@@ -1,18 +1,10 @@
-# KLS SameDay Office – Supabase V2
+# KLS SameDay Office — Authentication Fix
 
-This version saves customers, quotes, jobs, invoices and settings permanently in Supabase.
+This build normalises the Supabase project URL before creating the client. It accepts either the base project URL or a mistakenly copied `/rest/v1/` Data API URL and uses the correct project origin for authentication.
 
-## Required Vercel environment variables
-- `VITE_SUPABASE_URL`
-- `VITE_SUPABASE_ANON_KEY`
+## Vercel variables
 
-## Database upgrade
-Run `supabase/upgrade.sql` once in the Supabase SQL Editor before using the new version.
+- `VITE_SUPABASE_URL`: the Supabase project URL, ideally `https://YOUR-PROJECT.supabase.co`
+- `VITE_SUPABASE_ANON_KEY`: the Supabase publishable key (`sb_publishable_...`) or legacy anon key
 
-## Vercel settings
-- Build command: `npm run build`
-- Output directory: `dist`
-- Root directory: project root / `./`
-
-## First login
-Use **Create account** on the login screen. Supabase may ask you to confirm the email address before signing in.
+Never use the secret/service-role key in Vercel for this browser application.

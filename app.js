@@ -6,7 +6,27 @@
     'Luton Curtainsider': { callout: 95, ppm: 2.15 }
   };
 
-  const config = window.KLS_CONFIG || {};
+  const rawConfig = window.KLS_CONFIG || {};
+
+  function normaliseSupabaseUrl(value) {
+    const raw = String(value || '').trim().replace(/^['"]|['"]$/g, '');
+    if (!raw) return '';
+    try {
+      const parsed = new URL(raw);
+      if (!/^https?:$/.test(parsed.protocol)) return '';
+      // Vercel must contain the Supabase PROJECT URL, not the REST endpoint.
+      // This safely converts URLs such as https://project.supabase.co/rest/v1/
+      // back to https://project.supabase.co.
+      return parsed.origin;
+    } catch (_error) {
+      return '';
+    }
+  }
+
+  const config = {
+    supabaseUrl: normaliseSupabaseUrl(rawConfig.supabaseUrl),
+    supabaseAnonKey: String(rawConfig.supabaseAnonKey || '').trim().replace(/^['"]|['"]$/g, '')
+  };
   const configured = Boolean(config.supabaseUrl && config.supabaseAnonKey && window.supabase);
   const db = configured ? window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey) : null;
 

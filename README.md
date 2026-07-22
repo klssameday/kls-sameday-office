@@ -1,13 +1,18 @@
-# KLS SameDay Office — Complete Working Version
+# KLS SameDay Office – Supabase V2
 
-Included: dashboard, new quotes, vehicle price suggestions, quote printing, accept quote to job, job tracking, customer list, invoice creation, invoice printing, payment status and business settings.
+This version saves customers, quotes, jobs, invoices and settings permanently in Supabase.
 
-This version uses browser storage so it works immediately without database configuration. Data stays on the device/browser being used.
+## Required Vercel environment variables
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
 
-## Vercel
-- Root Directory: project root / `./`
-- Build Command: `npm run build`
-- Output Directory: `dist`
-- Install Command: leave automatic
+## Database upgrade
+Run `supabase/upgrade.sql` once in the Supabase SQL Editor before using the new version.
 
-No external packages are required. The build uses Node only.
+## Vercel settings
+- Build command: `npm run build`
+- Output directory: `dist`
+- Root directory: project root / `./`
+
+## First login
+Use **Create account** on the login screen. Supabase may ask you to confirm the email address before signing in.

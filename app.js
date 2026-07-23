@@ -322,9 +322,11 @@
         if (error) throw error;
         await db.from('jobs').update({ invoice_status: 'Invoiced', invoice_date: todayISO() }).eq('id', job.id);
         job.invoice_status = 'Invoiced';
+        state.invoices.unshift(invoice);
         state.page = 'invoices';
         showNotice(`${invoice.invoice_number} created.`, 'ok');
-        await loadAll();
+        render();
+        loadAll().catch(error => showNotice(error.message, 'error'));
       } catch (error) { showNotice(error.message, 'error'); render(); }
     });
 

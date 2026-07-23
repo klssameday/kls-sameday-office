@@ -1,9 +1,9 @@
 (() => {
   const vehicles = {
-    'Small Van': { callout: 65, ppm: 1.30 },
-    'LWB': { callout: 80, ppm: 1.70 },
-    'XLWB': { callout: 85, ppm: 1.80 },
-    'Luton Curtainsider': { callout: 95, ppm: 2.15 }
+    'Small Van': { minimum: 85, ppm: 1.50 },
+    'Medium Van': { minimum: 100, ppm: 1.75 },
+    'LWB': { minimum: 125, ppm: 2.00 },
+    'Luton Tail Lift': { minimum: 150, ppm: 2.40 }
   };
 
   const rawConfig = window.KLS_CONFIG || {};
@@ -54,7 +54,8 @@
     settings: { ...defaults },
     notice: null,
     loading: true,
-    authMode: 'signin'
+    authMode: 'signin',
+    selectedCustomerId: null
   };
 
   const money = value => new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(Number(value || 0));
@@ -155,8 +156,24 @@
   }
 
   function customersView() {
-    const cards = state.customers.map(c => `<article><div class="avatar">${esc((c.company || '?')[0].toUpperCase())}</div><div><strong>${esc(c.company)}</strong><p>${esc(c.contact_name || '')}</p><p>${esc(c.phone || '')}</p><p>${esc(c.email || '')}</p><p>${Number(c.payment_terms || 7)}-day terms</p></div></article>`).join('');
-    return panel('Customers', `<div class="customergrid">${cards || '<div class="empty">No customers yet.</div>'}</div>`, '', '<label class="search">Search <input id="customer-search"></label>');
+    const cards = state.customers.map(c => `<article class="customer-card" data-customer="${c.id}" tabindex="0" role="button"><div class="avatar">${esc((c.company || '?')[0].toUpperCase())}</div><div><strong>${esc(c.company)}</strong><p>${esc(c.contact_name || 'No contact name')}</p><p>${esc(c.phone || 'No phone')}</p><p>${esc(c.email || 'No email')}</p><p>${Number(c.payment_terms || 7)}-day terms</p><small>Open customer →</small></div></article>`).join('');
+    return panel('Customers', `<div class="customergrid">${cards || '<div class="empty">No customers yet.</div>'}</div>${customerModal()}`, 'Click a customer to view their history or edit their details.', '<div class="customer-tools"><label class="search">Search <input id="customer-search"></label><button class="primary" data-action="new-customer">＋ Add Customer</button></div>');
+  }
+
+  function customerModal() {
+    const c = state.customers.find(x => x.id === state.selectedCustomerId);
+    if (!c && !state.selectedCustomerId) return '';
+    const isNew = state.selectedCustomerId === 'new';
+    const customer = c || { company:'', contact_name:'', phone:'', email:'', billing_address:'', payment_terms:7, notes:'' };
+    const quotes = isNew ? [] : state.quotes.filter(q => q.customer_id === customer.id);
+    const jobs = isNew ? [] : state.jobs.filter(j => j.customer_id === customer.id);
+    const invoices = isNew ? [] : state.invoices.filter(i => i.customer_id === customer.id);
+    const total = invoices.reduce((n,i) => n + Number(i.total || 0), 0);
+    const outstanding = invoices.filter(i => i.status !== 'Paid').reduce((n,i) => n + Number(i.total || 0), 0);
+    return `<div class="modalback" data-action="customer-close"><section class="customermodal" onclick="event.stopPropagation()"><div class="modalhead"><div><small>${isNew ? 'NEW CUSTOMER' : 'CUSTOMER PROFILE'}</small><h2>${esc(customer.company || 'Add customer')}</h2></div><button data-action="customer-close">×</button></div>
+      <form id="customer-form"><div class="grid two"><label>Company *<input name="company" required value="${esc(customer.company)}"></label><label>Contact name<input name="contact_name" value="${esc(customer.contact_name || '')}"></label><label>Telephone<input name="phone" value="${esc(customer.phone || '')}"></label><label>Email<input name="email" type="email" value="${esc(customer.email || '')}"></label><label>Billing address<textarea name="billing_address">${esc(customer.billing_address || '')}</textarea></label><label>Payment terms (days)<input name="payment_terms" type="number" min="0" value="${Number(customer.payment_terms || 7)}"></label></div><label>Notes<textarea name="notes">${esc(customer.notes || '')}</textarea></label><div class="actions"><button type="button" class="secondary" data-action="customer-close">Cancel</button><button class="primary">${isNew ? 'Save Customer' : 'Save Changes'}</button></div></form>
+      ${isNew ? '' : `<div class="customerstats"><div><small>Total invoiced</small><b>${money(total)}</b></div><div><small>Outstanding</small><b>${money(outstanding)}</b></div><div><small>Quotes</small><b>${quotes.length}</b></div><div><small>Jobs</small><b>${jobs.length}</b></div></div><div class="historygrid"><div><h3>Recent quotes</h3>${quotes.slice(0,5).map(q=>`<p><b>${esc(q.quote_number)}</b> · ${money(q.quoted_price)} · ${esc(q.status)}</p>`).join('') || '<p class="muted">No quotes yet.</p>'}</div><div><h3>Recent jobs</h3>${jobs.slice(0,5).map(j=>`<p><b>${esc(j.job_number || 'Job')}</b> · ${money(j.total_price)} · ${esc(j.job_status)}</p>`).join('') || '<p class="muted">No jobs yet.</p>'}</div><div><h3>Invoices</h3>${invoices.slice(0,5).map(i=>`<p><b>${esc(i.invoice_number)}</b> · ${money(i.total)} · ${esc(i.status)}</p>`).join('') || '<p class="muted">No invoices yet.</p>'}</div></div>`}
+    </section></div>`;
   }
 
   function settingsView() {
@@ -208,7 +225,7 @@
       for (const result of [customers, quotes, jobs, invoices, settings]) if (result.error) throw result.error;
       state.customers = customers.data || [];
       state.quotes = quotes.data || [];
-      state.jobs = (jobs.data || []).map(j => ({ ...j, customer_name: j.contact_name || '' }));
+      state.jobs = (jobs.data || []).map(j => ({ ...j, customer_name: j.customer_name || j.contact_name || '' }));
       state.invoices = invoices.data || [];
       state.settings = { ...defaults, ...(settings.data || {}) };
     } catch (error) {
@@ -238,7 +255,7 @@
       const calculate = () => {
         const miles = Number(quoteForm.miles.value || 0);
         const rate = vehicles[quoteForm.vehicle.value];
-        const suggested = miles <= 10 ? rate.callout : rate.callout + (miles - 10) * rate.ppm;
+        const suggested = Math.max(rate.minimum, miles * rate.ppm);
         document.getElementById('suggestion').textContent = `Suggested: ${money(suggested)}`;
         if (!quoteForm.quoted_price.value) quoteForm.quoted_price.value = suggested.toFixed(2);
       };
@@ -251,7 +268,7 @@
         try {
           const form = Object.fromEntries(new FormData(quoteForm));
           const customer = await findOrCreateCustomer(form);
-          const rate = vehicles[form.vehicle]; const miles = Number(form.miles || 0); const suggested = miles <= 10 ? rate.callout : rate.callout + (miles - 10) * rate.ppm;
+          const rate = vehicles[form.vehicle]; const miles = Number(form.miles || 0); const suggested = Math.max(rate.minimum, miles * rate.ppm);
           const payload = {
             user_id: state.user.id, customer_id: customer.id, quote_number: numberCode('Q'), customer_name: form.company,
             contact_name: form.contact_name || null, phone: form.phone || null, email: form.email || null,
@@ -321,6 +338,37 @@
         const { data, error } = await db.from('business_settings').upsert(values, { onConflict: 'user_id' }).select().single();
         if (error) throw error;
         state.settings = { ...defaults, ...data }; showNotice('Business settings saved.', 'ok'); render();
+      } catch (error) { showNotice(error.message, 'error'); render(); }
+    };
+
+
+    document.querySelectorAll('[data-customer]').forEach(card => {
+      const open = () => { state.selectedCustomerId = card.dataset.customer; render(); };
+      card.onclick = open;
+      card.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } };
+    });
+    document.querySelector('[data-action="new-customer"]')?.addEventListener('click', () => { state.selectedCustomerId = 'new'; render(); });
+    document.querySelectorAll('[data-action="customer-close"]').forEach(el => el.addEventListener('click', () => { state.selectedCustomerId = null; render(); }));
+    const customerForm = document.getElementById('customer-form');
+    if (customerForm) customerForm.onsubmit = async e => {
+      e.preventDefault();
+      const values = Object.fromEntries(new FormData(customerForm));
+      values.payment_terms = Number(values.payment_terms || 7);
+      values.user_id = state.user.id;
+      try {
+        if (state.selectedCustomerId === 'new') {
+          const { data, error } = await db.from('customers').insert(values).select().single();
+          if (error) throw error;
+          state.customers.unshift(data);
+          showNotice(`${data.company} added.`, 'ok');
+        } else {
+          const { data, error } = await db.from('customers').update(values).eq('id', state.selectedCustomerId).select().single();
+          if (error) throw error;
+          const idx = state.customers.findIndex(c => c.id === data.id);
+          if (idx >= 0) state.customers[idx] = data;
+          showNotice(`${data.company} updated.`, 'ok');
+        }
+        state.selectedCustomerId = null; render();
       } catch (error) { showNotice(error.message, 'error'); render(); }
     };
 

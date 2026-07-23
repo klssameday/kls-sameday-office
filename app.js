@@ -56,8 +56,13 @@
     loading: true,
     authMode: 'signin',
     selectedCustomerId: null,
-    quoteCustomerId: null
+    quoteCustomerId: null,
+    selectedDriverJobId: null,
+    publicTracking: null
   };
+
+  let locationWatchId = null;
+  let trackingPollId = null;
 
   const money = value => new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(Number(value || 0));
   const fmtDate = value => value ? new Date(value).toLocaleDateString('en-GB') : '—';
@@ -83,7 +88,7 @@
     </section></div>`;
   }
 
-  const navItems = [['dashboard','Dashboard'],['operations','Today’s Planner'],['dispatch','Dispatch Board'],['newquote','New Quote'],['quotes','Quotes'],['jobs','Jobs'],['invoices','Invoices'],['customers','CRM / Customers'],['settings','Settings']];
+  const navItems = [['dashboard','Dashboard'],['operations','Today’s Planner'],['dispatch','Dispatch Board'],['driver','Driver App'],['newquote','New Quote'],['quotes','Quotes'],['jobs','Jobs'],['invoices','Invoices'],['customers','CRM / Customers'],['settings','Settings']];
 
   function layout(content) {
     const title = navItems.find(([key]) => key === state.page)?.[1] || 'Dashboard';
@@ -235,14 +240,46 @@
   function jobTable(rows) {
     return table(['Job','Customer','Route','Vehicle','Price','Status','Invoice'], rows.map(j => [
       esc(j.job_number || 'Pending'), esc(j.customer_name || j.contact_name || ''), `${esc(j.collection_address)}<br><i>→ ${esc(j.delivery_address)}</i>`, esc(j.vehicle), money(j.total_price),
-      `<select data-job-status="${j.id}">${['Booked','Collected','In Transit','Delivered','Cancelled'].map(s => `<option ${j.job_status === s ? 'selected' : ''}>${s}</option>`).join('')}</select>`,
+      `<select data-job-status="${j.id}">${['Booked','En Route to Collection','Arrived at Collection','Collected','In Transit','Arrived at Delivery','Delivered','Cancelled'].map(s => `<option ${j.job_status === s ? 'selected' : ''}>${s}</option>`).join('')}</select>`,
       `<button data-invoice="${j.id}" ${j.job_status !== 'Delivered' ? 'disabled' : ''}>Create Invoice</button>`
     ]));
   }
 
   function jobsView() { return panel('Jobs', jobTable(state.jobs), '', '<label class="search">Search <input id="job-search"></label>'); }
 
-  const dispatchStatuses = ['Booked','Collected','In Transit','Delivered'];
+  const driverStatuses = ['Booked','En Route to Collection','Arrived at Collection','Collected','In Transit','Arrived at Delivery','Delivered'];
+
+  function trackingUrl(job) {
+    if (!job?.tracking_token) return '';
+    return `${location.origin}${location.pathname}?track=${encodeURIComponent(job.tracking_token)}`;
+  }
+
+  function driverView() {
+    const jobs = state.jobs.filter(j => j.job_status !== 'Cancelled').sort((a,b) => new Date(a.collection_date || a.created_at || 0) - new Date(b.collection_date || b.created_at || 0));
+    const cards = jobs.map(job => {
+      const active = !['Delivered','Cancelled'].includes(job.job_status);
+      const index = driverStatuses.indexOf(job.job_status);
+      const next = index >= 0 && index < driverStatuses.length - 1 ? driverStatuses[index + 1] : (job.job_status === 'Booked' ? 'En Route to Collection' : '');
+      return `<article class="driver-card ${active ? 'active' : ''}"><div class="driver-card-head"><div><small>${fmtDate(job.collection_date)} ${esc(String(job.collection_time || '').slice(0,5))}</small><h3>${esc(job.job_number || 'Job')}</h3></div><span>${esc(job.job_status || 'Booked')}</span></div><b>${esc(job.customer_name || 'Customer')}</b><div class="driver-route"><p><small>COLLECT</small>${esc(job.collection_address || '')}</p><p><small>DELIVER</small>${esc(job.delivery_address || '')}</p></div><div class="driver-buttons"><button class="secondary" data-driver-open="${job.id}">Open Job</button><button class="secondary" data-driver-nav="${job.id}">Navigate</button>${next ? `<button class="primary" data-driver-status="${job.id}" data-status="${esc(next)}">${esc(next)}</button>` : ''}</div></article>`;
+    }).join('');
+    return `<section class="ops-hero driver-hero"><div><small>MOBILE DRIVER WORKSPACE</small><h2>Driver App</h2><p>Update jobs, share live location and capture photo, signature and recipient details.</p></div><div class="live-pill">● GPS ready</div></section><div class="driver-list">${cards || '<div class="empty">No active jobs.</div>'}</div>${driverModal()}`;
+  }
+
+  function driverModal() {
+    const job = state.jobs.find(j => j.id === state.selectedDriverJobId);
+    if (!job) return '';
+    const hasPod = Boolean(job.pod_photo_url || job.pod_signature_url || job.recipient_name);
+    return `<div class="modalback" data-action="driver-close"><section class="customermodal driver-modal" onclick="event.stopPropagation()"><div class="modalhead"><div><small>DRIVER JOB</small><h2>${esc(job.job_number || 'Job')}</h2><p>${esc(job.customer_name || '')}</p></div><button data-action="driver-close">×</button></div><div class="driver-route large"><p><small>COLLECTION</small>${esc(job.collection_address || '')}</p><p><small>DELIVERY</small>${esc(job.delivery_address || '')}</p></div><div class="driver-status-grid">${driverStatuses.map(status => `<button type="button" class="${job.job_status === status ? 'primary' : 'secondary'}" data-driver-status="${job.id}" data-status="${status}">${status}</button>`).join('')}</div><div class="tracking-controls"><button class="primary" data-action="start-tracking" data-job="${job.id}">Start Live Tracking</button><button class="secondary" data-action="stop-tracking">Stop Tracking</button><button class="secondary" data-copy-track="${job.id}">Copy Customer Link</button><small>Location updates while this Driver App remains open and location permission is allowed.</small></div><form id="pod-form"><h3>Proof of Delivery</h3><div class="grid two"><label>Recipient name<input name="recipient_name" value="${esc(job.recipient_name || '')}" required></label><label>Delivery notes<input name="pod_notes" value="${esc(job.pod_notes || '')}"></label></div><label>Delivery photo<input name="pod_photo" type="file" accept="image/*" capture="environment"></label><label>Recipient signature<div class="signature-wrap"><canvas id="signature-canvas" width="700" height="240"></canvas><button type="button" class="secondary" data-action="clear-signature">Clear signature</button></div></label>${hasPod ? `<div class="existing-pod">Existing POD saved ${job.delivered_at ? fmtDate(job.delivered_at) : ''}${job.pod_photo_url ? `<a href="${esc(job.pod_photo_url)}" target="_blank">View photo</a>` : ''}${job.pod_signature_url ? `<a href="${esc(job.pod_signature_url)}" target="_blank">View signature</a>` : ''}</div>` : ''}<div class="actions"><button type="button" class="secondary" data-action="driver-close">Cancel</button><button class="primary">Save POD & Mark Delivered</button></div></form></section></div>`;
+  }
+
+  function publicTrackingView(data, loading=false, error='') {
+    if (loading) return `<div class="public-track"><div class="track-card"><div class="track-logo"><b>KLS</b><span>SameDay Live Tracking</span></div><div class="loading">Loading delivery…</div></div></div>`;
+    if (error || !data) return `<div class="public-track"><div class="track-card"><div class="track-logo"><b>KLS</b><span>SameDay Live Tracking</span></div><h1>Tracking unavailable</h1><p>${esc(error || 'This tracking link is invalid or has expired.')}</p></div></div>`;
+    const maps = data.last_latitude && data.last_longitude ? `https://www.google.com/maps?q=${data.last_latitude},${data.last_longitude}` : '';
+    return `<div class="public-track"><div class="track-card"><div class="track-logo"><b>KLS</b><span>SameDay Live Tracking</span></div><small>JOB ${esc(data.job_number || '')}</small><h1>${esc(data.status || 'Booked')}</h1><div class="track-progress">${driverStatuses.map((s,i) => `<span class="${i <= Math.max(driverStatuses.indexOf(data.status),0) ? 'done' : ''}"></span>`).join('')}</div><div class="track-route"><p><small>COLLECTION</small>${esc(data.collection_area || 'Collection arranged')}</p><p><small>DELIVERY</small>${esc(data.delivery_area || 'Delivery arranged')}</p></div>${maps ? `<a class="primary button-link map-link" href="${maps}" target="_blank">View latest driver location</a>` : '<div class="track-waiting">Live location will appear once the driver starts tracking.</div>'}<div class="track-update">Last update: ${data.location_updated_at ? new Date(data.location_updated_at).toLocaleString('en-GB') : 'Not started'}</div>${data.status === 'Delivered' ? `<div class="delivered-box"><b>Delivered</b><span>${data.delivered_at ? new Date(data.delivered_at).toLocaleString('en-GB') : ''}</span><span>${data.recipient_name ? `Received by ${esc(data.recipient_name)}` : ''}</span></div>` : ''}<footer>Dedicated vehicle • No shared loads<br>0330 043 5237 · info@klssameday.co.uk</footer></div></div>`;
+  }
+
+  const dispatchStatuses = ['Booked','En Route to Collection','Arrived at Collection','Collected','In Transit','Arrived at Delivery','Delivered'];
 
   function dispatchCard(job) {
     const statusIndex = dispatchStatuses.indexOf(job.job_status);
@@ -332,9 +369,11 @@
   }
 
   function render() {
+    const trackToken = new URLSearchParams(location.search).get('track');
+    if (trackToken) { document.getElementById('app').innerHTML = publicTrackingView(state.publicTracking, state.loading, state.notice?.type === 'error' ? state.notice.text : ''); return; }
     if (state.loading) { document.getElementById('app').innerHTML = '<div class="loading">Loading KLS SameDay Office…</div>'; return; }
     if (!state.user) { document.getElementById('app').innerHTML = authView(); bindAuth(); return; }
-    const views = { dashboard, operations: operationsView, dispatch: dispatchView, newquote: newQuote, quotes: quotesView, jobs: jobsView, invoices: invoicesView, customers: customersView, settings: settingsView };
+    const views = { dashboard, operations: operationsView, dispatch: dispatchView, driver: driverView, newquote: newQuote, quotes: quotesView, jobs: jobsView, invoices: invoicesView, customers: customersView, settings: settingsView };
     document.getElementById('app').innerHTML = layout(views[state.page]());
     bindApp();
   }
@@ -415,6 +454,13 @@
 
   function bindApp() {
     document.querySelectorAll('[data-page]').forEach(button => button.onclick = () => { state.page = button.dataset.page; render(); });
+    document.querySelectorAll('[data-driver-open]').forEach(button => button.onclick = () => { state.selectedDriverJobId = button.dataset.driverOpen; render(); });
+    document.querySelectorAll('[data-action="driver-close"]').forEach(button => button.onclick = () => { state.selectedDriverJobId = null; render(); });
+    document.querySelectorAll('[data-driver-nav]').forEach(button => button.onclick = () => { const j=state.jobs.find(x=>x.id===button.dataset.driverNav); if(j) window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(j.job_status === 'Booked' ? j.collection_address : j.delivery_address)}&travelmode=driving`,'_blank','noopener'); });
+    document.querySelectorAll('[data-copy-track]').forEach(button => button.onclick = async () => { const j=state.jobs.find(x=>x.id===button.dataset.copyTrack); if(!j?.tracking_token){showNotice('Run the v9 Supabase upgrade first.','error');render();return;} await navigator.clipboard.writeText(trackingUrl(j)); showNotice('Customer tracking link copied.','ok'); render(); });
+    document.querySelectorAll('[data-driver-status]').forEach(button => button.onclick = async () => { const job=state.jobs.find(j=>j.id===button.dataset.driverStatus); if(!job)return; const previous=job.job_status; job.job_status=button.dataset.status; render(); const payload={job_status:button.dataset.status}; if(button.dataset.status==='Delivered') payload.delivered_at=new Date().toISOString(); const {error}=await db.from('jobs').update(payload).eq('id',job.id); if(error){job.job_status=previous;showNotice(error.message,'error');render();} });
+    document.querySelector('[data-action="start-tracking"]')?.addEventListener('click', () => startLocationTracking(document.querySelector('[data-action="start-tracking"]').dataset.job));
+    document.querySelector('[data-action="stop-tracking"]')?.addEventListener('click', stopLocationTracking);
 
     document.querySelectorAll('[data-move-job]').forEach(button => button.onclick = event => {
       event.stopPropagation();
@@ -623,6 +669,18 @@
       render();
     });
 
+    const canvas = document.getElementById('signature-canvas');
+    let drawing = false;
+    if (canvas) {
+      const ctx=canvas.getContext('2d'); ctx.lineWidth=3; ctx.lineCap='round';
+      const point=e=>{const r=canvas.getBoundingClientRect();const t=e.touches?.[0]||e;return{x:(t.clientX-r.left)*(canvas.width/r.width),y:(t.clientY-r.top)*(canvas.height/r.height)}};
+      const begin=e=>{e.preventDefault();drawing=true;const p=point(e);ctx.beginPath();ctx.moveTo(p.x,p.y)}; const move=e=>{if(!drawing)return;e.preventDefault();const p=point(e);ctx.lineTo(p.x,p.y);ctx.stroke()}; const end=()=>drawing=false;
+      canvas.addEventListener('mousedown',begin);canvas.addEventListener('mousemove',move);window.addEventListener('mouseup',end,{once:true});canvas.addEventListener('touchstart',begin,{passive:false});canvas.addEventListener('touchmove',move,{passive:false});canvas.addEventListener('touchend',end);
+      document.querySelector('[data-action="clear-signature"]')?.addEventListener('click',()=>ctx.clearRect(0,0,canvas.width,canvas.height));
+    }
+    const podForm=document.getElementById('pod-form');
+    if(podForm) podForm.onsubmit=async e=>{e.preventDefault();const job=state.jobs.find(j=>j.id===state.selectedDriverJobId);const btn=podForm.querySelector('button.primary');btn.disabled=true;btn.textContent='Saving POD…';try{const fd=new FormData(podForm);let photoUrl=job.pod_photo_url||null;let signatureUrl=job.pod_signature_url||null;const photo=fd.get('pod_photo');if(photo&&photo.size){photoUrl=await uploadPodFile(job,photo,'photo');}if(canvas){const blank=document.createElement('canvas');blank.width=canvas.width;blank.height=canvas.height;if(canvas.toDataURL()!==blank.toDataURL()){const blob=await new Promise(r=>canvas.toBlob(r,'image/png'));signatureUrl=await uploadPodFile(job,blob,'signature');}}const position=await getOnePosition().catch(()=>null);const payload={recipient_name:fd.get('recipient_name'),pod_notes:fd.get('pod_notes')||null,pod_photo_url:photoUrl,pod_signature_url:signatureUrl,job_status:'Delivered',delivered_at:new Date().toISOString(),pod_latitude:position?.coords.latitude||job.last_latitude||null,pod_longitude:position?.coords.longitude||job.last_longitude||null};const{data,error}=await db.from('jobs').update(payload).eq('id',job.id).select().single();if(error)throw error;Object.assign(job,data);state.selectedDriverJobId=null;showNotice(`${job.job_number} POD saved and job delivered.`,'ok');render();}catch(error){showNotice(error.message,'error');render();}};
+
     const jobSearch = document.getElementById('job-search');
     if (jobSearch) jobSearch.oninput = () => filterRows(jobSearch.value);
     const customerSearch = document.getElementById('customer-search');
@@ -643,7 +701,29 @@
     win.focus();
   }
 
+  function getOnePosition() { return new Promise((resolve,reject)=>navigator.geolocation.getCurrentPosition(resolve,reject,{enableHighAccuracy:true,timeout:15000,maximumAge:5000})); }
+  async function startLocationTracking(jobId) {
+    if(!navigator.geolocation){showNotice('Location is not supported on this device.','error');render();return;}
+    stopLocationTracking(false);
+    const push=async pos=>{const payload={last_latitude:pos.coords.latitude,last_longitude:pos.coords.longitude,location_accuracy:pos.coords.accuracy,location_updated_at:new Date().toISOString()};const{error}=await db.from('jobs').update(payload).eq('id',jobId);if(error){showNotice(error.message,'error');render();}else{const j=state.jobs.find(x=>x.id===jobId);if(j)Object.assign(j,payload);}};
+    locationWatchId=navigator.geolocation.watchPosition(push,error=>{showNotice(`Location error: ${error.message}`,'error');render();},{enableHighAccuracy:true,maximumAge:5000,timeout:20000});
+    showNotice('Live tracking started. Keep this Driver App open.','ok');render();
+  }
+  function stopLocationTracking(show=true){if(locationWatchId!==null){navigator.geolocation.clearWatch(locationWatchId);locationWatchId=null;}if(show){showNotice('Live tracking stopped.','ok');render();}}
+  async function uploadPodFile(job,file,type){const ext=type==='signature'?'png':((file.name||'photo.jpg').split('.').pop()||'jpg').toLowerCase();const path=`${state.user.id}/${job.id}/${type}-${Date.now()}.${ext}`;const{error}=await db.storage.from('pod').upload(path,file,{contentType:file.type||'image/jpeg',upsert:false});if(error)throw error;const{data}=db.storage.from('pod').getPublicUrl(path);return data.publicUrl;}
+
   async function initialise() {
+    const trackToken = new URLSearchParams(location.search).get('track');
+    if (trackToken) {
+      state.loading = true; render();
+      if (!configured) { state.loading = false; state.notice = {text:'Tracking service is not configured.',type:'error'}; render(); return; }
+      const refreshPublic = async () => {
+        const { data, error } = await db.rpc('get_public_tracking', { p_token: trackToken });
+        state.publicTracking = Array.isArray(data) ? data[0] : data;
+        state.notice = error ? {text:error.message,type:'error'} : null; state.loading = false; render();
+      };
+      await refreshPublic(); trackingPollId = setInterval(refreshPublic, 10000); return;
+    }
     if (!configured) { state.loading = false; render(); return; }
     const { data: { session } } = await db.auth.getSession();
     state.user = session?.user || null;

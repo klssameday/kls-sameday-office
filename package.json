@@ -1,7 +1,7 @@
 {
-  "name": "kls-sameday-office-auth-fixed",
+  "name": "kls-sameday-office-v9-tracking-pod",
   "private": true,
-  "version": "2.1.0",
+  "version": "9.0.0",
   "scripts": {
     "build": "node build.js"
   }

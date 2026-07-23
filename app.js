@@ -51,12 +51,12 @@
     quotes: [],
     jobs: [],
     invoices: [],
-    fleet: [],
     settings: { ...defaults },
     notice: null,
     loading: true,
     authMode: 'signin',
-    selectedCustomerId: null
+    selectedCustomerId: null,
+    quoteCustomerId: null
   };
 
   const money = value => new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(Number(value || 0));
@@ -83,7 +83,7 @@
     </section></div>`;
   }
 
-  const navItems = [['dashboard','Dashboard'],['operations','Today’s Planner'],['dispatch','Dispatch Board'],['newquote','New Quote'],['quotes','Quotes'],['jobs','Jobs'],['invoices','Invoices'],['fleet','Fleet'],['customers','Customers'],['settings','Settings']];
+  const navItems = [['dashboard','Dashboard'],['operations','Today’s Planner'],['dispatch','Dispatch Board'],['newquote','New Quote'],['quotes','Quotes'],['jobs','Jobs'],['invoices','Invoices'],['customers','CRM / Customers'],['settings','Settings']];
 
   function layout(content) {
     const title = navItems.find(([key]) => key === state.page)?.[1] || 'Dashboard';
@@ -198,10 +198,11 @@
   }
 
   function newQuote() {
+    const selected = state.customers.find(c => c.id === state.quoteCustomerId) || {};
     return panel('Smart Quote Builder', `<form id="quote-form">
       <div class="quote-builder-head"><div><small>KLS PRICING ENGINE</small><h3>Build a consistent quote in seconds</h3><p>Enter the route mileage, choose a vehicle and add any extras. The total updates instantly.</p></div><div class="rate-pill">Minimum or mileage rate — whichever is higher</div></div>
-      <div class="grid"><label>Customer / company *<input name="company" required></label><label>Contact name<input name="contact_name"></label><label>Telephone / WhatsApp<input name="phone"></label></div>
-      <div class="grid"><label>Email<input name="email" type="email"></label><label>Collection date<input name="collection_date" type="date" value="${todayISO()}"></label><label>Collection time<input name="collection_time" type="time"></label></div>
+      <div class="grid"><label>Customer / company *<input name="company" required value="${esc(selected.company || '')}"></label><label>Contact name<input name="contact_name" value="${esc(selected.contact_name || '')}"></label><label>Telephone / WhatsApp<input name="phone" value="${esc(selected.phone || '')}"></label></div>
+      <div class="grid"><label>Email<input name="email" type="email" value="${esc(selected.email || '')}"></label><label>Collection date<input name="collection_date" type="date" value="${todayISO()}"></label><label>Collection time<input name="collection_time" type="time"></label></div>
       <div class="grid two"><label>Collection address / postcode *<textarea name="collection_address" required></textarea></label><label>Delivery address / postcode *<textarea name="delivery_address" required></textarea></label></div>
       <div class="route-tools"><button type="button" class="secondary" data-action="open-route">Open route in Google Maps</button><span>Use the route mileage shown by Google Maps, then enter it below.</span></div>
       <div class="grid"><label>Vehicle<select name="vehicle">${Object.keys(vehicles).map(v => `<option>${v}</option>`).join('')}</select></label><label>Distance (miles)<input name="miles" type="number" min="0" step="0.1" value="0"></label><label>Base delivery charge<input name="base_charge" type="number" readonly></label></div>
@@ -232,12 +233,8 @@
   }
 
   function jobTable(rows) {
-    const fleetOptions = job => `<option value="">Unassigned</option>${state.fleet.filter(v => v.status !== 'Off Road').map(v => `<option value="${v.id}" ${job.assigned_vehicle_id === v.id ? 'selected' : ''}>${esc(v.registration)} — ${esc(v.vehicle_name)}</option>`).join('')}`;
-    return table(['Job','Customer','Route','Assigned vehicle','Driver','Price','Status','Invoice'], rows.map(j => [
-      esc(j.job_number || 'Pending'), esc(j.customer_name || j.contact_name || ''), `${esc(j.collection_address)}<br><i>→ ${esc(j.delivery_address)}</i>`,
-      `<select data-job-vehicle="${j.id}">${fleetOptions(j)}</select>`,
-      `<input class="table-input" data-job-driver="${j.id}" value="${esc(j.driver_name || '')}" placeholder="Driver name">`,
-      money(j.total_price),
+    return table(['Job','Customer','Route','Vehicle','Price','Status','Invoice'], rows.map(j => [
+      esc(j.job_number || 'Pending'), esc(j.customer_name || j.contact_name || ''), `${esc(j.collection_address)}<br><i>→ ${esc(j.delivery_address)}</i>`, esc(j.vehicle), money(j.total_price),
       `<select data-job-status="${j.id}">${['Booked','Collected','In Transit','Delivered','Cancelled'].map(s => `<option ${j.job_status === s ? 'selected' : ''}>${s}</option>`).join('')}</select>`,
       `<button data-invoice="${j.id}" ${j.job_status !== 'Delivered' ? 'disabled' : ''}>Create Invoice</button>`
     ]));
@@ -256,7 +253,7 @@
       <div class="dispatch-card-head"><b>${esc(job.job_number || 'Job')}</b><span>${esc(time)}</span></div>
       <h3>${esc(job.customer_name || job.contact_name || 'Customer')}</h3>
       <div class="dispatch-route"><p><small>COLLECT</small>${esc(job.collection_address || 'Not set')}</p><span>↓</span><p><small>DELIVER</small>${esc(job.delivery_address || 'Not set')}</p></div>
-      <div class="dispatch-meta"><span>${esc((state.fleet.find(v => v.id === job.assigned_vehicle_id)?.registration) || job.vehicle || 'Vehicle TBC')}</span><span>${esc(job.driver_name || 'Driver unassigned')}</span><span>${money(job.total_price)}</span></div>
+      <div class="dispatch-meta"><span>${esc(job.vehicle || 'Vehicle TBC')}</span><span>${money(job.total_price)}</span></div>
       <div class="dispatch-card-actions">${previous ? `<button class="secondary" data-move-job="${job.id}" data-move-status="${previous}">← ${esc(previous)}</button>` : ''}${next ? `<button class="primary" data-move-job="${job.id}" data-move-status="${next}">${esc(next)} →</button>` : `<button class="primary" data-page="jobs">Open job</button>`}</div>
       ${job.invoice_status === 'Invoiced' ? '<div class="dispatch-badge">INVOICED</div>' : ''}
     </article>`;
@@ -272,28 +269,6 @@
   }
 
 
-  function fleetView() {
-    const today = todayISO();
-    const soon = new Date(Date.now() + 30 * 86400000).toISOString().slice(0,10);
-    const expiryBadge = date => {
-      if (!date) return '<span class="fleet-ok">Not set</span>';
-      const d = String(date).slice(0,10);
-      if (d < today) return `<span class="fleet-expired">Expired ${fmtDate(d)}</span>`;
-      if (d <= soon) return `<span class="fleet-warning">Due ${fmtDate(d)}</span>`;
-      return `<span class="fleet-ok">${fmtDate(d)}</span>`;
-    };
-    const cards = state.fleet.map(v => {
-      const assigned = state.jobs.filter(j => j.assigned_vehicle_id === v.id && !['Delivered','Cancelled'].includes(j.job_status)).length;
-      return `<article class="fleet-card"><div class="fleet-card-head"><div><small>${esc(v.registration)}</small><h3>${esc(v.vehicle_name)}</h3></div><span class="fleet-status ${String(v.status||'Available').toLowerCase().replace(/\s+/g,'-')}">${esc(v.status || 'Available')}</span></div><p>${esc(v.vehicle_type || '')}</p><div class="fleet-details"><div><small>MOT</small>${expiryBadge(v.mot_due)}</div><div><small>Insurance</small>${expiryBadge(v.insurance_due)}</div><div><small>Service</small>${expiryBadge(v.service_due)}</div><div><small>LOLER</small>${expiryBadge(v.loler_due)}</div></div><div class="fleet-footer"><span>${assigned} active job${assigned===1?'':'s'}</span><button class="secondary" data-edit-vehicle="${v.id}">Edit</button></div></article>`;
-    }).join('') || '<div class="empty">No vehicles added yet.</div>';
-    return `<section class="fleet-hero"><div><small>FLEET CONTROL</small><h2>Vehicles, availability and compliance</h2><p>Track your vans, assign them to jobs and keep important dates visible.</p></div><button class="primary" data-action="new-vehicle">＋ Add Vehicle</button></section><div class="fleet-grid">${cards}</div><div id="fleet-form-wrap"></div>`;
-  }
-
-  function vehicleForm(vehicle = {}) {
-    return `<div class="modalback" data-action="vehicle-close"><section class="customermodal" onclick="event.stopPropagation()"><div class="modalhead"><div><small>${vehicle.id ? 'EDIT VEHICLE' : 'NEW VEHICLE'}</small><h2>${esc(vehicle.vehicle_name || 'Add vehicle')}</h2></div><button data-action="vehicle-close">×</button></div><form id="vehicle-form" data-vehicle-id="${esc(vehicle.id || '')}"><div class="grid two"><label>Vehicle name *<input name="vehicle_name" required value="${esc(vehicle.vehicle_name || '')}" placeholder="KLS Luton"></label><label>Registration *<input name="registration" required value="${esc(vehicle.registration || '')}" placeholder="AB12 CDE"></label><label>Vehicle type<select name="vehicle_type">${Object.keys(vehicles).map(x=>`<option ${vehicle.vehicle_type===x?'selected':''}>${x}</option>`).join('')}</select></label><label>Status<select name="status">${['Available','Assigned','Maintenance','Off Road'].map(x=>`<option ${vehicle.status===x?'selected':''}>${x}</option>`).join('')}</select></label><label>MOT due<input name="mot_due" type="date" value="${esc(vehicle.mot_due || '')}"></label><label>Insurance due<input name="insurance_due" type="date" value="${esc(vehicle.insurance_due || '')}"></label><label>Service due<input name="service_due" type="date" value="${esc(vehicle.service_due || '')}"></label><label>LOLER due<input name="loler_due" type="date" value="${esc(vehicle.loler_due || '')}"></label></div><label>Notes<textarea name="notes">${esc(vehicle.notes || '')}</textarea></label><div class="actions"><button type="button" class="secondary" data-action="vehicle-close">Cancel</button><button class="primary">Save Vehicle</button></div></form></section></div>`;
-  }
-
-
   function invoicesView() {
     return panel('Invoices', table(['Invoice','Customer','Issue','Due','Total','Status','Actions'], state.invoices.map(inv => [
       esc(inv.invoice_number), esc(inv.customer_name), fmtDate(inv.issue_date), fmtDate(inv.due_date), money(inv.total),
@@ -302,9 +277,34 @@
     ])));
   }
 
+  function customerMetrics(customer) {
+    const quotes = state.quotes.filter(q => q.customer_id === customer.id);
+    const jobs = state.jobs.filter(j => j.customer_id === customer.id);
+    const invoices = state.invoices.filter(i => i.customer_id === customer.id);
+    const invoiced = invoices.reduce((sum, item) => sum + Number(item.total || 0), 0);
+    const paid = invoices.filter(item => item.status === 'Paid').reduce((sum, item) => sum + Number(item.total || 0), 0);
+    const outstanding = invoices.filter(item => !['Paid','Cancelled'].includes(item.status)).reduce((sum, item) => sum + Number(item.total || 0), 0);
+    const lastJob = [...jobs].sort((a,b) => new Date(b.collection_date || b.created_at || 0) - new Date(a.collection_date || a.created_at || 0))[0];
+    const accepted = quotes.filter(item => item.status === 'Accepted').length;
+    return { quotes, jobs, invoices, invoiced, paid, outstanding, lastJob, accepted };
+  }
+
   function customersView() {
-    const cards = state.customers.map(c => `<article class="customer-card" data-customer="${c.id}" tabindex="0" role="button"><div class="avatar">${esc((c.company || '?')[0].toUpperCase())}</div><div><strong>${esc(c.company)}</strong><p>${esc(c.contact_name || 'No contact name')}</p><p>${esc(c.phone || 'No phone')}</p><p>${esc(c.email || 'No email')}</p><p>${Number(c.payment_terms || 7)}-day terms</p><small>Open customer →</small></div></article>`).join('');
-    return panel('Customers', `<div class="customergrid">${cards || '<div class="empty">No customers yet.</div>'}</div>${customerModal()}`, 'Click a customer to view their history or edit their details.', '<div class="customer-tools"><label class="search">Search <input id="customer-search"></label><button class="primary" data-action="new-customer">＋ Add Customer</button></div>');
+    const enriched = state.customers.map(customer => ({ customer, metrics: customerMetrics(customer) }))
+      .sort((a,b) => b.metrics.invoiced - a.metrics.invoiced || String(a.customer.company).localeCompare(String(b.customer.company)));
+    const totalRevenue = enriched.reduce((sum,row) => sum + row.metrics.invoiced, 0);
+    const totalOutstanding = enriched.reduce((sum,row) => sum + row.metrics.outstanding, 0);
+    const activeCustomers = enriched.filter(row => row.metrics.jobs.length || row.metrics.quotes.length).length;
+    const topCustomer = enriched[0];
+    const cards = enriched.map(({customer:c, metrics:m}) => `<article class="crm-card" data-customer="${c.id}" tabindex="0" role="button">
+      <div class="crm-card-head"><div class="avatar">${esc((c.company || '?')[0].toUpperCase())}</div><div><strong>${esc(c.company)}</strong><p>${esc(c.contact_name || 'No contact name')}</p></div><span class="crm-open">Open →</span></div>
+      <div class="crm-contact"><span>${esc(c.phone || 'No phone')}</span><span>${esc(c.email || 'No email')}</span></div>
+      <div class="crm-card-stats"><div><small>Revenue</small><b>${money(m.invoiced)}</b></div><div><small>Outstanding</small><b class="${m.outstanding ? 'warning-text' : ''}">${money(m.outstanding)}</b></div><div><small>Jobs</small><b>${m.jobs.length}</b></div></div>
+      <div class="crm-last"><small>LAST JOB</small><span>${m.lastJob ? `${fmtDate(m.lastJob.collection_date || m.lastJob.created_at)} · ${esc(m.lastJob.job_status || 'Booked')}` : 'No jobs yet'}</span></div>
+    </article>`).join('');
+    return `<section class="crm-hero"><div><small>SALES & CUSTOMER RELATIONSHIPS</small><h2>Customer CRM</h2><p>See customer value, outstanding money and full history in one place.</p></div><button class="primary" data-action="new-customer">＋ Add Customer</button></section>
+      <section class="crm-kpis">${card('Customers', state.customers.length, `${activeCustomers} with activity`, '')}${card('Customer revenue', money(totalRevenue), 'Total invoices raised', '')}${card('Outstanding', money(totalOutstanding), 'Across all customers', 'invoices')}${card('Top customer', topCustomer ? esc(topCustomer.customer.company) : '—', topCustomer ? money(topCustomer.metrics.invoiced) : 'No revenue yet', '')}</section>
+      ${panel('Customer accounts', `<div class="customergrid crm-grid">${cards || '<div class="empty">No customers yet.</div>'}</div>${customerModal()}`, 'Click any customer to open their profile, activity and account history.', '<div class="customer-tools"><label class="search">Search <input id="customer-search" placeholder="Company, contact, phone or email"></label><button class="primary" data-action="new-customer">＋ Add Customer</button></div>')}`;
   }
 
   function customerModal() {
@@ -312,14 +312,17 @@
     if (!c && !state.selectedCustomerId) return '';
     const isNew = state.selectedCustomerId === 'new';
     const customer = c || { company:'', contact_name:'', phone:'', email:'', billing_address:'', payment_terms:7, notes:'' };
-    const quotes = isNew ? [] : state.quotes.filter(q => q.customer_id === customer.id);
-    const jobs = isNew ? [] : state.jobs.filter(j => j.customer_id === customer.id);
-    const invoices = isNew ? [] : state.invoices.filter(i => i.customer_id === customer.id);
-    const total = invoices.reduce((n,i) => n + Number(i.total || 0), 0);
-    const outstanding = invoices.filter(i => i.status !== 'Paid').reduce((n,i) => n + Number(i.total || 0), 0);
-    return `<div class="modalback" data-action="customer-close"><section class="customermodal" onclick="event.stopPropagation()"><div class="modalhead"><div><small>${isNew ? 'NEW CUSTOMER' : 'CUSTOMER PROFILE'}</small><h2>${esc(customer.company || 'Add customer')}</h2></div><button data-action="customer-close">×</button></div>
-      <form id="customer-form"><div class="grid two"><label>Company *<input name="company" required value="${esc(customer.company)}"></label><label>Contact name<input name="contact_name" value="${esc(customer.contact_name || '')}"></label><label>Telephone<input name="phone" value="${esc(customer.phone || '')}"></label><label>Email<input name="email" type="email" value="${esc(customer.email || '')}"></label><label>Billing address<textarea name="billing_address">${esc(customer.billing_address || '')}</textarea></label><label>Payment terms (days)<input name="payment_terms" type="number" min="0" value="${Number(customer.payment_terms || 7)}"></label></div><label>Notes<textarea name="notes">${esc(customer.notes || '')}</textarea></label><div class="actions"><button type="button" class="secondary" data-action="customer-close">Cancel</button><button class="primary">${isNew ? 'Save Customer' : 'Save Changes'}</button></div></form>
-      ${isNew ? '' : `<div class="customerstats"><div><small>Total invoiced</small><b>${money(total)}</b></div><div><small>Outstanding</small><b>${money(outstanding)}</b></div><div><small>Quotes</small><b>${quotes.length}</b></div><div><small>Jobs</small><b>${jobs.length}</b></div></div><div class="historygrid"><div><h3>Recent quotes</h3>${quotes.slice(0,5).map(q=>`<p><b>${esc(q.quote_number)}</b> · ${money(q.quoted_price)} · ${esc(q.status)}</p>`).join('') || '<p class="muted">No quotes yet.</p>'}</div><div><h3>Recent jobs</h3>${jobs.slice(0,5).map(j=>`<p><b>${esc(j.job_number || 'Job')}</b> · ${money(j.total_price)} · ${esc(j.job_status)}</p>`).join('') || '<p class="muted">No jobs yet.</p>'}</div><div><h3>Invoices</h3>${invoices.slice(0,5).map(i=>`<p><b>${esc(i.invoice_number)}</b> · ${money(i.total)} · ${esc(i.status)}</p>`).join('') || '<p class="muted">No invoices yet.</p>'}</div></div>`}
+    const metrics = isNew ? {quotes:[],jobs:[],invoices:[],invoiced:0,paid:0,outstanding:0,lastJob:null,accepted:0} : customerMetrics(customer);
+    const activity = [
+      ...metrics.quotes.map(item => ({date:item.created_at, type:'Quote', title:item.quote_number, value:item.quoted_price, status:item.status})),
+      ...metrics.jobs.map(item => ({date:item.collection_date || item.created_at, type:'Job', title:item.job_number || 'Job', value:item.total_price, status:item.job_status})),
+      ...metrics.invoices.map(item => ({date:item.issue_date || item.created_at, type:'Invoice', title:item.invoice_number, value:item.total, status:item.status}))
+    ].sort((a,b) => new Date(b.date || 0) - new Date(a.date || 0)).slice(0,12);
+    return `<div class="modalback" data-action="customer-close"><section class="customermodal crm-modal" onclick="event.stopPropagation()"><div class="modalhead"><div><small>${isNew ? 'NEW CUSTOMER' : 'CUSTOMER 360° PROFILE'}</small><h2>${esc(customer.company || 'Add customer')}</h2>${!isNew ? `<p>${esc(customer.contact_name || '')}${customer.phone ? ` · ${esc(customer.phone)}` : ''}</p>` : ''}</div><button data-action="customer-close">×</button></div>
+      ${isNew ? '' : `<div class="crm-profile-actions"><button class="primary" data-new-quote-customer="${customer.id}">＋ New Quote</button>${customer.phone ? `<a class="secondary button-link" href="tel:${esc(customer.phone)}">Call</a>` : ''}${customer.email ? `<a class="secondary button-link" href="mailto:${esc(customer.email)}">Email</a>` : ''}</div>`}
+      <form id="customer-form"><div class="grid two"><label>Company *<input name="company" required value="${esc(customer.company)}"></label><label>Contact name<input name="contact_name" value="${esc(customer.contact_name || '')}"></label><label>Telephone<input name="phone" value="${esc(customer.phone || '')}"></label><label>Email<input name="email" type="email" value="${esc(customer.email || '')}"></label><label>Billing address<textarea name="billing_address">${esc(customer.billing_address || '')}</textarea></label><label>Payment terms (days)<input name="payment_terms" type="number" min="0" value="${Number(customer.payment_terms || 7)}"></label></div><label>Relationship notes<textarea name="notes" placeholder="Buying preferences, usual routes, contact notes or follow-up details">${esc(customer.notes || '')}</textarea></label><div class="actions"><button type="button" class="secondary" data-action="customer-close">Cancel</button><button class="primary">${isNew ? 'Save Customer' : 'Save Changes'}</button></div></form>
+      ${isNew ? '' : `<div class="customerstats crm-profile-stats"><div><small>Total invoiced</small><b>${money(metrics.invoiced)}</b></div><div><small>Paid</small><b>${money(metrics.paid)}</b></div><div><small>Outstanding</small><b>${money(metrics.outstanding)}</b></div><div><small>Jobs</small><b>${metrics.jobs.length}</b></div><div><small>Quotes</small><b>${metrics.quotes.length}</b></div><div><small>Accepted quotes</small><b>${metrics.accepted}</b></div></div>
+      <div class="crm-profile-grid"><div class="crm-timeline"><h3>Customer timeline</h3>${activity.map(item => `<div class="crm-event"><span>${esc(item.type)}</span><div><b>${esc(item.title || item.type)}</b><small>${fmtDate(item.date)} · ${esc(item.status || '')}</small></div><strong>${money(item.value)}</strong></div>`).join('') || '<p class="muted">No customer activity yet.</p>'}</div><div class="crm-account"><h3>Account summary</h3><p><span>Payment terms</span><b>${Number(customer.payment_terms || 7)} days</b></p><p><span>Last job</span><b>${metrics.lastJob ? fmtDate(metrics.lastJob.collection_date || metrics.lastJob.created_at) : '—'}</b></p><p><span>Last job status</span><b>${metrics.lastJob ? esc(metrics.lastJob.job_status || 'Booked') : '—'}</b></p><p><span>Outstanding balance</span><b>${money(metrics.outstanding)}</b></p><h3>Notes</h3><div class="crm-notes">${esc(customer.notes || 'No relationship notes saved.')}</div></div></div>`}
     </section></div>`;
   }
 
@@ -331,7 +334,7 @@
   function render() {
     if (state.loading) { document.getElementById('app').innerHTML = '<div class="loading">Loading KLS SameDay Office…</div>'; return; }
     if (!state.user) { document.getElementById('app').innerHTML = authView(); bindAuth(); return; }
-    const views = { dashboard, operations: operationsView, dispatch: dispatchView, newquote: newQuote, quotes: quotesView, jobs: jobsView, invoices: invoicesView, fleet: fleetView, customers: customersView, settings: settingsView };
+    const views = { dashboard, operations: operationsView, dispatch: dispatchView, newquote: newQuote, quotes: quotesView, jobs: jobsView, invoices: invoicesView, customers: customersView, settings: settingsView };
     document.getElementById('app').innerHTML = layout(views[state.page]());
     bindApp();
   }
@@ -362,20 +365,18 @@
   async function loadAll() {
     state.loading = true; render();
     try {
-      const [customers, quotes, jobs, invoices, fleet, settings] = await Promise.all([
+      const [customers, quotes, jobs, invoices, settings] = await Promise.all([
         db.from('customers').select('*').order('created_at', { ascending: false }),
         db.from('quotes').select('*').order('created_at', { ascending: false }),
         db.from('jobs').select('*').order('created_at', { ascending: false }),
         db.from('invoices').select('*').order('created_at', { ascending: false }),
-        db.from('fleet').select('*').order('created_at', { ascending: false }),
         db.from('business_settings').select('*').maybeSingle()
       ]);
-      for (const result of [customers, quotes, jobs, invoices, fleet, settings]) if (result.error) throw result.error;
+      for (const result of [customers, quotes, jobs, invoices, settings]) if (result.error) throw result.error;
       state.customers = customers.data || [];
       state.quotes = quotes.data || [];
       state.jobs = (jobs.data || []).map(j => ({ ...j, customer_name: j.customer_name || j.contact_name || '' }));
       state.invoices = invoices.data || [];
-      state.fleet = fleet.data || [];
       state.settings = { ...defaults, ...(settings.data || {}) };
     } catch (error) {
       showNotice(`Database setup needed: ${error.message}`, 'error');
@@ -440,7 +441,7 @@
     document.querySelector('[data-action="menu-open"]')?.addEventListener('click', () => document.getElementById('side').classList.add('open'));
     document.querySelector('[data-action="menu-close"]')?.addEventListener('click', () => document.getElementById('side').classList.remove('open'));
     document.querySelector('[data-action="notice-close"]')?.addEventListener('click', () => { state.notice = null; render(); });
-    document.querySelector('[data-action="signout"]')?.addEventListener('click', async () => { await db.auth.signOut(); state.user = null; state.customers=[]; state.quotes=[]; state.jobs=[]; state.invoices=[]; state.fleet=[]; render(); });
+    document.querySelector('[data-action="signout"]')?.addEventListener('click', async () => { await db.auth.signOut(); state.user = null; state.customers=[]; state.quotes=[]; state.jobs=[]; state.invoices=[]; render(); });
 
     const quoteForm = document.getElementById('quote-form');
     if (quoteForm) {
@@ -527,23 +528,6 @@
       } catch (error) { showNotice(error.message, 'error'); render(); }
     });
 
-    document.querySelectorAll('[data-job-vehicle]').forEach(select => select.onchange = async () => {
-      const job = state.jobs.find(j => j.id === select.dataset.jobVehicle);
-      const previous = job.assigned_vehicle_id || null;
-      job.assigned_vehicle_id = select.value || null;
-      const { error } = await db.from('jobs').update({ assigned_vehicle_id: job.assigned_vehicle_id }).eq('id', job.id);
-      if (error) { job.assigned_vehicle_id = previous; showNotice(error.message, 'error'); render(); return; }
-      showNotice(`${job.job_number || 'Job'} vehicle assignment updated.`, 'ok');
-    });
-    document.querySelectorAll('[data-job-driver]').forEach(input => input.onchange = async () => {
-      const job = state.jobs.find(j => j.id === input.dataset.jobDriver);
-      const previous = job.driver_name || '';
-      job.driver_name = input.value.trim();
-      const { error } = await db.from('jobs').update({ driver_name: job.driver_name || null }).eq('id', job.id);
-      if (error) { job.driver_name = previous; showNotice(error.message, 'error'); render(); return; }
-      showNotice(`${job.job_number || 'Job'} driver updated.`, 'ok');
-    });
-
     document.querySelectorAll('[data-job-status]').forEach(select => select.onchange = async () => {
       const job = state.jobs.find(j => j.id === select.dataset.jobStatus); const previous = job.job_status; job.job_status = select.value;
       const { error } = await db.from('jobs').update({ job_status: select.value }).eq('id', job.id);
@@ -602,33 +586,6 @@
     };
 
 
-    const openVehicleForm = vehicle => {
-      const wrap = document.getElementById('fleet-form-wrap');
-      if (!wrap) return;
-      wrap.innerHTML = vehicleForm(vehicle);
-      bindVehicleForm();
-    };
-    const bindVehicleForm = () => {
-      document.querySelectorAll('[data-action="vehicle-close"]').forEach(el => el.onclick = () => { const wrap=document.getElementById('fleet-form-wrap'); if(wrap) wrap.innerHTML=''; });
-      const form = document.getElementById('vehicle-form');
-      if (!form) return;
-      form.onsubmit = async e => {
-        e.preventDefault();
-        const values = Object.fromEntries(new FormData(form));
-        values.user_id = state.user.id;
-        for (const key of ['mot_due','insurance_due','service_due','loler_due']) if (!values[key]) values[key] = null;
-        try {
-          const id = form.dataset.vehicleId;
-          const result = id ? await db.from('fleet').update(values).eq('id', id).select().single() : await db.from('fleet').insert(values).select().single();
-          if (result.error) throw result.error;
-          if (id) state.fleet[state.fleet.findIndex(v=>v.id===id)] = result.data; else state.fleet.unshift(result.data);
-          showNotice(`${result.data.vehicle_name} saved.`, 'ok'); render();
-        } catch(error) { showNotice(error.message,'error'); render(); }
-      };
-    };
-    document.querySelector('[data-action="new-vehicle"]')?.addEventListener('click', () => openVehicleForm({ status:'Available', vehicle_type:'Luton Tail Lift' }));
-    document.querySelectorAll('[data-edit-vehicle]').forEach(button => button.onclick = () => openVehicleForm(state.fleet.find(v => v.id === button.dataset.editVehicle) || {}));
-
     document.querySelectorAll('[data-customer]').forEach(card => {
       const open = () => { state.selectedCustomerId = card.dataset.customer; render(); };
       card.onclick = open;
@@ -658,6 +615,13 @@
         state.selectedCustomerId = null; render();
       } catch (error) { showNotice(error.message, 'error'); render(); }
     };
+
+    document.querySelectorAll('[data-new-quote-customer]').forEach(button => button.onclick = () => {
+      state.quoteCustomerId = button.dataset.newQuoteCustomer;
+      state.selectedCustomerId = null;
+      state.page = 'newquote';
+      render();
+    });
 
     const jobSearch = document.getElementById('job-search');
     if (jobSearch) jobSearch.oninput = () => filterRows(jobSearch.value);

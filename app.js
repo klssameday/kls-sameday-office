@@ -168,14 +168,26 @@
   }
 
   function newQuote() {
-    return panel('Create a new quote', `<form id="quote-form">
-      <div class="grid"><label>Customer / company *<input name="company" required></label><label>Contact name<input name="contact_name"></label><label>Telephone<input name="phone"></label></div>
+    return panel('Smart Quote Builder', `<form id="quote-form">
+      <div class="quote-builder-head"><div><small>KLS PRICING ENGINE</small><h3>Build a consistent quote in seconds</h3><p>Enter the route mileage, choose a vehicle and add any extras. The total updates instantly.</p></div><div class="rate-pill">Minimum or mileage rate — whichever is higher</div></div>
+      <div class="grid"><label>Customer / company *<input name="company" required></label><label>Contact name<input name="contact_name"></label><label>Telephone / WhatsApp<input name="phone"></label></div>
       <div class="grid"><label>Email<input name="email" type="email"></label><label>Collection date<input name="collection_date" type="date" value="${todayISO()}"></label><label>Collection time<input name="collection_time" type="time"></label></div>
-      <div class="grid two"><label>Collection address *<textarea name="collection_address" required></textarea></label><label>Delivery address *<textarea name="delivery_address" required></textarea></label></div>
-      <div class="grid"><label>Vehicle<select name="vehicle">${Object.keys(vehicles).map(v => `<option>${v}</option>`).join('')}</select></label><label>Distance (miles)<input name="miles" type="number" min="0" step="0.1"></label><label>Your quoted price<input name="quoted_price" type="number" min="0" step="0.01"><em id="suggestion">Suggested: £65.00</em></label></div>
+      <div class="grid two"><label>Collection address / postcode *<textarea name="collection_address" required></textarea></label><label>Delivery address / postcode *<textarea name="delivery_address" required></textarea></label></div>
+      <div class="route-tools"><button type="button" class="secondary" data-action="open-route">Open route in Google Maps</button><span>Use the route mileage shown by Google Maps, then enter it below.</span></div>
+      <div class="grid"><label>Vehicle<select name="vehicle">${Object.keys(vehicles).map(v => `<option>${v}</option>`).join('')}</select></label><label>Distance (miles)<input name="miles" type="number" min="0" step="0.1" value="0"></label><label>Base delivery charge<input name="base_charge" type="number" readonly></label></div>
+      <div class="extras-box"><div class="extras-title"><div><small>OPTIONAL EXTRAS</small><h3>Add only what applies</h3></div><button type="button" class="secondary" data-action="clear-extras">Clear extras</button></div>
+        <div class="extras-grid">
+          <label>Waiting after free 30 mins (hours)<input name="waiting_hours" type="number" min="0" step="0.25" value="0"><em>£60 per hour</em></label>
+          <label>Loading assistance<select name="loading_ends"><option value="0">None</option><option value="1">One end — £20</option><option value="2">Both ends — £40</option></select></label>
+          <label>Extra drops<input name="extra_drops" type="number" min="0" step="1" value="0"><em>£25 each</em></label>
+          <label>Manual charges<input name="manual_extras" type="number" min="0" step="0.01" value="0"><em>Tolls, ULEZ, congestion, ferry</em></label>
+          <label>Surcharge<select name="surcharge"><option value="0">None</option><option value="0.25">Night +25%</option><option value="0.30">Saturday +30%</option><option value="0.50">Sunday / Bank Holiday +50%</option></select></label>
+        </div>
+      </div>
+      <div class="quote-total-card"><div><small>SUGGESTED TOTAL</small><strong id="suggestion">£85.00</strong><span id="price-breakdown">Small Van minimum charge</span></div><label>Your final quoted price<input name="quoted_price" type="number" min="0" step="0.01"></label></div>
       <label>Goods description<input name="goods_description"></label><label>Notes<textarea name="notes"></textarea></label>
       <div class="actions"><button type="reset" class="secondary">Clear</button><button class="primary">Save Quote</button></div>
-    </form>`, 'Give the customer a price first, then convert it into a job if accepted.');
+    </form>`, 'Your agreed KLS rates, extras and surcharges are built into this calculator. Automatic postcode mileage needs a Google Maps API key; the route button provides a no-cost mileage check for now.');
   }
 
   function table(headers, rows) {
@@ -185,7 +197,7 @@
   function quotesView() {
     return panel('Quotes', table(['Quote','Customer','Route','Vehicle','Price','Status','Actions'], state.quotes.map(q => [
       esc(q.quote_number), esc(q.customer_name), `${esc(q.collection_address)}<br><i>→ ${esc(q.delivery_address)}</i>`, esc(q.vehicle), money(q.quoted_price), esc(q.status),
-      `<button data-print-quote="${q.id}">Print</button>${q.status === 'Pending' ? `<button data-accept="${q.id}">Accept → Job</button>` : ''}`
+      `<button data-print-quote="${q.id}">Print</button><button data-email-quote="${q.id}">Email</button><button data-whatsapp-quote="${q.id}">WhatsApp</button>${q.status === 'Pending' ? `<button data-accept="${q.id}">Accept → Job</button>` : ''}`
     ])));
   }
 
@@ -374,29 +386,58 @@
 
     const quoteForm = document.getElementById('quote-form');
     if (quoteForm) {
-      const calculate = () => {
+      const calculate = (forcePrice = false) => {
         const miles = Number(quoteForm.miles.value || 0);
         const rate = vehicles[quoteForm.vehicle.value];
-        const suggested = Math.max(rate.minimum, miles * rate.ppm);
-        document.getElementById('suggestion').textContent = `Suggested: ${money(suggested)}`;
-        if (!quoteForm.quoted_price.value) quoteForm.quoted_price.value = suggested.toFixed(2);
+        const base = Math.max(rate.minimum, miles * rate.ppm);
+        const waiting = Number(quoteForm.waiting_hours.value || 0) * 60;
+        const loading = Number(quoteForm.loading_ends.value || 0) * 20;
+        const drops = Number(quoteForm.extra_drops.value || 0) * 25;
+        const manual = Number(quoteForm.manual_extras.value || 0);
+        const preSurcharge = base + waiting + loading + drops + manual;
+        const surchargeRate = Number(quoteForm.surcharge.value || 0);
+        const surcharge = preSurcharge * surchargeRate;
+        const suggested = preSurcharge + surcharge;
+        quoteForm.base_charge.value = base.toFixed(2);
+        document.getElementById('suggestion').textContent = money(suggested);
+        const parts = [`Base ${money(base)}`];
+        if (waiting) parts.push(`waiting ${money(waiting)}`);
+        if (loading) parts.push(`loading ${money(loading)}`);
+        if (drops) parts.push(`drops ${money(drops)}`);
+        if (manual) parts.push(`manual ${money(manual)}`);
+        if (surcharge) parts.push(`surcharge ${money(surcharge)}`);
+        document.getElementById('price-breakdown').textContent = parts.join(' + ');
+        if (forcePrice || !quoteForm.quoted_price.value) quoteForm.quoted_price.value = suggested.toFixed(2);
+        return { base, waiting, loading, drops, manual, surcharge, suggested };
       };
-      quoteForm.vehicle.onchange = () => { quoteForm.quoted_price.value = ''; calculate(); };
-      quoteForm.miles.oninput = () => { quoteForm.quoted_price.value = ''; calculate(); };
-      calculate();
+      ['vehicle','miles','waiting_hours','loading_ends','extra_drops','manual_extras','surcharge'].forEach(name => {
+        quoteForm[name].addEventListener(name === 'vehicle' || name === 'loading_ends' || name === 'surcharge' ? 'change' : 'input', () => calculate(true));
+      });
+      document.querySelector('[data-action="clear-extras"]')?.addEventListener('click', () => {
+        quoteForm.waiting_hours.value = 0; quoteForm.loading_ends.value = 0; quoteForm.extra_drops.value = 0; quoteForm.manual_extras.value = 0; quoteForm.surcharge.value = 0; calculate(true);
+      });
+      document.querySelector('[data-action="open-route"]')?.addEventListener('click', () => {
+        const from = quoteForm.collection_address.value.trim(); const to = quoteForm.delivery_address.value.trim();
+        if (!from || !to) { showNotice('Enter both collection and delivery addresses first.', 'error'); render(); return; }
+        window.open(`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(from)}&destination=${encodeURIComponent(to)}&travelmode=driving`, '_blank', 'noopener');
+      });
+      calculate(true);
       quoteForm.onsubmit = async e => {
         e.preventDefault();
         const button = quoteForm.querySelector('button.primary'); button.disabled = true; button.textContent = 'Saving…';
         try {
           const form = Object.fromEntries(new FormData(quoteForm));
           const customer = await findOrCreateCustomer(form);
-          const rate = vehicles[form.vehicle]; const miles = Number(form.miles || 0); const suggested = Math.max(rate.minimum, miles * rate.ppm);
+          const rate = vehicles[form.vehicle]; const miles = Number(form.miles || 0); const base = Math.max(rate.minimum, miles * rate.ppm);
+          const waiting = Number(form.waiting_hours || 0) * 60; const loading = Number(form.loading_ends || 0) * 20; const drops = Number(form.extra_drops || 0) * 25; const manual = Number(form.manual_extras || 0); const surchargeRate = Number(form.surcharge || 0); const surcharge = (base + waiting + loading + drops + manual) * surchargeRate; const suggested = base + waiting + loading + drops + manual + surcharge;
+          const extrasSummary = [waiting ? `Waiting: ${money(waiting)}` : '', loading ? `Loading assistance: ${money(loading)}` : '', drops ? `Extra drops: ${money(drops)}` : '', manual ? `Manual charges: ${money(manual)}` : '', surcharge ? `Surcharge: ${money(surcharge)}` : ''].filter(Boolean).join(' | ');
+          const savedNotes = [form.notes, extrasSummary].filter(Boolean).join('\n');
           const payload = {
             user_id: state.user.id, customer_id: customer.id, quote_number: numberCode('Q'), customer_name: form.company,
             contact_name: form.contact_name || null, phone: form.phone || null, email: form.email || null,
             collection_date: form.collection_date || null, collection_time: form.collection_time || null,
             collection_address: form.collection_address, delivery_address: form.delivery_address, vehicle: form.vehicle,
-            goods_description: form.goods_description || null, miles, quoted_price: Number(form.quoted_price || suggested), notes: form.notes || null, status: 'Pending'
+            goods_description: form.goods_description || null, miles, quoted_price: Number(form.quoted_price || suggested), notes: savedNotes || null, status: 'Pending'
           };
           const { data, error } = await db.from('quotes').insert(payload).select().single();
           if (error) throw error;
@@ -459,6 +500,19 @@
     });
 
     document.querySelectorAll('[data-print-quote]').forEach(button => button.onclick = () => printDocument('quote', state.quotes.find(q => q.id === button.dataset.printQuote)));
+    const quoteMessage = quote => `${state.settings.trading_name} quotation ${quote.quote_number}\n\nCollection: ${quote.collection_address}\nDelivery: ${quote.delivery_address}\nVehicle: ${quote.vehicle}\nPrice: ${money(quote.quoted_price)}\n\nDedicated vehicle • No shared loads\n${state.settings.phone} • ${state.settings.email}`;
+    document.querySelectorAll('[data-email-quote]').forEach(button => button.onclick = () => {
+      const quote = state.quotes.find(q => q.id === button.dataset.emailQuote);
+      const subject = encodeURIComponent(`${state.settings.trading_name} quotation ${quote.quote_number}`);
+      const body = encodeURIComponent(quoteMessage(quote));
+      window.location.href = `mailto:${encodeURIComponent(quote.email || '')}?subject=${subject}&body=${body}`;
+    });
+    document.querySelectorAll('[data-whatsapp-quote]').forEach(button => button.onclick = () => {
+      const quote = state.quotes.find(q => q.id === button.dataset.whatsappQuote);
+      const digits = String(quote.phone || '').replace(/\D/g, '').replace(/^0/, '44');
+      const url = digits ? `https://wa.me/${digits}?text=${encodeURIComponent(quoteMessage(quote))}` : `https://wa.me/?text=${encodeURIComponent(quoteMessage(quote))}`;
+      window.open(url, '_blank', 'noopener');
+    });
     document.querySelectorAll('[data-print-invoice]').forEach(button => button.onclick = () => printDocument('invoice', state.invoices.find(i => i.id === button.dataset.printInvoice)));
 
     const settingsForm = document.getElementById('settings-form');

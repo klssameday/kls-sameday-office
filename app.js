@@ -100,19 +100,71 @@
   }
 
   const panel = (title, body, sub = '', right = '') => `<section class="panel"><div class="panelhead"><div><h2>${title}</h2>${sub ? `<p>${sub}</p>` : ''}</div>${right}</div>${body}</section>`;
-  const card = (title, value) => `<div class="card"><span>◆</span><div><small>${title}</small><b>${value}</b></div></div>`;
+  const card = (title, value, note = '', page = '') => `<button class="card dashboard-card" ${page ? `data-page="${page}"` : ''}><span>◆</span><div><small>${title}</small><b>${value}</b>${note ? `<em>${note}</em>` : ''}</div></button>`;
 
   function dashboard() {
     const now = new Date();
-    const monthJobs = state.jobs.filter(job => {
-      const date = new Date(job.created_at);
-      return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear() && job.job_status !== 'Cancelled';
+    const today = todayISO();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+    const validJobs = state.jobs.filter(job => job.job_status !== 'Cancelled');
+    const monthJobs = validJobs.filter(job => {
+      const raw = job.collection_date || job.created_at;
+      const date = raw ? new Date(raw) : null;
+      return date && !Number.isNaN(date.getTime()) && date.getMonth() === currentMonth && date.getFullYear() === currentYear;
     });
+    const todayJobs = validJobs.filter(job => String(job.collection_date || '').slice(0,10) === today);
+    const activeJobs = validJobs.filter(job => !['Delivered'].includes(job.job_status));
+    const deliveredJobs = validJobs.filter(job => job.job_status === 'Delivered');
     const revenue = monthJobs.reduce((sum, job) => sum + Number(job.total_price || 0), 0);
-    const outstanding = state.invoices.filter(inv => inv.status !== 'Paid').reduce((sum, inv) => sum + Number(inv.total || 0), 0);
-    return `<section class="hero"><div><small>FAST QUOTING</small><h2>Quote it. Book it. Invoice it.</h2><p>Permanent online storage for your same-day courier work.</p></div><button data-page="newquote">＋ NEW QUOTE</button></section>
-      <section class="cards">${card('Pending quotes', state.quotes.filter(q => q.status === 'Pending').length)}${card('Active jobs', state.jobs.filter(j => !['Delivered','Cancelled'].includes(j.job_status)).length)}${card('This month', money(revenue))}${card('Outstanding', money(outstanding))}</section>
-      ${panel('Latest jobs', jobTable(state.jobs.slice(0, 8)))}`;
+    const paidThisMonth = state.invoices.filter(inv => {
+      if (inv.status !== 'Paid') return false;
+      const raw = inv.paid_date || inv.issue_date || inv.created_at;
+      const date = raw ? new Date(raw) : null;
+      return date && !Number.isNaN(date.getTime()) && date.getMonth() === currentMonth && date.getFullYear() === currentYear;
+    }).reduce((sum, inv) => sum + Number(inv.total || 0), 0);
+    const unpaid = state.invoices.filter(inv => !['Paid','Cancelled'].includes(inv.status));
+    const outstanding = unpaid.reduce((sum, inv) => sum + Number(inv.total || 0), 0);
+    const overdue = unpaid.filter(inv => inv.due_date && String(inv.due_date).slice(0,10) < today);
+    const overdueTotal = overdue.reduce((sum, inv) => sum + Number(inv.total || 0), 0);
+    const pendingQuotes = state.quotes.filter(q => q.status === 'Pending');
+    const totalMiles = monthJobs.reduce((sum, job) => sum + Number(job.miles || 0), 0);
+    const averageJob = monthJobs.length ? revenue / monthJobs.length : 0;
+
+    const monthLabels = [];
+    const monthValues = [];
+    for (let offset = 5; offset >= 0; offset--) {
+      const date = new Date(currentYear, currentMonth - offset, 1);
+      monthLabels.push(date.toLocaleDateString('en-GB', { month: 'short' }));
+      monthValues.push(validJobs.filter(job => {
+        const raw = job.collection_date || job.created_at;
+        const d = raw ? new Date(raw) : null;
+        return d && !Number.isNaN(d.getTime()) && d.getMonth() === date.getMonth() && d.getFullYear() === date.getFullYear();
+      }).reduce((sum, job) => sum + Number(job.total_price || 0), 0));
+    }
+    const maxValue = Math.max(...monthValues, 1);
+    const chart = `<div class="revenue-chart">${monthValues.map((value, index) => `<div class="chart-column"><div class="chart-value">${value ? money(value) : '£0'}</div><div class="chart-track"><div class="chart-bar" style="height:${Math.max(value ? (value / maxValue) * 100 : 3, 3)}%"></div></div><small>${monthLabels[index]}</small></div>`).join('')}</div>`;
+
+    const attention = [
+      overdue.length ? `<button data-page="invoices"><b>${overdue.length} overdue invoice${overdue.length === 1 ? '' : 's'}</b><span>${money(overdueTotal)} needs attention</span></button>` : '',
+      pendingQuotes.length ? `<button data-page="quotes"><b>${pendingQuotes.length} pending quote${pendingQuotes.length === 1 ? '' : 's'}</b><span>Waiting to be accepted or followed up</span></button>` : '',
+      activeJobs.length ? `<button data-page="jobs"><b>${activeJobs.length} active job${activeJobs.length === 1 ? '' : 's'}</b><span>Booked, collected or in transit</span></button>` : '',
+      !overdue.length && !pendingQuotes.length && !activeJobs.length ? `<div class="all-clear"><b>All clear</b><span>Nothing urgent needs your attention.</span></div>` : ''
+    ].filter(Boolean).join('');
+
+    const todaysRows = todayJobs.length ? jobTable(todayJobs.slice(0, 6)) : `<div class="dashboard-empty"><b>No jobs booked for today</b><p>Create a quote or review upcoming work.</p><button class="primary" data-page="newquote">＋ New Quote</button></div>`;
+
+    return `<section class="hero dashboard-hero"><div><small>KLS SAMEDAY CONTROL CENTRE</small><h2>${todayJobs.length ? `${todayJobs.length} job${todayJobs.length === 1 ? '' : 's'} booked today` : 'Your business at a glance'}</h2><p>${overdue.length ? `${overdue.length} overdue invoice${overdue.length === 1 ? '' : 's'} need attention.` : 'Quotes, jobs, invoices and cash flow in one place.'}</p></div><button data-page="newquote">＋ NEW QUOTE</button></section>
+      <section class="cards dashboard-cards">${card('Today’s jobs', todayJobs.length, activeJobs.length ? `${activeJobs.length} active overall` : 'No active jobs', 'jobs')}${card('Monthly turnover', money(revenue), `${monthJobs.length} job${monthJobs.length === 1 ? '' : 's'} · ${Math.round(totalMiles)} miles`, 'jobs')}${card('Outstanding', money(outstanding), overdue.length ? `${money(overdueTotal)} overdue` : 'Nothing overdue', 'invoices')}${card('Paid this month', money(paidThisMonth), `${deliveredJobs.length} delivered overall`, 'invoices')}</section>
+      <section class="dashboard-grid">
+        ${panel('Today’s jobs', todaysRows, todayJobs.length ? 'Collection schedule for today.' : 'Your schedule is clear.', '<button class="secondary" data-page="jobs">View all jobs</button>')}
+        ${panel('Needs attention', `<div class="attention-list">${attention}</div>`, 'The items most likely to need action next.')}
+      </section>
+      <section class="dashboard-grid lower">
+        ${panel('Six-month turnover', chart, 'Job value by collection month.')}
+        ${panel('This month', `<div class="mini-metrics"><div><small>Average job</small><b>${money(averageJob)}</b></div><div><small>Total miles</small><b>${Math.round(totalMiles).toLocaleString('en-GB')}</b></div><div><small>Jobs booked</small><b>${monthJobs.length}</b></div><div><small>Pending quotes</small><b>${pendingQuotes.length}</b></div></div>`, 'Quick performance snapshot.')}
+      </section>
+      ${panel('Latest jobs', jobTable(state.jobs.slice(0, 8)), 'Most recently added work.', '<button class="secondary" data-page="jobs">Open jobs</button>')}`;
   }
 
   function newQuote() {

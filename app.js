@@ -82,7 +82,7 @@
     </section></div>`;
   }
 
-  const navItems = [['dashboard','Dashboard'],['newquote','New Quote'],['quotes','Quotes'],['jobs','Jobs'],['invoices','Invoices'],['customers','Customers'],['settings','Settings']];
+  const navItems = [['dashboard','Dashboard'],['dispatch','Dispatch Board'],['newquote','New Quote'],['quotes','Quotes'],['jobs','Jobs'],['invoices','Invoices'],['customers','Customers'],['settings','Settings']];
 
   function layout(content) {
     const title = navItems.find(([key]) => key === state.page)?.[1] || 'Dashboard';
@@ -199,6 +199,33 @@
 
   function jobsView() { return panel('Jobs', jobTable(state.jobs), '', '<label class="search">Search <input id="job-search"></label>'); }
 
+  const dispatchStatuses = ['Booked','Collected','In Transit','Delivered'];
+
+  function dispatchCard(job) {
+    const statusIndex = dispatchStatuses.indexOf(job.job_status);
+    const previous = statusIndex > 0 ? dispatchStatuses[statusIndex - 1] : '';
+    const next = statusIndex >= 0 && statusIndex < dispatchStatuses.length - 1 ? dispatchStatuses[statusIndex + 1] : '';
+    const time = job.collection_time ? String(job.collection_time).slice(0,5) : 'Time TBC';
+    return `<article class="dispatch-card" draggable="true" data-dispatch-job="${job.id}">
+      <div class="dispatch-card-head"><b>${esc(job.job_number || 'Job')}</b><span>${esc(time)}</span></div>
+      <h3>${esc(job.customer_name || job.contact_name || 'Customer')}</h3>
+      <div class="dispatch-route"><p><small>COLLECT</small>${esc(job.collection_address || 'Not set')}</p><span>↓</span><p><small>DELIVER</small>${esc(job.delivery_address || 'Not set')}</p></div>
+      <div class="dispatch-meta"><span>${esc(job.vehicle || 'Vehicle TBC')}</span><span>${money(job.total_price)}</span></div>
+      <div class="dispatch-card-actions">${previous ? `<button class="secondary" data-move-job="${job.id}" data-move-status="${previous}">← ${esc(previous)}</button>` : ''}${next ? `<button class="primary" data-move-job="${job.id}" data-move-status="${next}">${esc(next)} →</button>` : `<button class="primary" data-page="jobs">Open job</button>`}</div>
+      ${job.invoice_status === 'Invoiced' ? '<div class="dispatch-badge">INVOICED</div>' : ''}
+    </article>`;
+  }
+
+  function dispatchView() {
+    const active = state.jobs.filter(job => job.job_status !== 'Cancelled');
+    const columns = dispatchStatuses.map(status => {
+      const jobs = active.filter(job => job.job_status === status);
+      return `<section class="dispatch-column" data-drop-status="${status}"><div class="dispatch-column-head"><div><h2>${status}</h2><p>${jobs.length} job${jobs.length === 1 ? '' : 's'}</p></div><span>${jobs.length}</span></div><div class="dispatch-list">${jobs.length ? jobs.map(dispatchCard).join('') : `<div class="dispatch-empty">Drop a job here</div>`}</div></section>`;
+    }).join('');
+    return `<section class="dispatch-toolbar"><div><small>LIVE OPERATIONS</small><h2>Dispatch Board</h2><p>Drag jobs between stages or use the move buttons on mobile.</p></div><div><button class="secondary" data-page="jobs">Table view</button><button class="primary" data-page="newquote">＋ New Quote</button></div></section><div class="dispatch-board">${columns}</div>`;
+  }
+
+
   function invoicesView() {
     return panel('Invoices', table(['Invoice','Customer','Issue','Due','Total','Status','Actions'], state.invoices.map(inv => [
       esc(inv.invoice_number), esc(inv.customer_name), fmtDate(inv.issue_date), fmtDate(inv.due_date), money(inv.total),
@@ -236,7 +263,7 @@
   function render() {
     if (state.loading) { document.getElementById('app').innerHTML = '<div class="loading">Loading KLS SameDay Office…</div>'; return; }
     if (!state.user) { document.getElementById('app').innerHTML = authView(); bindAuth(); return; }
-    const views = { dashboard, newquote: newQuote, quotes: quotesView, jobs: jobsView, invoices: invoicesView, customers: customersView, settings: settingsView };
+    const views = { dashboard, dispatch: dispatchView, newquote: newQuote, quotes: quotesView, jobs: jobsView, invoices: invoicesView, customers: customersView, settings: settingsView };
     document.getElementById('app').innerHTML = layout(views[state.page]());
     bindApp();
   }
@@ -295,8 +322,51 @@
     return created;
   }
 
+
+
+  async function updateJobStatus(jobId, newStatus) {
+    const job = state.jobs.find(item => item.id === jobId);
+    if (!job || !dispatchStatuses.includes(newStatus)) return;
+    const previous = job.job_status;
+    if (previous === newStatus) return;
+    job.job_status = newStatus;
+    render();
+    const { error } = await db.from('jobs').update({ job_status: newStatus }).eq('id', jobId);
+    if (error) {
+      job.job_status = previous;
+      showNotice(error.message, 'error');
+      render();
+      return;
+    }
+    showNotice(`${job.job_number || 'Job'} moved to ${newStatus}.`, 'ok');
+    render();
+  }
+
   function bindApp() {
     document.querySelectorAll('[data-page]').forEach(button => button.onclick = () => { state.page = button.dataset.page; render(); });
+
+    document.querySelectorAll('[data-move-job]').forEach(button => button.onclick = event => {
+      event.stopPropagation();
+      updateJobStatus(button.dataset.moveJob, button.dataset.moveStatus);
+    });
+    document.querySelectorAll('[data-dispatch-job]').forEach(card => {
+      card.addEventListener('dragstart', event => {
+        card.classList.add('dragging');
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', card.dataset.dispatchJob);
+      });
+      card.addEventListener('dragend', () => card.classList.remove('dragging'));
+    });
+    document.querySelectorAll('[data-drop-status]').forEach(column => {
+      column.addEventListener('dragover', event => { event.preventDefault(); column.classList.add('drag-over'); });
+      column.addEventListener('dragleave', event => { if (!column.contains(event.relatedTarget)) column.classList.remove('drag-over'); });
+      column.addEventListener('drop', event => {
+        event.preventDefault();
+        column.classList.remove('drag-over');
+        const jobId = event.dataTransfer.getData('text/plain');
+        updateJobStatus(jobId, column.dataset.dropStatus);
+      });
+    });
     document.querySelector('[data-action="menu-open"]')?.addEventListener('click', () => document.getElementById('side').classList.add('open'));
     document.querySelector('[data-action="menu-close"]')?.addEventListener('click', () => document.getElementById('side').classList.remove('open'));
     document.querySelector('[data-action="notice-close"]')?.addEventListener('click', () => { state.notice = null; render(); });

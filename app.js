@@ -82,7 +82,7 @@
     </section></div>`;
   }
 
-  const navItems = [['dashboard','Dashboard'],['dispatch','Dispatch Board'],['newquote','New Quote'],['quotes','Quotes'],['jobs','Jobs'],['invoices','Invoices'],['customers','Customers'],['settings','Settings']];
+  const navItems = [['dashboard','Dashboard'],['operations','Today’s Planner'],['dispatch','Dispatch Board'],['newquote','New Quote'],['quotes','Quotes'],['jobs','Jobs'],['invoices','Invoices'],['customers','Customers'],['settings','Settings']];
 
   function layout(content) {
     const title = navItems.find(([key]) => key === state.page)?.[1] || 'Dashboard';
@@ -165,6 +165,35 @@
         ${panel('This month', `<div class="mini-metrics"><div><small>Average job</small><b>${money(averageJob)}</b></div><div><small>Total miles</small><b>${Math.round(totalMiles).toLocaleString('en-GB')}</b></div><div><small>Jobs booked</small><b>${monthJobs.length}</b></div><div><small>Pending quotes</small><b>${pendingQuotes.length}</b></div></div>`, 'Quick performance snapshot.')}
       </section>
       ${panel('Latest jobs', jobTable(state.jobs.slice(0, 8)), 'Most recently added work.', '<button class="secondary" data-page="jobs">Open jobs</button>')}`;
+  }
+
+
+  function operationsView() {
+    const today = todayISO();
+    const todayJobs = state.jobs
+      .filter(job => job.job_status !== 'Cancelled' && String(job.collection_date || '').slice(0,10) === today)
+      .sort((a,b) => String(a.collection_time || '23:59').localeCompare(String(b.collection_time || '23:59')));
+    const activeJobs = state.jobs.filter(job => !['Delivered','Cancelled'].includes(job.job_status));
+    const deliveredToday = state.jobs.filter(job => job.job_status === 'Delivered' && String(job.collection_date || '').slice(0,10) === today);
+    const unpaid = state.invoices.filter(inv => !['Paid','Cancelled'].includes(inv.status));
+    const outstanding = unpaid.reduce((sum, inv) => sum + Number(inv.total || 0), 0);
+    const pendingQuotes = state.quotes.filter(q => q.status === 'Pending');
+    const todayRevenue = todayJobs.reduce((sum, job) => sum + Number(job.total_price || 0), 0);
+
+    const timeline = todayJobs.length ? todayJobs.map(job => {
+      const time = job.collection_time ? String(job.collection_time).slice(0,5) : 'TBC';
+      const nextStatus = job.job_status === 'Booked' ? 'Collected' : job.job_status === 'Collected' ? 'In Transit' : job.job_status === 'In Transit' ? 'Delivered' : '';
+      return `<article class="planner-item"><div class="planner-time">${esc(time)}</div><div class="planner-dot ${String(job.job_status || '').toLowerCase().replace(/\s+/g,'-')}"></div><div class="planner-job"><div class="planner-job-head"><div><b>${esc(job.job_number || 'Job')}</b><span>${esc(job.job_status || 'Booked')}</span></div><strong>${money(job.total_price)}</strong></div><h3>${esc(job.customer_name || job.contact_name || 'Customer')}</h3><p><small>COLLECT</small>${esc(job.collection_address || 'Not set')}</p><p><small>DELIVER</small>${esc(job.delivery_address || 'Not set')}</p><div class="planner-actions"><button class="secondary" data-page="jobs">Open job</button>${nextStatus ? `<button class="primary" data-move-job="${job.id}" data-move-status="${nextStatus}">Mark ${esc(nextStatus)}</button>` : ''}</div></div></article>`;
+    }).join('') : `<div class="planner-empty"><div>✓</div><h3>No jobs booked today</h3><p>Your day is clear. Add a new quote or check the dispatch board.</p><button class="primary" data-page="newquote">＋ New Quote</button></div>`;
+
+    const activeList = activeJobs.slice(0,6).map(job => `<button class="ops-list-row" data-page="dispatch"><span><b>${esc(job.job_number || 'Job')}</b><small>${esc(job.customer_name || job.contact_name || '')}</small></span><em>${esc(job.job_status || 'Booked')}</em></button>`).join('') || '<div class="ops-clear">No active jobs.</div>';
+    const quoteList = pendingQuotes.slice(0,5).map(q => `<button class="ops-list-row" data-page="quotes"><span><b>${esc(q.quote_number)}</b><small>${esc(q.customer_name)}</small></span><strong>${money(q.quoted_price)}</strong></button>`).join('') || '<div class="ops-clear">No quotes awaiting reply.</div>';
+
+    return `<section class="ops-hero"><div><small>DAILY OPERATIONS</small><h2>${new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})}</h2><p>Everything you need to run today’s work from one screen.</p></div><div class="ops-quick"><button class="primary" data-page="newquote">＋ New Quote</button><button class="secondary" data-page="dispatch">Open Dispatch</button></div></section>
+      <section class="ops-stats">${card('Jobs today', todayJobs.length, `${activeJobs.length} active overall`, 'jobs')}${card('Today’s value', money(todayRevenue), `${deliveredToday.length} delivered today`, 'jobs')}${card('Outstanding', money(outstanding), `${unpaid.length} unpaid invoice${unpaid.length===1?'':'s'}`, 'invoices')}${card('Quotes awaiting reply', pendingQuotes.length, 'Follow up pending quotes', 'quotes')}</section>
+      <section class="operations-layout"><div class="planner-panel"><div class="panelhead"><div><h2>Today’s planner</h2><p>Collection schedule in time order.</p></div><button class="secondary" data-page="jobs">All jobs</button></div><div class="planner-timeline">${timeline}</div></div>
+      <aside class="operations-side">${panel('Active jobs', `<div class="ops-list">${activeList}</div>`, 'Current work not yet delivered.', '<button class="secondary" data-page="dispatch">Board</button>')}${panel('Pending quotes', `<div class="ops-list">${quoteList}</div>`, 'Quotes that may need following up.', '<button class="secondary" data-page="quotes">View all</button>')}</aside></section>
+      <section class="ops-bottom-actions"><button data-page="newquote"><b>＋</b><span><strong>New Quote</strong><small>Price and save a job</small></span></button><button data-page="customers"><b>👤</b><span><strong>Add Customer</strong><small>Create or update a contact</small></span></button><button data-page="dispatch"><b>🚚</b><span><strong>Dispatch Board</strong><small>Move jobs through each stage</small></span></button><button data-page="invoices"><b>£</b><span><strong>Invoices</strong><small>Check money owed</small></span></button></section>`;
   }
 
   function newQuote() {
@@ -275,7 +304,7 @@
   function render() {
     if (state.loading) { document.getElementById('app').innerHTML = '<div class="loading">Loading KLS SameDay Office…</div>'; return; }
     if (!state.user) { document.getElementById('app').innerHTML = authView(); bindAuth(); return; }
-    const views = { dashboard, dispatch: dispatchView, newquote: newQuote, quotes: quotesView, jobs: jobsView, invoices: invoicesView, customers: customersView, settings: settingsView };
+    const views = { dashboard, operations: operationsView, dispatch: dispatchView, newquote: newQuote, quotes: quotesView, jobs: jobsView, invoices: invoicesView, customers: customersView, settings: settingsView };
     document.getElementById('app').innerHTML = layout(views[state.page]());
     bindApp();
   }

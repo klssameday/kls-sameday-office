@@ -278,7 +278,9 @@
           };
           const { data, error } = await db.from('quotes').insert(payload).select().single();
           if (error) throw error;
-          state.quotes.unshift(data); showNotice(`${data.quote_number} saved permanently.`, 'ok'); state.page = 'quotes'; render();
+          state.page = 'quotes';
+          showNotice(`${data.quote_number} saved permanently.`, 'ok');
+          await loadAll();
         } catch (error) { showNotice(error.message, 'error'); render(); }
       };
     }
@@ -297,8 +299,10 @@
         if (jobError) throw jobError;
         const { error: quoteError } = await db.from('quotes').update({ status: 'Accepted', job_id: job.id }).eq('id', quote.id);
         if (quoteError) throw quoteError;
-        quote.status = 'Accepted'; quote.job_id = job.id; state.jobs.unshift({ ...job, customer_name: quote.customer_name });
-        showNotice(`${job.job_number || 'Job'} created.`, 'ok'); state.page = 'jobs'; render();
+        quote.status = 'Accepted'; quote.job_id = job.id;
+        state.page = 'jobs';
+        showNotice(`${job.job_number || 'Job'} created.`, 'ok');
+        await loadAll();
       } catch (error) { showNotice(error.message, 'error'); render(); }
     });
 
@@ -317,7 +321,10 @@
         const { data: invoice, error } = await db.from('invoices').insert(payload).select().single();
         if (error) throw error;
         await db.from('jobs').update({ invoice_status: 'Invoiced', invoice_date: todayISO() }).eq('id', job.id);
-        state.invoices.unshift(invoice); job.invoice_status = 'Invoiced'; showNotice(`${invoice.invoice_number} created.`, 'ok'); state.page = 'invoices'; render();
+        job.invoice_status = 'Invoiced';
+        state.page = 'invoices';
+        showNotice(`${invoice.invoice_number} created.`, 'ok');
+        await loadAll();
       } catch (error) { showNotice(error.message, 'error'); render(); }
     });
 

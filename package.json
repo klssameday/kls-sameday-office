@@ -1,6 +1,8 @@
 {
-  "name": "kls-sameday-office-v14-booking-calendar",
+  "name": "kls-sameday-office-v15-accounts-payments",
   "private": true,
-  "version": "14.0.0",
-  "scripts": { "build": "node build.js" }
+  "version": "15.0.0",
+  "scripts": {
+    "build": "node build.js"
+  }
 }

@@ -57,6 +57,7 @@
     quotes: [],
     jobs: [],
     invoices: [],
+    expenses: [],
     settings: { ...defaults },
     notice: null,
     loading: true,
@@ -76,6 +77,9 @@
   const todayISO = () => new Date().toISOString().slice(0, 10);
   const numberCode = prefix => `${prefix}-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`;
   const showNotice = (text, type = 'ok') => { state.notice = { text, type }; };
+  const invoicePaid = inv => Number(inv.amount_paid || (inv.status === 'Paid' ? inv.total : 0) || 0);
+  const invoiceBalance = inv => Math.max(0, Number(inv.total || 0) - invoicePaid(inv));
+  const invoiceDisplayStatus = inv => invoiceBalance(inv) <= 0 && inv.status !== 'Cancelled' ? 'Paid' : invoicePaid(inv) > 0 ? 'Part-paid' : (inv.status || 'Unpaid');
 
   function authView() {
     const signUp = state.authMode === 'signup';
@@ -94,7 +98,7 @@
     </section></div>`;
   }
 
-  const navItems = [['dashboard','Dashboard'],['operations','Today’s Planner'],['dispatch','Dispatch Centre'],['driver','Driver App'],['fleet','Fleet Management'],['schedule','Booking Calendar'],['newquote','New Quote'],['quotes','Quotes'],['jobs','Jobs'],['invoices','Invoices'],['customers','CRM / Customers'],['settings','Settings']];
+  const navItems = [['dashboard','Dashboard'],['operations','Today’s Planner'],['dispatch','Dispatch Centre'],['driver','Driver App'],['fleet','Fleet Management'],['schedule','Booking Calendar'],['newquote','New Quote'],['quotes','Quotes'],['jobs','Jobs'],['invoices','Invoices'],['accounts','Accounts & Payments'],['customers','CRM / Customers'],['settings','Settings']];
 
   function layout(content) {
     const title = navItems.find(([key]) => key === state.page)?.[1] || 'Dashboard';
@@ -321,11 +325,29 @@
 
 
   function invoicesView() {
-    return panel('Invoices', table(['Invoice','Customer','Issue','Due','Total','Status','Actions'], state.invoices.map(inv => [
-      esc(inv.invoice_number), esc(inv.customer_name), fmtDate(inv.issue_date), fmtDate(inv.due_date), money(inv.total),
-      `<select data-invoice-status="${inv.id}">${['Unpaid','Paid','Overdue','Cancelled'].map(s => `<option ${inv.status === s ? 'selected' : ''}>${s}</option>`).join('')}</select>`,
-      `<button data-print-invoice="${inv.id}">Print</button>`
-    ])));
+    return panel('Invoices', table(['Invoice','Customer','Issue','Due','Total','Paid','Balance','Status','Actions'], state.invoices.map(inv => [
+      esc(inv.invoice_number), esc(inv.customer_name), fmtDate(inv.issue_date), fmtDate(inv.due_date), money(inv.total), money(invoicePaid(inv)), money(invoiceBalance(inv)),
+      `<span class="account-status ${invoiceDisplayStatus(inv).toLowerCase().replace(/[^a-z]/g,'')}">${esc(invoiceDisplayStatus(inv))}</span>`,
+      `<button data-record-payment="${inv.id}">Payment</button><button data-print-invoice="${inv.id}">Print</button>`
+    ])), 'Record payments from the Accounts page or directly against an invoice.');
+  }
+
+  function accountsView() {
+    const active = state.invoices.filter(i => i.status !== 'Cancelled');
+    const totalInvoiced = active.reduce((s,i)=>s+Number(i.total||0),0);
+    const totalPaid = active.reduce((s,i)=>s+invoicePaid(i),0);
+    const outstanding = active.reduce((s,i)=>s+invoiceBalance(i),0);
+    const overdue = active.filter(i=>invoiceBalance(i)>0 && i.due_date && i.due_date < todayISO()).reduce((s,i)=>s+invoiceBalance(i),0);
+    const month = todayISO().slice(0,7);
+    const monthIncome = active.filter(i=>String(i.paid_date||'').slice(0,7)===month).reduce((s,i)=>s+invoicePaid(i),0);
+    const monthExpenses = state.expenses.filter(e=>String(e.expense_date||'').slice(0,7)===month).reduce((s,e)=>s+Number(e.amount||0),0);
+    const rows = active.map(inv=>[esc(inv.invoice_number),esc(inv.customer_name),money(inv.total),money(invoicePaid(inv)),money(invoiceBalance(inv)),esc(invoiceDisplayStatus(inv)),`<button data-record-payment="${inv.id}">Record payment</button>`]);
+    const expenseRows = state.expenses.map(e=>[fmtDate(e.expense_date),esc(e.category),esc(e.supplier||'—'),esc(e.description||'—'),money(e.amount),`<button class="danger" data-delete-expense="${e.id}">Delete</button>`]);
+    return `<section class="accounts-hero"><div><small>V15 ACCOUNTS & PAYMENTS</small><h2>Cash flow and business costs</h2><p>Track invoice balances, payments, overdue accounts and operating expenses.</p></div></section>
+      <section class="cards accounts-kpis">${card('Total invoiced',money(totalInvoiced),'All active invoices','invoices')}${card('Received',money(totalPaid),'Payments recorded','accounts')}${card('Outstanding',money(outstanding),`${money(overdue)} overdue`,'accounts')}${card('This month profit',money(monthIncome-monthExpenses),`${money(monthIncome)} in · ${money(monthExpenses)} out`,'accounts')}</section>
+      <section class="accounts-layout"><div>${panel('Customer balances',table(['Invoice','Customer','Total','Paid','Balance','Status','Action'],rows),'Part-payments automatically update the balance and status.')}</div>
+      <div class="accounts-side">${panel('Record an expense',`<form id="expense-form"><label>Date<input name="expense_date" type="date" value="${todayISO()}" required></label><label>Category<select name="category"><option>Fuel</option><option>Vehicle</option><option>Insurance</option><option>Maintenance</option><option>Tolls & Parking</option><option>Office</option><option>Marketing</option><option>Subcontractor</option><option>Other</option></select></label><label>Supplier<input name="supplier"></label><label>Description<input name="description"></label><label>Amount<input name="amount" type="number" step="0.01" min="0" required></label><button class="primary" style="width:100%">Save Expense</button></form>`)}
+      ${panel('Recent expenses',table(['Date','Category','Supplier','Description','Amount',''],expenseRows),'Running business costs saved securely.')}</div></section>`;
   }
 
   function customerMetrics(customer) {
@@ -451,7 +473,7 @@
     if (trackToken) { document.getElementById('app').innerHTML = publicTrackingView(state.publicTracking, state.loading, state.notice?.type === 'error' ? state.notice.text : ''); return; }
     if (state.loading) { document.getElementById('app').innerHTML = '<div class="loading">Loading KLS SameDay Office…</div>'; return; }
     if (!state.user) { document.getElementById('app').innerHTML = authView(); bindAuth(); return; }
-    const views = { dashboard, operations: operationsView, dispatch: dispatchView, driver: driverView, fleet: fleetView, schedule: scheduleView, newquote: newQuote, quotes: quotesView, jobs: jobsView, invoices: invoicesView, customers: customersView, settings: settingsView };
+    const views = { dashboard, operations: operationsView, dispatch: dispatchView, driver: driverView, fleet: fleetView, schedule: scheduleView, newquote: newQuote, quotes: quotesView, jobs: jobsView, invoices: invoicesView, accounts: accountsView, customers: customersView, settings: settingsView };
     document.getElementById('app').innerHTML = layout(views[state.page]());
     bindApp();
     if (state.page === 'dispatch') initialiseDispatchMap();
@@ -512,7 +534,7 @@
   async function loadAll() {
     state.loading = true; render();
     try {
-      const [customers, drivers, fleet, fuelLogs, maintenance, recurringJobs, quotes, jobs, invoices, settings] = await Promise.all([
+      const [customers, drivers, fleet, fuelLogs, maintenance, recurringJobs, quotes, jobs, invoices, expenses, settings] = await Promise.all([
         db.from('customers').select('*').order('created_at', { ascending: false }),
         db.from('drivers').select('*').order('name', { ascending: true }),
         db.from('vehicles').select('*').order('created_at', { ascending: false }),
@@ -522,9 +544,10 @@
         db.from('quotes').select('*').order('created_at', { ascending: false }),
         db.from('jobs').select('*').order('created_at', { ascending: false }),
         db.from('invoices').select('*').order('created_at', { ascending: false }),
+        db.from('expenses').select('*').order('expense_date', { ascending: false }),
         db.from('business_settings').select('*').maybeSingle()
       ]);
-      for (const result of [customers, drivers, fleet, fuelLogs, maintenance, recurringJobs, quotes, jobs, invoices, settings]) if (result.error) throw result.error;
+      for (const result of [customers, drivers, fleet, fuelLogs, maintenance, recurringJobs, quotes, jobs, invoices, expenses, settings]) if (result.error) throw result.error;
       state.customers = customers.data || [];
       state.drivers = drivers.data || [];
       state.fleet = fleet.data || [];
@@ -534,6 +557,7 @@
       state.quotes = quotes.data || [];
       state.jobs = (jobs.data || []).map(j => ({ ...j, customer_name: j.customer_name || j.contact_name || '' }));
       state.invoices = invoices.data || [];
+      state.expenses = expenses.data || [];
       state.settings = { ...defaults, ...(settings.data || {}) };
     } catch (error) {
       showNotice(`Database setup needed: ${error.message}`, 'error');
@@ -610,7 +634,7 @@
     document.querySelector('[data-action="menu-open"]')?.addEventListener('click', () => document.getElementById('side').classList.add('open'));
     document.querySelector('[data-action="menu-close"]')?.addEventListener('click', () => document.getElementById('side').classList.remove('open'));
     document.querySelector('[data-action="notice-close"]')?.addEventListener('click', () => { state.notice = null; render(); });
-    document.querySelector('[data-action="signout"]')?.addEventListener('click', async () => { await db.auth.signOut(); state.user = null; state.customers=[]; state.drivers=[]; state.fleet=[]; state.fuelLogs=[]; state.maintenance=[]; state.recurringJobs=[]; state.quotes=[]; state.jobs=[]; state.invoices=[]; render(); });
+    document.querySelector('[data-action="signout"]')?.addEventListener('click', async () => { await db.auth.signOut(); state.user = null; state.customers=[]; state.drivers=[]; state.fleet=[]; state.fuelLogs=[]; state.maintenance=[]; state.recurringJobs=[]; state.quotes=[]; state.jobs=[]; state.invoices=[]; state.expenses=[]; render(); });
 
     const driverForm = document.getElementById('driver-form');
     if(driverForm) driverForm.onsubmit=async e=>{e.preventDefault();const values=Object.fromEntries(new FormData(driverForm));values.user_id=state.user.id;values.active=true;values.availability_status='Available';values.last_seen_at=new Date().toISOString();try{const{data,error}=await db.from('drivers').insert(values).select().single();if(error)throw error;state.drivers.push(data);showNotice(`${data.name} added as a driver.`,'ok');render();}catch(error){showNotice(error.message,'error');render();}};
@@ -742,7 +766,7 @@
         const job = state.jobs.find(j => j.id === button.dataset.invoice);
         if (state.invoices.some(i => i.job_id === job.id)) throw new Error('An invoice already exists for this job.');
         const due = new Date(Date.now() + Number(state.settings.default_terms || 7) * 86400000).toISOString().slice(0, 10);
-        const payload = { user_id: state.user.id, job_id: job.id, customer_id: job.customer_id, invoice_number: numberCode('INV'), customer_name: job.customer_name || job.contact_name, total: Number(job.total_price || 0), status: 'Unpaid', issue_date: todayISO(), due_date: due };
+        const payload = { user_id: state.user.id, job_id: job.id, customer_id: job.customer_id, invoice_number: numberCode('INV'), customer_name: job.customer_name || job.contact_name, total: Number(job.total_price || 0), status: 'Unpaid', amount_paid: 0, issue_date: todayISO(), due_date: due };
         const { data: invoice, error } = await db.from('invoices').insert(payload).select().single();
         if (error) throw error;
         await db.from('jobs').update({ invoice_status: 'Invoiced', invoice_date: todayISO() }).eq('id', job.id);
@@ -755,10 +779,37 @@
       } catch (error) { showNotice(error.message, 'error'); render(); }
     });
 
-    document.querySelectorAll('[data-invoice-status]').forEach(select => select.onchange = async () => {
-      const invoice = state.invoices.find(i => i.id === select.dataset.invoiceStatus); const previous = invoice.status; invoice.status = select.value;
-      const { error } = await db.from('invoices').update({ status: select.value, paid_date: select.value === 'Paid' ? todayISO() : null }).eq('id', invoice.id);
-      if (error) { invoice.status = previous; showNotice(error.message, 'error'); render(); }
+    document.querySelectorAll('[data-record-payment]').forEach(button => button.onclick = async () => {
+      const invoice = state.invoices.find(i => i.id === button.dataset.recordPayment);
+      const remaining = invoiceBalance(invoice);
+      const raw = prompt(`Payment received for ${invoice.invoice_number}. Remaining balance ${money(remaining)}. Enter payment amount:`, remaining.toFixed(2));
+      if (raw === null) return;
+      const amount = Number(raw);
+      if (!Number.isFinite(amount) || amount <= 0) return showNotice('Enter a valid payment amount.','error'), render();
+      if (amount > remaining + 0.005) return showNotice('Payment cannot be more than the outstanding balance.','error'), render();
+      const method = prompt('Payment method:', invoice.payment_method || 'Bank Transfer') || 'Bank Transfer';
+      const newPaid = invoicePaid(invoice) + amount;
+      const newStatus = newPaid >= Number(invoice.total||0) ? 'Paid' : 'Part-paid';
+      const payload = { amount_paid:newPaid, status:newStatus, paid_date:todayISO(), payment_method:method };
+      const { error } = await db.from('invoices').update(payload).eq('id', invoice.id);
+      if (error) return showNotice(error.message,'error'), render();
+      Object.assign(invoice,payload); showNotice(`${money(amount)} payment recorded against ${invoice.invoice_number}.`,'ok'); render();
+    });
+
+    document.getElementById('expense-form')?.addEventListener('submit', async e => {
+      e.preventDefault();
+      try {
+        const form = Object.fromEntries(new FormData(e.currentTarget));
+        const payload = {...form, user_id:state.user.id, amount:Number(form.amount||0)};
+        const {data,error}=await db.from('expenses').insert(payload).select().single();
+        if(error) throw error; state.expenses.unshift(data); showNotice('Expense saved.','ok'); render();
+      } catch(error){ showNotice(error.message,'error'); render(); }
+    });
+    document.querySelectorAll('[data-delete-expense]').forEach(button=>button.onclick=async()=>{
+      if(!confirm('Delete this expense?')) return;
+      const {error}=await db.from('expenses').delete().eq('id',button.dataset.deleteExpense);
+      if(error) return showNotice(error.message,'error'),render();
+      state.expenses=state.expenses.filter(e=>e.id!==button.dataset.deleteExpense); showNotice('Expense deleted.','ok'); render();
     });
 
     document.querySelectorAll('[data-print-quote]').forEach(button => button.onclick = () => printDocument('quote', state.quotes.find(q => q.id === button.dataset.printQuote)));

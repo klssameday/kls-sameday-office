@@ -63,6 +63,7 @@
     portalBookings: [],
     portalJobs: [],
     portalInvoices: [],
+    portalAccessUsers: [],
     settings: { ...defaults },
     notice: null,
     loading: true,
@@ -103,7 +104,7 @@
     </section></div>`;
   }
 
-  const navItems = [['dashboard','Dashboard'],['operations','Today’s Planner'],['dispatch','Dispatch Centre'],['driver','Driver App'],['fleet','Fleet Management'],['schedule','Booking Calendar'],['portalrequests','Portal Requests'],['newquote','New Quote'],['quotes','Quotes'],['jobs','Jobs'],['invoices','Invoices'],['accounts','Accounts & Payments'],['customers','CRM / Customers'],['settings','Settings']];
+  const navItems = [['dashboard','Dashboard'],['operations','Today’s Planner'],['dispatch','Dispatch Centre'],['driver','Driver App'],['fleet','Fleet Management'],['schedule','Booking Calendar'],['portalrequests','Customer Portal'],['newquote','New Quote'],['quotes','Quotes'],['jobs','Jobs'],['invoices','Invoices'],['accounts','Accounts & Payments'],['customers','CRM / Customers'],['settings','Settings']];
 
   function layout(content) {
     const title = navItems.find(([key]) => key === state.page)?.[1] || 'Dashboard';
@@ -111,7 +112,7 @@
       <div class="logo"><b>KLS</b><span>SameDay Office</span></div>
       <button class="close" data-action="menu-close">×</button>
       <div class="account">${esc(state.user?.email || '')}</div>
-      <nav>${navItems.map(([key,label]) => `<button class="${state.page === key ? 'active' : ''}" data-page="${key}">${label}</button>`).join('')}</nav>
+      <nav>${navItems.map(([key,label]) => { const pendingPortal = key === 'portalrequests' ? state.portalBookings.filter(b=>b.status==='Pending').length : 0; return `<button class="${state.page === key ? 'active' : ''}" data-page="${key}">${label}${pendingPortal ? `<span class="nav-badge">${pendingPortal}</span>` : ''}</button>`; }).join('')}</nav>
       <div class="sidefooter"><span class="connection"><span class="dot"></span> Supabase connected</span><button data-action="signout">Sign out</button></div>
     </aside><main>
       <header><button class="hamb" data-action="menu-open">☰</button><div><h1>${title}</h1><p>KLS SameDay business control centre</p></div><button class="primary" data-page="newquote">＋ New Quote</button></header>
@@ -149,6 +150,7 @@
     const overdue = unpaid.filter(inv => inv.due_date && String(inv.due_date).slice(0,10) < today);
     const overdueTotal = overdue.reduce((sum, inv) => sum + Number(inv.total || 0), 0);
     const pendingQuotes = state.quotes.filter(q => q.status === 'Pending');
+    const pendingPortal = state.portalBookings.filter(b => b.status === 'Pending');
     const totalMiles = monthJobs.reduce((sum, job) => sum + Number(job.miles || 0), 0);
     const averageJob = monthJobs.length ? revenue / monthJobs.length : 0;
 
@@ -168,9 +170,10 @@
 
     const attention = [
       overdue.length ? `<button data-page="invoices"><b>${overdue.length} overdue invoice${overdue.length === 1 ? '' : 's'}</b><span>${money(overdueTotal)} needs attention</span></button>` : '',
+      pendingPortal.length ? `<button data-page="portalrequests"><b>${pendingPortal.length} new customer booking request${pendingPortal.length === 1 ? '' : 's'}</b><span>Review and convert into confirmed jobs</span></button>` : '',
       pendingQuotes.length ? `<button data-page="quotes"><b>${pendingQuotes.length} pending quote${pendingQuotes.length === 1 ? '' : 's'}</b><span>Waiting to be accepted or followed up</span></button>` : '',
       activeJobs.length ? `<button data-page="jobs"><b>${activeJobs.length} active job${activeJobs.length === 1 ? '' : 's'}</b><span>Booked, collected or in transit</span></button>` : '',
-      !overdue.length && !pendingQuotes.length && !activeJobs.length ? `<div class="all-clear"><b>All clear</b><span>Nothing urgent needs your attention.</span></div>` : ''
+      !overdue.length && !pendingPortal.length && !pendingQuotes.length && !activeJobs.length ? `<div class="all-clear"><b>All clear</b><span>Nothing urgent needs your attention.</span></div>` : ''
     ].filter(Boolean).join('');
 
     const todaysRows = todayJobs.length ? jobTable(todayJobs.slice(0, 6)) : `<div class="dashboard-empty"><b>No jobs booked for today</b><p>Create a quote or review upcoming work.</p><button class="primary" data-page="newquote">＋ New Quote</button></div>`;
@@ -199,6 +202,7 @@
     const unpaid = state.invoices.filter(inv => !['Paid','Cancelled'].includes(inv.status));
     const outstanding = unpaid.reduce((sum, inv) => sum + Number(inv.total || 0), 0);
     const pendingQuotes = state.quotes.filter(q => q.status === 'Pending');
+    const pendingPortal = state.portalBookings.filter(b => b.status === 'Pending');
     const todayRevenue = todayJobs.reduce((sum, job) => sum + Number(job.total_price || 0), 0);
 
     const timeline = todayJobs.length ? todayJobs.map(job => {
@@ -519,12 +523,13 @@
   function portalRequestsView() {
     const pending=state.portalBookings.filter(b=>b.status==='Pending');
     const rows=state.portalBookings.length?`<div class="portal-admin-list">${state.portalBookings.map(b=>{const customer=state.customers.find(c=>c.id===b.customer_id);return `<article><div><span><b>${esc(customer?.company||'Customer')}</b><small>${fmtDate(b.collection_date)} ${esc(String(b.collection_time||'').slice(0,5))}</small></span>${portalStatusBadge(b.status)}</div><p><small>COLLECT</small>${esc(b.collection_address)}</p><p><small>DELIVER</small>${esc(b.delivery_address)}</p><p><small>VEHICLE</small>${esc(b.vehicle||'Not specified')}</p>${b.load_description?`<p><small>LOAD</small>${esc(b.load_description)}</p>`:''}<footer>${b.status==='Pending'?`<button class="primary" data-portal-approve="${b.id}">Approve & create job</button><button class="danger" data-portal-reject="${b.id}">Reject</button>`:''}</footer></article>`}).join('')}</div>`:'<div class="fleet-empty">No portal booking requests yet.</div>';
-    return `<section class="fleet-hero"><div><small>V16 CUSTOMER PORTAL</small><h2>Portal Booking Requests</h2><p>Review requests sent directly by customer accounts.</p></div><strong>${pending.length} pending</strong></section>${panel('Customer requests',rows,'Approved requests create a confirmed job in your booking calendar.')}`;
+    return `<section class="fleet-hero"><div><small>V16 CUSTOMER PORTAL</small><h2>Customer Portal</h2><p>Review requests sent directly by customer accounts.</p></div><strong>${pending.length} pending</strong></section>${panel('Customer requests',rows,'Approved requests create a confirmed job in your booking calendar.')}`;
   }
 
   function settingsView() {
     const fields = { trading_name:'Trading name',legal_name:'Legal company name',phone:'Telephone',whatsapp:'WhatsApp',email:'Email',website:'Website',address_line:'Business address',bank_name:'Bank name',sort_code:'Sort code',account_number:'Account number',default_terms:'Payment terms (days)' };
-    return panel('Business settings', `<form id="settings-form"><div class="grid two">${Object.entries(fields).map(([key,label]) => `<label>${label}<input name="${key}" value="${esc(state.settings[key] ?? '')}" ${key === 'default_terms' ? 'type="number"' : ''}></label>`).join('')}</div><div class="actions"><button class="primary">Save Settings</button></div></form><p class="saved">✓ Saved securely in Supabase.</p><hr class="portal-divider"><h2>Customer Portal Access</h2><p>Ask the customer to create an account using their email address, then link that login here.</p><form id="portal-access-form"><div class="grid two"><label>Customer<select name="customer_id" required><option value="">Choose customer</option>${state.customers.map(c=>`<option value="${c.id}">${esc(c.company)}</option>`).join('')}</select></label><label>Customer login email<input name="email" type="email" required></label></div><div class="actions"><button class="primary">Enable Customer Portal</button></div></form>`);
+    const linked = state.portalAccessUsers.length ? `<div class="portal-access-list">${state.portalAccessUsers.map(u=>`<article><div><b>${esc(u.customers?.company||'Customer')}</b><small>${esc(u.email)}</small></div><span class="portal-status ${u.active?'approved':'cancelled'}">${u.active?'Active':'Disabled'}</span>${u.active?`<button class="danger" data-portal-revoke="${u.id}">Disable</button>`:''}</article>`).join('')}</div>` : '<div class="fleet-empty">No customer portal accounts linked yet.</div>';
+    return panel('Business settings', `<form id="settings-form"><div class="grid two">${Object.entries(fields).map(([key,label]) => `<label>${label}<input name="${key}" value="${esc(state.settings[key] ?? '')}" ${key === 'default_terms' ? 'type="number"' : ''}></label>`).join('')}</div><div class="actions"><button class="primary">Save Settings</button></div></form><p class="saved">✓ Saved securely in Supabase.</p><hr class="portal-divider"><div class="portal-section-head"><div><h2>Customer Portal Access</h2><p>Ask the customer to create an account using their email address, then link that login here.</p></div><span>${state.portalAccessUsers.filter(u=>u.active).length} active</span></div><form id="portal-access-form"><div class="grid two"><label>Customer<select name="customer_id" required><option value="">Choose customer</option>${state.customers.map(c=>`<option value="${c.id}">${esc(c.company)}</option>`).join('')}</select></label><label>Customer login email<input name="email" type="email" required></label></div><div class="actions"><button class="primary">Enable Customer Portal</button></div></form><h3 class="linked-title">Linked customer accounts</h3>${linked}`);
   }
 
   function render() {
@@ -610,7 +615,7 @@
         state.loading=false; render(); return;
       }
       state.portalUser = null;
-      const [customers, drivers, fleet, fuelLogs, maintenance, recurringJobs, quotes, jobs, invoices, expenses, portalBookings, settings] = await Promise.all([
+      const [customers, drivers, fleet, fuelLogs, maintenance, recurringJobs, quotes, jobs, invoices, expenses, portalBookings, portalAccessUsers, settings] = await Promise.all([
         db.from('customers').select('*').order('created_at', { ascending: false }),
         db.from('drivers').select('*').order('name', { ascending: true }),
         db.from('vehicles').select('*').order('created_at', { ascending: false }),
@@ -622,9 +627,10 @@
         db.from('invoices').select('*').order('created_at', { ascending: false }),
         db.from('expenses').select('*').order('expense_date', { ascending: false }),
         db.from('portal_bookings').select('*').order('created_at', { ascending: false }),
+        db.from('customer_users').select('*, customers(company)').order('created_at', { ascending: false }),
         db.from('business_settings').select('*').maybeSingle()
       ]);
-      for (const result of [customers, drivers, fleet, fuelLogs, maintenance, recurringJobs, quotes, jobs, invoices, expenses, portalBookings, settings]) if (result.error) throw result.error;
+      for (const result of [customers, drivers, fleet, fuelLogs, maintenance, recurringJobs, quotes, jobs, invoices, expenses, portalBookings, portalAccessUsers, settings]) if (result.error) throw result.error;
       state.customers = customers.data || [];
       state.drivers = drivers.data || [];
       state.fleet = fleet.data || [];
@@ -636,6 +642,7 @@
       state.invoices = invoices.data || [];
       state.expenses = expenses.data || [];
       state.portalBookings = portalBookings.data || [];
+      state.portalAccessUsers = portalAccessUsers.data || [];
       state.settings = { ...defaults, ...(settings.data || {}) };
     } catch (error) {
       showNotice(`Database setup needed: ${error.message}`, 'error');
@@ -940,9 +947,16 @@
         const form=Object.fromEntries(new FormData(portalAccessForm));
         const {data,error}=await db.rpc('link_customer_portal',{p_customer_id:form.customer_id,p_email:form.email});
         if(error)throw error;
-        showNotice(data || 'Customer portal access enabled.','ok'); render();
+        const {data:links}=await db.from('customer_users').select('*, customers(company)').order('created_at',{ascending:false}); state.portalAccessUsers=links||[]; showNotice(data || 'Customer portal access enabled.','ok'); render();
       } catch(error){showNotice(error.message,'error');render();}
     };
+
+    document.querySelectorAll('[data-portal-revoke]').forEach(button=>button.addEventListener('click',async()=>{
+      if(!confirm('Disable this customer portal login?'))return;
+      const {error}=await db.from('customer_users').update({active:false}).eq('id',button.dataset.portalRevoke);
+      if(error)showNotice(error.message,'error'); else {const item=state.portalAccessUsers.find(u=>u.id===button.dataset.portalRevoke);if(item)item.active=false;showNotice('Customer portal access disabled.','ok');}
+      render();
+    }));
 
     document.querySelectorAll('[data-customer]').forEach(card => {
       const open = () => { state.selectedCustomerId = card.dataset.customer; render(); };

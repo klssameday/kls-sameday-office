@@ -73,7 +73,10 @@
     selectedDriverJobId: null,
     publicTracking: null,
     routeStops: [],
-    routeDate: new Date().toISOString().slice(0,10)
+    routeDate: new Date().toISOString().slice(0,10),
+    publicQuote: null,
+    publicQuoteRequestMode: false,
+    quoteRequests: []
   };
 
   let locationWatchId = null;
@@ -106,7 +109,7 @@
     </section></div>`;
   }
 
-  const navItems = [['dashboard','Dashboard'],['smart','Smart Dispatch'],['routes','Route Planner'],['operations','Today’s Planner'],['dispatch','Dispatch Centre'],['driver','Driver App'],['tracking','Live Tracking'],['fleet','Fleet Management'],['schedule','Booking Calendar'],['portalrequests','Customer Portal'],['newquote','New Quote'],['quotes','Quotes'],['jobs','Jobs'],['invoices','Invoices'],['accounts','Accounts & Payments'],['customers','CRM / Customers'],['settings','Settings']];
+  const navItems = [['dashboard','Dashboard'],['smart','Smart Dispatch'],['routes','Route Planner'],['operations','Today’s Planner'],['dispatch','Dispatch Centre'],['driver','Driver App'],['tracking','Live Tracking'],['fleet','Fleet Management'],['schedule','Booking Calendar'],['portalrequests','Customer Portal'],['quoterequests','Online Requests'],['newquote','New Quote'],['quotes','Quotes'],['jobs','Jobs'],['invoices','Invoices'],['accounts','Accounts & Payments'],['customers','CRM / Customers'],['settings','Settings']];
 
   function layout(content) {
     const title = navItems.find(([key]) => key === state.page)?.[1] || 'Dashboard';
@@ -114,7 +117,7 @@
       <div class="logo"><b>KLS</b><span>SameDay Office</span></div>
       <button class="close" data-action="menu-close">×</button>
       <div class="account">${esc(state.user?.email || '')}</div>
-      <nav>${navItems.map(([key,label]) => { const pendingPortal = key === 'portalrequests' ? state.portalBookings.filter(b=>b.status==='Pending').length : 0; return `<button class="${state.page === key ? 'active' : ''}" data-page="${key}">${label}${pendingPortal ? `<span class="nav-badge">${pendingPortal}</span>` : ''}</button>`; }).join('')}</nav>
+      <nav>${navItems.map(([key,label]) => { const pendingPortal = key === 'portalrequests' ? state.portalBookings.filter(b=>b.status==='Pending').length : (key === 'quoterequests' ? state.quoteRequests.filter(b=>b.status==='Pending').length : 0); return `<button class="${state.page === key ? 'active' : ''}" data-page="${key}">${label}${pendingPortal ? `<span class="nav-badge">${pendingPortal}</span>` : ''}</button>`; }).join('')}</nav>
       <div class="sidefooter"><span class="connection"><span class="dot"></span> Supabase connected</span><button data-action="signout">Sign out</button></div>
     </aside><main>
       <header><button class="hamb" data-action="menu-open">☰</button><div><h1>${title}</h1><p>KLS SameDay business control centre</p></div><button class="primary" data-page="newquote">＋ New Quote</button></header>
@@ -251,11 +254,30 @@
     return `<div class="tablewrap"><table><thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.length ? rows.map(row => `<tr>${row.map(cell => `<td>${cell}</td>`).join('')}</tr>`).join('') : `<tr><td colspan="${headers.length}" class="empty">Nothing here yet.</td></tr>`}</tbody></table></div>`;
   }
 
+  function quotePublicUrl(q) { return q?.public_token ? `${location.origin}${location.pathname}?quote=${encodeURIComponent(q.public_token)}` : ''; }
+
   function quotesView() {
-    return panel('Quotes', table(['Quote','Customer','Route','Vehicle','Price','Status','Actions'], state.quotes.map(q => [
+    return panel('Quotes', table(['Quote','Customer','Route','Vehicle','Price','Status','Online','Actions'], state.quotes.map(q => [
       esc(q.quote_number), esc(q.customer_name), `${esc(q.collection_address)}<br><i>→ ${esc(q.delivery_address)}</i>`, esc(q.vehicle), money(q.quoted_price), esc(q.status),
-      `<button data-print-quote="${q.id}">Print</button><button data-email-quote="${q.id}">Email</button><button data-whatsapp-quote="${q.id}">WhatsApp</button>${q.status === 'Pending' ? `<button data-accept="${q.id}">Accept → Job</button>` : ''}`
-    ])));
+      q.public_token ? `<span class="account-status ${q.customer_response === 'Accepted' ? 'paid' : q.customer_response === 'Declined' ? 'overdue' : 'unpaid'}">${esc(q.customer_response || 'Awaiting reply')}</span>` : '<i>Not published</i>',
+      `<button data-print-quote="${q.id}">Print</button><button data-email-quote="${q.id}">Email</button><button data-whatsapp-quote="${q.id}">WhatsApp</button><button data-publish-quote="${q.id}">${q.public_token ? 'Copy link' : 'Create online link'}</button>${q.status === 'Pending' ? `<button data-accept="${q.id}">Accept → Job</button>` : ''}`
+    ])), 'Send a secure link so the customer can review, accept or decline the quotation online.', '<button class="secondary" data-copy-request-link>Copy website request link</button>');
+  }
+
+  function publicQuoteView(row, loading=false, error='') {
+    if (loading) return '<div class="public-quote-page"><div class="loading">Loading quotation…</div></div>';
+    if (error || !row) return `<div class="public-quote-page"><section class="public-quote-card"><div class="public-quote-brand"><b>KLS</b><span>SameDay</span></div><h1>Quotation unavailable</h1><p>${esc(error || 'This quotation link is invalid or has expired.')}</p></section></div>`;
+    const responded = ['Accepted','Declined'].includes(row.customer_response);
+    return `<div class="public-quote-page"><section class="public-quote-card"><div class="public-quote-brand"><b>KLS</b><span>SameDay</span></div><small>SECURE ONLINE QUOTATION</small><h1>${esc(row.quote_number)}</h1><p class="public-quote-intro">Prepared for <b>${esc(row.customer_name)}</b></p><div class="public-quote-route"><p><small>COLLECTION</small>${esc(row.collection_address)}</p><p><small>DELIVERY</small>${esc(row.delivery_address)}</p></div><div class="public-quote-details"><p><span>Collection date</span><b>${fmtDate(row.collection_date)}</b></p><p><span>Vehicle</span><b>${esc(row.vehicle)}</b></p><p><span>Distance</span><b>${Number(row.miles||0).toFixed(1)} miles</b></p><p><span>Quote total</span><strong>${money(row.quoted_price)}</strong></p></div>${row.goods_description?`<div class="public-quote-note"><small>GOODS</small>${esc(row.goods_description)}</div>`:''}${row.notes?`<div class="public-quote-note"><small>NOTES</small>${esc(row.notes)}</div>`:''}${responded?`<div class="public-response ${row.customer_response.toLowerCase()}"><b>Quotation ${esc(row.customer_response.toLowerCase())}</b><span>${row.responded_at ? new Date(row.responded_at).toLocaleString('en-GB') : ''}</span></div>`:`<form id="public-quote-response"><label>Your name<input name="customer_name" required></label><label>Message to KLS (optional)<textarea name="customer_message"></textarea></label><div class="public-quote-actions"><button type="button" class="danger" data-public-decline>Decline</button><button class="primary">Accept quotation</button></div></form>`}<footer>Dedicated vehicle · No shared loads<br>0330 043 5237 · info@klssameday.co.uk</footer></section></div>`;
+  }
+
+  function publicRequestView() {
+    return `<div class="public-quote-page"><section class="public-quote-card request-card"><div class="public-quote-brand"><b>KLS</b><span>SameDay</span></div><small>REQUEST A QUOTE</small><h1>Tell us about your delivery</h1><p class="public-quote-intro">Complete the form and KLS SameDay will review the job and contact you.</p><form id="public-request-form"><div class="grid two"><label>Company / name *<input name="customer_name" required></label><label>Contact name<input name="contact_name"></label><label>Email *<input name="email" type="email" required></label><label>Telephone / WhatsApp *<input name="phone" required></label><label>Collection date<input name="collection_date" type="date" min="${todayISO()}"></label><label>Collection time<input name="collection_time" type="time"></label></div><label>Collection address / postcode *<textarea name="collection_address" required></textarea></label><label>Delivery address / postcode *<textarea name="delivery_address" required></textarea></label><div class="grid two"><label>Vehicle required<select name="vehicle"><option>Not sure</option>${Object.keys(vehicles).map(v=>`<option>${v}</option>`).join('')}</select></label><label>Approximate mileage<input name="miles" type="number" min="0" step="0.1"></label></div><label>Goods / job details<textarea name="goods_description"></textarea></label><button class="primary" style="width:100%">Send quote request</button></form><footer>Based in Essex · Nationwide coverage<br>0330 043 5237 · info@klssameday.co.uk</footer></section></div>`;
+  }
+
+  function quoteRequestsView() {
+    const rows=state.quoteRequests.length ? state.quoteRequests.map(r=>`<article><div><span><b>${esc(r.customer_name)}</b><small>${esc(r.email)} · ${esc(r.phone)}</small></span><span class="portal-status ${String(r.status||'Pending').toLowerCase()}">${esc(r.status||'Pending')}</span></div><p><small>COLLECT</small>${esc(r.collection_address)}</p><p><small>DELIVER</small>${esc(r.delivery_address)}</p><p><small>WHEN</small>${fmtDate(r.collection_date)} ${esc(String(r.collection_time||'').slice(0,5))}</p><p><small>VEHICLE</small>${esc(r.vehicle||'Not sure')}</p>${r.goods_description?`<p><small>DETAILS</small>${esc(r.goods_description)}</p>`:''}<footer>${r.status==='Pending'?`<button class="primary" data-request-convert="${r.id}">Turn into quote</button><button class="danger" data-request-reject="${r.id}">Reject</button>`:''}</footer></article>`).join(''):'<div class="fleet-empty">No online quote requests yet.</div>';
+    return `<section class="tracking-hero"><div><small>V20 ONLINE BOOKING</small><h2>Online Quote Requests</h2><p>Requests submitted from your public KLS quote form.</p></div><button class="secondary" data-copy-request-link>Copy website request link</button></section>${panel('Customer requests',`<div class="portal-admin-list">${rows}</div>`,`${state.quoteRequests.filter(r=>r.status==='Pending').length} awaiting review`)}`;
   }
 
   function jobTable(rows) {
@@ -624,12 +646,16 @@
   }
 
   function render() {
-    const trackToken = new URLSearchParams(location.search).get('track');
+    const params = new URLSearchParams(location.search);
+    const quoteToken = params.get('quote');
+    if (quoteToken) { document.getElementById('app').innerHTML = publicQuoteView(state.publicQuote, state.loading, state.notice?.type === 'error' ? state.notice.text : ''); bindPublicQuote(); return; }
+    if (params.get('request') === 'quote') { document.getElementById('app').innerHTML = publicRequestView(); bindPublicRequest(); return; }
+    const trackToken = params.get('track');
     if (trackToken) { document.getElementById('app').innerHTML = publicTrackingView(state.publicTracking, state.loading, state.notice?.type === 'error' ? state.notice.text : ''); setTimeout(initialisePublicTrackingExtras, 0); return; }
     if (state.loading) { document.getElementById('app').innerHTML = '<div class="loading">Loading KLS SameDay Office…</div>'; return; }
     if (!state.user) { document.getElementById('app').innerHTML = authView(); bindAuth(); return; }
     if (state.portalUser) { document.getElementById('app').innerHTML = customerPortalView(); bindCustomerPortal(); return; }
-    const views = { dashboard, smart: smartDispatchView, routes: routePlannerView, operations: operationsView, dispatch: dispatchView, driver: driverView, tracking: liveTrackingView, fleet: fleetView, schedule: scheduleView, newquote: newQuote, quotes: quotesView, jobs: jobsView, invoices: invoicesView, accounts: accountsView, portalrequests: portalRequestsView, customers: customersView, settings: settingsView };
+    const views = { dashboard, smart: smartDispatchView, routes: routePlannerView, operations: operationsView, dispatch: dispatchView, driver: driverView, tracking: liveTrackingView, fleet: fleetView, schedule: scheduleView, newquote: newQuote, quotes: quotesView, jobs: jobsView, invoices: invoicesView, accounts: accountsView, portalrequests: portalRequestsView, quoterequests: quoteRequestsView, customers: customersView, settings: settingsView };
     document.getElementById('app').innerHTML = layout(views[state.page]());
     bindApp();
     if (state.page === 'dispatch') initialiseDispatchMap();
@@ -725,7 +751,8 @@
         state.loading=false; render(); return;
       }
       state.portalUser = null;
-      const [customers, drivers, fleet, fuelLogs, maintenance, recurringJobs, quotes, jobs, invoices, expenses, portalBookings, portalAccessUsers, routeStops, settings] = await Promise.all([
+      await db.rpc('claim_public_quote_requests');
+      const [customers, drivers, fleet, fuelLogs, maintenance, recurringJobs, quotes, jobs, invoices, expenses, portalBookings, portalAccessUsers, routeStops, quoteRequests, settings] = await Promise.all([
         db.from('customers').select('*').order('created_at', { ascending: false }),
         db.from('drivers').select('*').order('name', { ascending: true }),
         db.from('vehicles').select('*').order('created_at', { ascending: false }),
@@ -741,7 +768,7 @@
         db.from('route_stops').select('*').order('stop_order', { ascending: true }),
         db.from('business_settings').select('*').maybeSingle()
       ]);
-      for (const result of [customers, drivers, fleet, fuelLogs, maintenance, recurringJobs, quotes, jobs, invoices, expenses, portalBookings, portalAccessUsers, routeStops, settings]) if (result.error) throw result.error;
+      for (const result of [customers, drivers, fleet, fuelLogs, maintenance, recurringJobs, quotes, jobs, invoices, expenses, portalBookings, portalAccessUsers, routeStops, quoteRequests, settings]) if (result.error) throw result.error;
       state.customers = customers.data || [];
       state.drivers = drivers.data || [];
       state.fleet = fleet.data || [];
@@ -755,6 +782,7 @@
       state.portalBookings = portalBookings.data || [];
       state.portalAccessUsers = portalAccessUsers.data || [];
       state.routeStops = routeStops.data || [];
+      state.quoteRequests = quoteRequests.data || [];
       state.settings = { ...defaults, ...(settings.data || {}) };
     } catch (error) {
       showNotice(`Database setup needed: ${error.message}`, 'error');
@@ -789,6 +817,19 @@
     }
     showNotice(`${job.job_number || 'Job'} moved to ${newStatus}.`, 'ok');
     render();
+  }
+
+  function bindPublicQuote() {
+    const form=document.getElementById('public-quote-response');
+    if(!form||!state.publicQuote)return;
+    const respond=async response=>{ const values=Object.fromEntries(new FormData(form)); const button=form.querySelector('button.primary'); if(button){button.disabled=true;button.textContent='Saving…';} const token=new URLSearchParams(location.search).get('quote'); const {data,error}=await db.rpc('respond_public_quote',{p_token:token,p_response:response,p_customer_name:values.customer_name,p_customer_message:values.customer_message||null}); if(error){state.notice={text:error.message,type:'error'};}else{state.publicQuote=Array.isArray(data)?data[0]:data;state.notice=null;} state.loading=false;render(); };
+    form.onsubmit=e=>{e.preventDefault();respond('Accepted')};
+    document.querySelector('[data-public-decline]')?.addEventListener('click',()=>respond('Declined'));
+  }
+
+  function bindPublicRequest() {
+    const form=document.getElementById('public-request-form'); if(!form)return;
+    form.onsubmit=async e=>{e.preventDefault();const button=form.querySelector('button.primary');button.disabled=true;button.textContent='Sending…';const values=Object.fromEntries(new FormData(form));values.miles=values.miles?Number(values.miles):null;const {error}=await db.from('public_quote_requests').insert(values);if(error){button.disabled=false;button.textContent='Send quote request';alert(error.message);return;}document.querySelector('.public-quote-card').innerHTML='<div class="public-quote-brand"><b>KLS</b><span>SameDay</span></div><div class="request-success"><b>Request received</b><p>Thank you. KLS SameDay will review the delivery and contact you shortly.</p></div><footer>0330 043 5237 · info@klssameday.co.uk</footer>';};
   }
 
   function bindApp() {
@@ -948,6 +989,7 @@
           };
           const { data, error } = await db.from('quotes').insert(payload).select().single();
           if (error) throw error;
+          if(state.pendingRequest){await db.from('public_quote_requests').update({status:'Converted'}).eq('id',state.pendingRequest.id);state.pendingRequest=null;}
           state.page = 'quotes';
           showNotice(`${data.quote_number} saved permanently.`, 'ok');
           await loadAll();
@@ -1032,6 +1074,15 @@
       if(error) return showNotice(error.message,'error'),render();
       state.expenses=state.expenses.filter(e=>e.id!==button.dataset.deleteExpense); showNotice('Expense deleted.','ok'); render();
     });
+
+    document.querySelectorAll('[data-publish-quote]').forEach(button=>button.onclick=async()=>{
+      const quote=state.quotes.find(q=>q.id===button.dataset.publishQuote); if(!quote)return;
+      if(!quote.public_token){const expiry=new Date(Date.now()+30*86400000).toISOString();const {data,error}=await db.from('quotes').update({public_token:crypto.randomUUID(),public_expires_at:expiry,customer_response:'Awaiting reply'}).eq('id',quote.id).select().single();if(error)return showNotice(error.message,'error'),render();Object.assign(quote,data);}
+      const url=quotePublicUrl(quote);try{await navigator.clipboard.writeText(url);showNotice('Secure quotation link copied.','ok');}catch(_e){prompt('Copy this quotation link:',url);}render();
+    });
+    document.querySelectorAll('[data-copy-request-link]').forEach(button=>button.onclick=async()=>{const url=`${location.origin}${location.pathname}?request=quote`;try{await navigator.clipboard.writeText(url);showNotice('Public quote request link copied.','ok');}catch(_e){prompt('Copy this request link:',url);}render();});
+    document.querySelectorAll('[data-request-convert]').forEach(button=>button.onclick=async()=>{const r=state.quoteRequests.find(x=>x.id===button.dataset.requestConvert);if(!r)return;state.quoteCustomerId=null;state.page='newquote';state.pendingRequest=r;render();setTimeout(()=>{const f=document.getElementById('quote-form');if(!f)return;['company','contact_name','email','phone','collection_date','collection_time','collection_address','delivery_address','vehicle','miles','goods_description'].forEach(k=>{if(f[k]&&r[k]!=null)f[k].value=r[k];});},0);});
+    document.querySelectorAll('[data-request-reject]').forEach(button=>button.onclick=async()=>{const {error}=await db.from('public_quote_requests').update({status:'Rejected'}).eq('id',button.dataset.requestReject);if(error)return showNotice(error.message,'error'),render();const r=state.quoteRequests.find(x=>x.id===button.dataset.requestReject);if(r)r.status='Rejected';showNotice('Request rejected.','ok');render();});
 
     document.querySelectorAll('[data-print-quote]').forEach(button => button.onclick = () => printDocument('quote', state.quotes.find(q => q.id === button.dataset.printQuote)));
     const quoteMessage = quote => `${state.settings.trading_name} quotation ${quote.quote_number}\n\nCollection: ${quote.collection_address}\nDelivery: ${quote.delivery_address}\nVehicle: ${quote.vehicle}\nPrice: ${money(quote.quoted_price)}\n\nDedicated vehicle • No shared loads\n${state.settings.phone} • ${state.settings.email}`;
@@ -1183,7 +1234,18 @@
   }
 
   async function initialise() {
-    const trackToken = new URLSearchParams(location.search).get('track');
+    const params = new URLSearchParams(location.search);
+    const quoteToken = params.get('quote');
+    if (quoteToken) {
+      state.loading = true; render();
+      if (!configured) { state.loading = false; state.notice = {text:'Quotation service is not configured.',type:'error'}; render(); return; }
+      const { data, error } = await db.rpc('get_public_quote', { p_token: quoteToken });
+      state.publicQuote = Array.isArray(data) ? data[0] : data;
+      state.notice = error ? {text:error.message,type:'error'} : null;
+      state.loading = false; render(); return;
+    }
+    if (params.get('request') === 'quote') { state.loading = false; render(); return; }
+    const trackToken = params.get('track');
     if (trackToken) {
       state.loading = true; render();
       if (!configured) { state.loading = false; state.notice = {text:'Tracking service is not configured.',type:'error'}; render(); return; }

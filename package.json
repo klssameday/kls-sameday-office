@@ -1,7 +1,7 @@
 {
-  "name": "kls-sameday-office-v19-route-planner",
+  "name": "kls-sameday-office-v20-online-quotes",
   "private": true,
-  "version": "19.0.0",
+  "version": "20.0.0",
   "scripts": {
     "build": "node build.js"
   }

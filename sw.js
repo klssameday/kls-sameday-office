@@ -1,4 +1,4 @@
-const CACHE = 'kls-office-v22-logo';
+const CACHE = 'kls-office-v23-logo';
 const APP_SHELL = [
   '/', '/index.html', '/offline.html', '/styles.css', '/app.js', '/manifest.json',
   '/icons/favicon-32.png', '/icons/apple-touch-icon.png', '/icons/icon-192.png',

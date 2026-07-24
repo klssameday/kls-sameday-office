@@ -76,7 +76,8 @@
     routeDate: new Date().toISOString().slice(0,10),
     publicQuote: null,
     publicQuoteRequestMode: false,
-    quoteRequests: []
+    quoteRequests: [],
+    driverFilter: 'active'
   };
 
   let locationWatchId = null;
@@ -298,14 +299,25 @@
   }
 
   function driverView() {
-    const jobs = state.jobs.filter(j => j.job_status !== 'Cancelled').sort((a,b) => new Date(a.collection_date || a.created_at || 0) - new Date(b.collection_date || b.created_at || 0));
+    const today = todayISO();
+    const allJobs = state.jobs.filter(j => j.job_status !== 'Cancelled').sort((a,b) => new Date(a.collection_date || a.created_at || 0) - new Date(b.collection_date || b.created_at || 0));
+    const jobs = allJobs.filter(job => {
+      if (state.driverFilter === 'today') return String(job.collection_date || '').slice(0,10) === today;
+      if (state.driverFilter === 'all') return true;
+      return !['Delivered','Cancelled'].includes(job.job_status);
+    });
+    const activeCount = allJobs.filter(j => !['Delivered','Cancelled'].includes(j.job_status)).length;
+    const todayCount = allJobs.filter(j => String(j.collection_date || '').slice(0,10) === today).length;
     const cards = jobs.map(job => {
       const active = !['Delivered','Cancelled'].includes(job.job_status);
       const index = driverStatuses.indexOf(job.job_status);
       const next = index >= 0 && index < driverStatuses.length - 1 ? driverStatuses[index + 1] : (job.job_status === 'Booked' ? 'En Route to Collection' : '');
-      return `<article class="driver-card ${active ? 'active' : ''}"><div class="driver-card-head"><div><small>${fmtDate(job.collection_date)} ${esc(String(job.collection_time || '').slice(0,5))}</small><h3>${esc(job.job_number || 'Job')}</h3></div><span>${esc(job.job_status || 'Booked')}</span></div><b>${esc(job.customer_name || 'Customer')}</b><div class="driver-route"><p><small>COLLECT</small>${esc(job.collection_address || '')}</p><p><small>DELIVER</small>${esc(job.delivery_address || '')}</p></div><div class="driver-buttons"><button class="secondary" data-driver-open="${job.id}">Open Job</button><button class="secondary" data-driver-nav="${job.id}">Navigate</button>${next ? `<button class="primary" data-driver-status="${job.id}" data-status="${esc(next)}">${esc(next)}</button>` : ''}</div></article>`;
+      const progress = Math.max(0, index);
+      const destinationLabel = ['Booked','En Route to Collection','Arrived at Collection'].includes(job.job_status) ? 'Collection' : 'Delivery';
+      const phone = job.customer_phone || job.phone || '';
+      return `<article class="driver-card ${active ? 'active' : ''}"><div class="driver-card-head"><div><small>${fmtDate(job.collection_date)} ${esc(String(job.collection_time || '').slice(0,5))}</small><h3>${esc(job.job_number || 'Job')}</h3></div><span>${esc(job.job_status || 'Booked')}</span></div><b>${esc(job.customer_name || 'Customer')}</b><div class="driver-progress" aria-label="Job progress">${driverStatuses.map((status,i)=>`<span class="${i<=progress?'done':''}" title="${esc(status)}"></span>`).join('')}</div><div class="driver-route"><p><small>COLLECT</small>${esc(job.collection_address || '')}</p><p><small>DELIVER</small>${esc(job.delivery_address || '')}</p></div><div class="driver-quick-grid"><button class="secondary" data-driver-open="${job.id}">Open job</button><button class="secondary" data-driver-nav="${job.id}" data-nav-target="${destinationLabel.toLowerCase()}">Navigate to ${destinationLabel}</button>${phone ? `<a class="secondary button-link" href="tel:${esc(phone)}">Call customer</a>` : ''}<button class="secondary" data-driver-share="${job.id}">Share job</button></div>${next ? `<button class="driver-next primary" data-driver-status="${job.id}" data-status="${esc(next)}">${job.job_status === 'Booked' ? 'Start Job' : esc(next)}</button>` : `<button class="driver-next secondary" data-driver-open="${job.id}">View POD</button>`}</article>`;
     }).join('');
-    return `<section class="ops-hero driver-hero"><div><small>MOBILE DRIVER WORKSPACE</small><h2>Driver App</h2><p>Update jobs, share live location and capture photo, signature and recipient details.</p></div><div class="live-pill">● GPS ready</div></section><div class="driver-list">${cards || '<div class="empty">No active jobs.</div>'}</div>${driverModal()}`;
+    return `<section class="ops-hero driver-hero"><div><small>V23 MOBILE DRIVER MODE</small><h2>Driver App</h2><p>One-tap job updates, navigation, live tracking and proof of delivery.</p></div><div class="live-pill">● GPS ready</div></section><section class="driver-toolbar"><div><b>${activeCount}</b><span>active jobs</span></div><div><b>${todayCount}</b><span>today</span></div><div class="driver-filter"><button class="${state.driverFilter==='active'?'active':''}" data-driver-filter="active">Active</button><button class="${state.driverFilter==='today'?'active':''}" data-driver-filter="today">Today</button><button class="${state.driverFilter==='all'?'active':''}" data-driver-filter="all">All</button></div></section><div class="driver-list">${cards || '<div class="empty">No jobs in this view.</div>'}</div>${driverModal()}`;
   }
 
   function driverModal() {
@@ -868,8 +880,10 @@
       });
     });
     document.querySelectorAll('[data-driver-open]').forEach(button => button.onclick = () => { state.selectedDriverJobId = button.dataset.driverOpen; render(); });
+    document.querySelectorAll('[data-driver-filter]').forEach(button => button.onclick = () => { state.driverFilter = button.dataset.driverFilter; render(); });
     document.querySelectorAll('[data-action="driver-close"]').forEach(button => button.onclick = () => { state.selectedDriverJobId = null; render(); });
-    document.querySelectorAll('[data-driver-nav]').forEach(button => button.onclick = () => { const j=state.jobs.find(x=>x.id===button.dataset.driverNav); if(j) window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(j.job_status === 'Booked' ? j.collection_address : j.delivery_address)}&travelmode=driving`,'_blank','noopener'); });
+    document.querySelectorAll('[data-driver-nav]').forEach(button => button.onclick = () => { const j=state.jobs.find(x=>x.id===button.dataset.driverNav); if(!j)return; const target=button.dataset.navTarget==='collection'?j.collection_address:(button.dataset.navTarget==='delivery'?j.delivery_address:(['Booked','En Route to Collection','Arrived at Collection'].includes(j.job_status)?j.collection_address:j.delivery_address)); window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(target||'')}&travelmode=driving`,'_blank','noopener'); });
+    document.querySelectorAll('[data-driver-share]').forEach(button => button.onclick = async () => { const j=state.jobs.find(x=>x.id===button.dataset.driverShare); if(!j)return; const text=`${j.job_number||'KLS Job'}\nCollect: ${j.collection_address||''}\nDeliver: ${j.delivery_address||''}\nStatus: ${j.job_status||'Booked'}`; try{ if(navigator.share) await navigator.share({title:j.job_number||'KLS Job',text}); else {await navigator.clipboard.writeText(text);showNotice('Job details copied.','ok');render();} }catch(error){ if(error.name!=='AbortError'){showNotice('Unable to share job details.','error');render();} } });
     document.querySelectorAll('[data-copy-track]').forEach(button => button.onclick = async () => { const j=state.jobs.find(x=>x.id===button.dataset.copyTrack); if(!j?.tracking_token){showNotice('Run the v9 Supabase upgrade first.','error');render();return;} await navigator.clipboard.writeText(trackingUrl(j)); showNotice('Customer tracking link copied.','ok'); render(); });
     document.querySelectorAll('[data-share-track]').forEach(button => button.onclick = async () => { const j=state.jobs.find(x=>x.id===button.dataset.shareTrack); if(!j)return; const text=`${state.settings.trading_name}: Your delivery ${j.job_number || ''} is ${j.job_status || 'booked'}.${j.eta_at ? ` ETA ${new Date(j.eta_at).toLocaleString('en-GB')}.` : ''} Track here: ${trackingUrl(j)}`; if(navigator.share){await navigator.share({title:'KLS SameDay tracking',text,url:trackingUrl(j)}).catch(()=>{});}else{await navigator.clipboard.writeText(text);showNotice('Tracking message copied.','ok');render();} });
     document.querySelectorAll('[data-assign-job],[data-driver-assign]').forEach(select => select.onchange = async () => { const jobId=select.dataset.assignJob||select.dataset.driverAssign; const driver=state.drivers.find(d=>d.id===select.value); const payload={assigned_driver_id:driver?.id||null,assigned_driver_name:driver?.name||null}; const {error}=await db.from('jobs').update(payload).eq('id',jobId); if(error){showNotice(error.message,'error');render();return;} const job=state.jobs.find(j=>j.id===jobId); if(job)Object.assign(job,payload); showNotice(driver?`${job.job_number} assigned to ${driver.name}.`:`${job.job_number} unassigned.`,'ok'); render(); });
@@ -877,7 +891,7 @@
     document.querySelectorAll('[data-driver-availability]').forEach(select => select.onchange = async () => { const driver=state.drivers.find(d=>d.id===select.dataset.driverAvailability); if(!driver)return; const previous=driver.availability_status||'Available'; driver.availability_status=select.value; const {error}=await db.from('drivers').update({availability_status:select.value,last_seen_at:new Date().toISOString()}).eq('id',driver.id); if(error){driver.availability_status=previous;showNotice(error.message,'error');render();return;} showNotice(`${driver.name} is now ${select.value}.`,'ok');render(); });
     document.querySelector('[data-action="refresh-map"]')?.addEventListener('click', initialiseDispatchMap);
     document.querySelector('[data-action="refresh-tracking"]')?.addEventListener('click', async()=>{ await loadAll(); state.page='tracking'; render(); });
-    document.querySelectorAll('[data-driver-status]').forEach(button => button.onclick = async () => { const job=state.jobs.find(j=>j.id===button.dataset.driverStatus); if(!job)return; const previous=job.job_status; job.job_status=button.dataset.status; render(); const payload={job_status:button.dataset.status}; if(button.dataset.status==='Delivered') payload.delivered_at=new Date().toISOString(); const {error}=await db.from('jobs').update(payload).eq('id',job.id); if(error){job.job_status=previous;showNotice(error.message,'error');render();} });
+    document.querySelectorAll('[data-driver-status]').forEach(button => button.onclick = async () => { const job=state.jobs.find(j=>j.id===button.dataset.driverStatus); if(!job)return; const previous=job.job_status; const nextStatus=button.dataset.status; job.job_status=nextStatus; render(); const payload={job_status:nextStatus}; const now=new Date().toISOString(); if(nextStatus==='En Route to Collection') payload.started_at=now; if(nextStatus==='Collected') payload.collected_at=now; if(nextStatus==='Delivered') payload.delivered_at=now; const {error}=await db.from('jobs').update(payload).eq('id',job.id); if(error){job.job_status=previous;showNotice(error.message,'error');render();return;} Object.assign(job,payload); if(nextStatus==='En Route to Collection') startLocationTracking(job.id); else {showNotice(`${job.job_number||'Job'} updated to ${nextStatus}.`,'ok');render();} });
     document.querySelector('[data-action="start-tracking"]')?.addEventListener('click', () => startLocationTracking(document.querySelector('[data-action="start-tracking"]').dataset.job));
     document.querySelector('[data-action="stop-tracking"]')?.addEventListener('click', stopLocationTracking);
 

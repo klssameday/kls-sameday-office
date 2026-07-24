@@ -22,4 +22,4 @@ fs.writeFileSync(
   'utf8'
 );
 
-console.log('Built KLS SameDay Office v22 App Edition to dist/');
+console.log('Built KLS SameDay Office v23 Driver Mode to dist/');

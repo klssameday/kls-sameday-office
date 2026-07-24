@@ -1,23 +1,26 @@
-KLS SameDay Office v21 — Stable Build
+KLS SameDay Office v22 — App Edition
 
-WHAT THIS FIXES
-- Replaces the fragile positional database loader with named queries.
-- Adds the missing public_quote_requests database query.
-- Stops the “undefined is not an object (evaluating result.error)” failure.
-- Gives database errors the name of the failing section.
-- Reconciles the v19 Route Planner and v20 Online Quotes schema safely.
-- Keeps all existing v1–v20 features in the supplied application.
+WHAT IS NEW
+- Installable on iPhone/iPad Home Screen and Mac Dock/Applications
+- KLS branded app icons
+- Full-screen standalone app mode
+- Branded launch/splash screen
+- Improved offline fallback and app-shell caching
+- PWA shortcuts for Dashboard, New Quote and Jobs on supported devices
+- Safe-area support for modern iPhones
 
-INSTALL
-1. In Supabase SQL Editor, run KLS_SameDay_v21_Stable_Migration.sql once.
-2. In GitHub, replace app.js, styles.css, index.html, manifest.json,
-   sw.js, build.js and package.json with the files in this folder.
-3. Keep your existing config.js unless your Supabase keys have changed.
-4. Commit with: Upgrade to v21 Stable Build
-5. Wait for Vercel to show Ready.
-6. Hard refresh the app with Command + Shift + R.
+DEPLOYMENT
+1. Run no new Supabase SQL. This update is front-end only.
+2. Keep your existing working config.js or Vercel environment variables.
+3. Replace the repository files with this package, including the new icons folder and offline.html.
+4. Deploy to Vercel and hard-refresh once.
+
+INSTALL ON IPHONE
+Open the live site in Safari > Share > Add to Home Screen > Add.
+
+INSTALL ON MAC
+Safari: File > Add to Dock.
+Chrome: open the site and use Install KLS SameDay Office from the address-bar/menu.
 
 IMPORTANT
-- The SQL is idempotent and can be run again safely.
-- This build does not add paid routing, traffic, SMS, email or payment services.
-- Existing business data is not deleted by this migration.
+The app requires internet access for live Supabase data. The offline page prevents a broken blank screen, but live records cannot be edited while offline.

@@ -1,7 +1,7 @@
 {
-  "name": "kls-sameday-office-v21-stable",
+  "name": "kls-sameday-office-v22-app",
   "private": true,
-  "version": "21.0.0",
+  "version": "22.0.0",
   "scripts": {
     "build": "node build.js"
   }

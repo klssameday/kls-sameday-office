@@ -6,7 +6,7 @@ const out = path.join(root, 'dist');
 fs.rmSync(out, { recursive: true, force: true });
 fs.mkdirSync(out, { recursive: true });
 
-for (const file of ['index.html', 'app.js', 'styles.css', 'manifest.json', 'sw.js']) {
+for (const file of ['index.html', 'offline.html', 'app.js', 'styles.css', 'manifest.json', 'sw.js']) {
   fs.copyFileSync(path.join(root, file), path.join(out, file));
 }
 
@@ -14,10 +14,12 @@ const config = {
   supabaseUrl: process.env.VITE_SUPABASE_URL || '',
   supabaseAnonKey: process.env.VITE_SUPABASE_ANON_KEY || ''
 };
+fs.cpSync(path.join(root, 'icons'), path.join(out, 'icons'), { recursive: true });
+
 fs.writeFileSync(
   path.join(out, 'config.js'),
   `window.KLS_CONFIG = ${JSON.stringify(config)};\n`,
   'utf8'
 );
 
-console.log('Built KLS SameDay Office v21 Stable to dist/');
+console.log('Built KLS SameDay Office v22 App Edition to dist/');

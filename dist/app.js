@@ -52,6 +52,8 @@
     fleet: [],
     fuelLogs: [],
     maintenance: [],
+    recurringJobs: [],
+    scheduleMonth: new Date().toISOString().slice(0,7),
     quotes: [],
     jobs: [],
     invoices: [],
@@ -92,7 +94,7 @@
     </section></div>`;
   }
 
-  const navItems = [['dashboard','Dashboard'],['operations','Today’s Planner'],['dispatch','Dispatch Centre'],['driver','Driver App'],['fleet','Fleet Management'],['newquote','New Quote'],['quotes','Quotes'],['jobs','Jobs'],['invoices','Invoices'],['customers','CRM / Customers'],['settings','Settings']];
+  const navItems = [['dashboard','Dashboard'],['operations','Today’s Planner'],['dispatch','Dispatch Centre'],['driver','Driver App'],['fleet','Fleet Management'],['schedule','Booking Calendar'],['newquote','New Quote'],['quotes','Quotes'],['jobs','Jobs'],['invoices','Invoices'],['customers','CRM / Customers'],['settings','Settings']];
 
   function layout(content) {
     const title = navItems.find(([key]) => key === state.page)?.[1] || 'Dashboard';
@@ -402,6 +404,43 @@
       <div id="fleet-modal"></div>`;
   }
 
+  function scheduleDateKey(value) {
+    return value ? String(value).slice(0,10) : '';
+  }
+
+  function addFrequency(dateValue, frequency) {
+    const date = new Date(`${dateValue}T12:00:00`);
+    if (frequency === 'Weekly') date.setDate(date.getDate() + 7);
+    else if (frequency === 'Fortnightly') date.setDate(date.getDate() + 14);
+    else if (frequency === 'Monthly') date.setMonth(date.getMonth() + 1);
+    else date.setDate(date.getDate() + 1);
+    return date.toISOString().slice(0,10);
+  }
+
+  function scheduleView() {
+    const monthStart = new Date(`${state.scheduleMonth}-01T12:00:00`);
+    const year = monthStart.getFullYear(), month = monthStart.getMonth();
+    const firstMondayOffset = (monthStart.getDay() + 6) % 7;
+    const gridStart = new Date(monthStart); gridStart.setDate(1 - firstMondayOffset);
+    const monthLabel = monthStart.toLocaleDateString('en-GB',{month:'long',year:'numeric'});
+    const jobs = state.jobs.filter(j => j.job_status !== 'Cancelled');
+    const cells = Array.from({length:42},(_,i)=>{
+      const date = new Date(gridStart); date.setDate(gridStart.getDate()+i);
+      const key = date.toISOString().slice(0,10);
+      const dayJobs = jobs.filter(j => scheduleDateKey(j.collection_date)===key).sort((a,b)=>String(a.collection_time||'23:59').localeCompare(String(b.collection_time||'23:59')));
+      const outside = date.getMonth()!==month;
+      return `<div class="calendar-day ${outside?'outside':''} ${key===todayISO()?'today':''}" data-schedule-date="${key}"><div class="calendar-date"><b>${date.getDate()}</b><span>${dayJobs.length||''}</span></div><div class="calendar-jobs">${dayJobs.slice(0,4).map(j=>`<button draggable="true" class="calendar-job" data-calendar-job="${j.id}" title="Drag to reschedule"><small>${esc(String(j.collection_time||'TBC').slice(0,5))}</small><b>${esc(j.job_number||'Job')}</b><span>${esc(j.customer_name||j.contact_name||'Customer')}</span></button>`).join('')}${dayJobs.length>4?`<em>+${dayJobs.length-4} more</em>`:''}</div></div>`;
+    }).join('');
+    const upcoming = jobs.filter(j=>scheduleDateKey(j.collection_date)>=todayISO()).sort((a,b)=>`${a.collection_date||''} ${a.collection_time||''}`.localeCompare(`${b.collection_date||''} ${b.collection_time||''}`)).slice(0,8);
+    const dueRecurring = state.recurringJobs.filter(r=>r.active!==false && r.next_run_date && r.next_run_date<=todayISO());
+    return `<section class="schedule-hero"><div><small>V14 JOB SCHEDULING</small><h2>Booking Calendar</h2><p>Book work, reschedule jobs by dragging them and manage repeat customers.</p></div><button class="primary" data-action="schedule-form-focus">＋ Quick Booking</button></section>
+      <section class="schedule-toolbar"><div><button class="secondary" data-schedule-shift="-1">‹</button><button class="secondary" data-schedule-today>Today</button><button class="secondary" data-schedule-shift="1">›</button></div><h2>${monthLabel}</h2><span>${jobs.filter(j=>scheduleDateKey(j.collection_date).slice(0,7)===state.scheduleMonth).length} jobs this month</span></section>
+      <section class="calendar-wrap"><div class="calendar-weekdays">${['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(x=>`<b>${x}</b>`).join('')}</div><div class="calendar-grid">${cells}</div></section>
+      <section class="schedule-lower"><div>${panel('Quick booking',`<form id="schedule-booking-form"><div class="grid two"><label>Customer / company<input name="customer_name" required></label><label>Contact email<input name="customer_email" type="email"></label><label>Collection date<input name="collection_date" type="date" value="${todayISO()}" required></label><label>Collection time<input name="collection_time" type="time"></label><label>Collection address<input name="collection_address" required></label><label>Delivery address<input name="delivery_address" required></label><label>Vehicle<select name="vehicle">${Object.keys(vehicles).map(v=>`<option>${v}</option>`).join('')}</select></label><label>Price<input name="total_price" type="number" step="0.01" min="0"></label><label>Driver<select name="assigned_driver_id"><option value="">Auto-allocate / unassigned</option>${state.drivers.filter(d=>d.active!==false).map(d=>`<option value="${d.id}">${esc(d.name)}</option>`).join('')}</select></label><label>Notes<input name="booking_notes"></label></div><div class="actions"><button class="primary">Create Booking</button></div></form>`,'Creates a confirmed job without needing a quote first.')}</div>
+      <div class="schedule-side">${panel('Upcoming jobs',`<div class="schedule-list">${upcoming.map(j=>`<button data-page="jobs"><span><b>${esc(j.job_number||'Job')}</b><small>${fmtDate(j.collection_date)} ${esc(String(j.collection_time||'').slice(0,5))}</small></span><em>${esc(j.assigned_driver_name||'Unassigned')}</em></button>`).join('')||'<div class="fleet-empty">No upcoming bookings.</div>'}</div>`)}
+      ${panel('Recurring bookings',`<form id="recurring-form"><label>Customer<input name="customer_name" required></label><label>Collection address<input name="collection_address" required></label><label>Delivery address<input name="delivery_address" required></label><div class="grid two"><label>Frequency<select name="frequency"><option>Daily</option><option>Weekly</option><option>Fortnightly</option><option>Monthly</option></select></label><label>Next date<input name="next_run_date" type="date" value="${todayISO()}" required></label><label>Time<input name="collection_time" type="time"></label><label>Vehicle<select name="vehicle">${Object.keys(vehicles).map(v=>`<option>${v}</option>`).join('')}</select></label></div><button class="primary" style="width:100%">Save Repeat Booking</button></form><div class="repeat-list">${state.recurringJobs.map(r=>`<p><span><b>${esc(r.customer_name)}</b><small>${esc(r.frequency)} · next ${fmtDate(r.next_run_date)}</small></span><button class="secondary" data-recurring-generate="${r.id}">${r.next_run_date<=todayISO()?'Generate due job':'Generate next'}</button></p>`).join('')||'<div class="fleet-empty">No repeat bookings.</div>'}</div>${dueRecurring.length?`<button class="primary" data-generate-all-recurring style="width:100%">Generate ${dueRecurring.length} due job${dueRecurring.length===1?'':'s'}</button>`:''}`,'Repeat jobs are generated when you press the button, so nothing is booked accidentally.')}</div></section>`;
+  }
+
   function settingsView() {
     const fields = { trading_name:'Trading name',legal_name:'Legal company name',phone:'Telephone',whatsapp:'WhatsApp',email:'Email',website:'Website',address_line:'Business address',bank_name:'Bank name',sort_code:'Sort code',account_number:'Account number',default_terms:'Payment terms (days)' };
     return panel('Business settings', `<form id="settings-form"><div class="grid two">${Object.entries(fields).map(([key,label]) => `<label>${label}<input name="${key}" value="${esc(state.settings[key] ?? '')}" ${key === 'default_terms' ? 'type="number"' : ''}></label>`).join('')}</div><div class="actions"><button class="primary">Save Settings</button></div></form><p class="saved">✓ Saved securely in Supabase.</p>`);
@@ -412,7 +451,7 @@
     if (trackToken) { document.getElementById('app').innerHTML = publicTrackingView(state.publicTracking, state.loading, state.notice?.type === 'error' ? state.notice.text : ''); return; }
     if (state.loading) { document.getElementById('app').innerHTML = '<div class="loading">Loading KLS SameDay Office…</div>'; return; }
     if (!state.user) { document.getElementById('app').innerHTML = authView(); bindAuth(); return; }
-    const views = { dashboard, operations: operationsView, dispatch: dispatchView, driver: driverView, fleet: fleetView, newquote: newQuote, quotes: quotesView, jobs: jobsView, invoices: invoicesView, customers: customersView, settings: settingsView };
+    const views = { dashboard, operations: operationsView, dispatch: dispatchView, driver: driverView, fleet: fleetView, schedule: scheduleView, newquote: newQuote, quotes: quotesView, jobs: jobsView, invoices: invoicesView, customers: customersView, settings: settingsView };
     document.getElementById('app').innerHTML = layout(views[state.page]());
     bindApp();
     if (state.page === 'dispatch') initialiseDispatchMap();
@@ -473,23 +512,25 @@
   async function loadAll() {
     state.loading = true; render();
     try {
-      const [customers, drivers, fleet, fuelLogs, maintenance, quotes, jobs, invoices, settings] = await Promise.all([
+      const [customers, drivers, fleet, fuelLogs, maintenance, recurringJobs, quotes, jobs, invoices, settings] = await Promise.all([
         db.from('customers').select('*').order('created_at', { ascending: false }),
         db.from('drivers').select('*').order('name', { ascending: true }),
         db.from('vehicles').select('*').order('created_at', { ascending: false }),
         db.from('fuel_logs').select('*').order('log_date', { ascending: false }),
         db.from('vehicle_maintenance').select('*').order('log_date', { ascending: false }),
+        db.from('recurring_jobs').select('*').order('next_run_date', { ascending: true }),
         db.from('quotes').select('*').order('created_at', { ascending: false }),
         db.from('jobs').select('*').order('created_at', { ascending: false }),
         db.from('invoices').select('*').order('created_at', { ascending: false }),
         db.from('business_settings').select('*').maybeSingle()
       ]);
-      for (const result of [customers, drivers, fleet, fuelLogs, maintenance, quotes, jobs, invoices, settings]) if (result.error) throw result.error;
+      for (const result of [customers, drivers, fleet, fuelLogs, maintenance, recurringJobs, quotes, jobs, invoices, settings]) if (result.error) throw result.error;
       state.customers = customers.data || [];
       state.drivers = drivers.data || [];
       state.fleet = fleet.data || [];
       state.fuelLogs = fuelLogs.data || [];
       state.maintenance = maintenance.data || [];
+      state.recurringJobs = recurringJobs.data || [];
       state.quotes = quotes.data || [];
       state.jobs = (jobs.data || []).map(j => ({ ...j, customer_name: j.customer_name || j.contact_name || '' }));
       state.invoices = invoices.data || [];
@@ -569,7 +610,7 @@
     document.querySelector('[data-action="menu-open"]')?.addEventListener('click', () => document.getElementById('side').classList.add('open'));
     document.querySelector('[data-action="menu-close"]')?.addEventListener('click', () => document.getElementById('side').classList.remove('open'));
     document.querySelector('[data-action="notice-close"]')?.addEventListener('click', () => { state.notice = null; render(); });
-    document.querySelector('[data-action="signout"]')?.addEventListener('click', async () => { await db.auth.signOut(); state.user = null; state.customers=[]; state.drivers=[]; state.fleet=[]; state.fuelLogs=[]; state.maintenance=[]; state.quotes=[]; state.jobs=[]; state.invoices=[]; render(); });
+    document.querySelector('[data-action="signout"]')?.addEventListener('click', async () => { await db.auth.signOut(); state.user = null; state.customers=[]; state.drivers=[]; state.fleet=[]; state.fuelLogs=[]; state.maintenance=[]; state.recurringJobs=[]; state.quotes=[]; state.jobs=[]; state.invoices=[]; render(); });
 
     const driverForm = document.getElementById('driver-form');
     if(driverForm) driverForm.onsubmit=async e=>{e.preventDefault();const values=Object.fromEntries(new FormData(driverForm));values.user_id=state.user.id;values.active=true;values.availability_status='Available';values.last_seen_at=new Date().toISOString();try{const{data,error}=await db.from('drivers').insert(values).select().single();if(error)throw error;state.drivers.push(data);showNotice(`${data.name} added as a driver.`,'ok');render();}catch(error){showNotice(error.message,'error');render();}};
@@ -587,6 +628,18 @@
         state.fleet.unshift(data); showNotice(`${data.registration||data.name} added to the fleet.`,'ok'); render();
       } catch(error){showNotice(error.message,'error');render();}
     };
+    document.querySelectorAll('[data-schedule-shift]').forEach(button=>button.onclick=()=>{const d=new Date(`${state.scheduleMonth}-01T12:00:00`);d.setMonth(d.getMonth()+Number(button.dataset.scheduleShift));state.scheduleMonth=d.toISOString().slice(0,7);render();});
+    document.querySelector('[data-schedule-today]')?.addEventListener('click',()=>{state.scheduleMonth=todayISO().slice(0,7);render();});
+    document.querySelector('[data-action="schedule-form-focus"]')?.addEventListener('click',()=>document.querySelector('#schedule-booking-form input')?.focus());
+    let draggedScheduleJob='';
+    document.querySelectorAll('[data-calendar-job]').forEach(node=>{node.addEventListener('dragstart',()=>{draggedScheduleJob=node.dataset.calendarJob;node.classList.add('dragging')});node.addEventListener('dragend',()=>node.classList.remove('dragging'));node.addEventListener('click',()=>{state.page='jobs';render();});});
+    document.querySelectorAll('[data-schedule-date]').forEach(cell=>{cell.addEventListener('dragover',e=>{e.preventDefault();cell.classList.add('drop-target')});cell.addEventListener('dragleave',()=>cell.classList.remove('drop-target'));cell.addEventListener('drop',async e=>{e.preventDefault();cell.classList.remove('drop-target');if(!draggedScheduleJob)return;const job=state.jobs.find(j=>j.id===draggedScheduleJob);const old=job?.collection_date;if(!job)return;job.collection_date=cell.dataset.scheduleDate;render();const {error}=await db.from('jobs').update({collection_date:job.collection_date}).eq('id',job.id);if(error){job.collection_date=old;showNotice(error.message,'error');}else showNotice(`${job.job_number||'Job'} moved to ${fmtDate(job.collection_date)}.`,'ok');render();});});
+    document.getElementById('schedule-booking-form')?.addEventListener('submit',async e=>{e.preventDefault();try{const form=Object.fromEntries(new FormData(e.currentTarget));let driver=null;if(form.assigned_driver_id)driver=state.drivers.find(d=>d.id===form.assigned_driver_id);else{const dayJobs=state.jobs.filter(j=>scheduleDateKey(j.collection_date)===form.collection_date);driver=state.drivers.filter(d=>d.active!==false && d.availability_status!=='Offline').sort((a,b)=>dayJobs.filter(j=>j.assigned_driver_id===a.id).length-dayJobs.filter(j=>j.assigned_driver_id===b.id).length)[0]||null;}const payload={user_id:state.user.id,customer_name:form.customer_name,contact_name:form.customer_name,customer_email:form.customer_email||null,collection_date:form.collection_date,collection_time:form.collection_time||null,collection_address:form.collection_address,delivery_address:form.delivery_address,vehicle:form.vehicle,total_price:Number(form.total_price||0),base_price:Number(form.total_price||0),extras:0,costs:0,job_status:'Booked',quote_status:'Direct Booking',invoice_status:'Not Invoiced',assigned_driver_id:driver?.id||null,assigned_driver_name:driver?.name||null,booking_notes:form.booking_notes||null};const {data,error}=await db.from('jobs').insert(payload).select().single();if(error)throw error;state.jobs.unshift({...data,customer_name:data.customer_name||data.contact_name||''});showNotice(`${data.job_number||'Booking'} created${driver?` and assigned to ${driver.name}`:''}.`,'ok');render();}catch(error){showNotice(error.message,'error');render();}});
+    document.getElementById('recurring-form')?.addEventListener('submit',async e=>{e.preventDefault();try{const form=Object.fromEntries(new FormData(e.currentTarget));const payload={...form,user_id:state.user.id,active:true};const {data,error}=await db.from('recurring_jobs').insert(payload).select().single();if(error)throw error;state.recurringJobs.push(data);showNotice('Recurring booking saved.','ok');render();}catch(error){showNotice(error.message,'error');render();}});
+    const generateRecurring=async recurring=>{const driver=state.drivers.filter(d=>d.active!==false&&d.availability_status!=='Offline')[0]||null;const payload={user_id:state.user.id,customer_name:recurring.customer_name,contact_name:recurring.customer_name,collection_date:recurring.next_run_date,collection_time:recurring.collection_time||null,collection_address:recurring.collection_address,delivery_address:recurring.delivery_address,vehicle:recurring.vehicle,total_price:Number(recurring.total_price||0),base_price:Number(recurring.total_price||0),extras:0,costs:0,job_status:'Booked',quote_status:'Recurring Booking',invoice_status:'Not Invoiced',assigned_driver_id:driver?.id||null,assigned_driver_name:driver?.name||null,recurring_job_id:recurring.id};const {data,error}=await db.from('jobs').insert(payload).select().single();if(error)throw error;const next=addFrequency(recurring.next_run_date,recurring.frequency);const {error:updateError}=await db.from('recurring_jobs').update({last_generated_date:recurring.next_run_date,next_run_date:next}).eq('id',recurring.id);if(updateError)throw updateError;recurring.last_generated_date=recurring.next_run_date;recurring.next_run_date=next;state.jobs.unshift({...data,customer_name:data.customer_name||data.contact_name||''});};
+    document.querySelectorAll('[data-recurring-generate]').forEach(button=>button.onclick=async()=>{try{const recurring=state.recurringJobs.find(r=>r.id===button.dataset.recurringGenerate);await generateRecurring(recurring);showNotice('Recurring job generated and next date advanced.','ok');render();}catch(error){showNotice(error.message,'error');render();}});
+    document.querySelector('[data-generate-all-recurring]')?.addEventListener('click',async()=>{try{const due=state.recurringJobs.filter(r=>r.active!==false&&r.next_run_date<=todayISO());for(const r of due)await generateRecurring(r);showNotice(`${due.length} due recurring job${due.length===1?'':'s'} generated.`,'ok');render();}catch(error){showNotice(error.message,'error');render();}});
+
     document.querySelector('[data-action="vehicle-form-focus"]')?.addEventListener('click',()=>document.querySelector('#vehicle-form input')?.focus());
     document.querySelectorAll('[data-vehicle-delete]').forEach(btn=>btn.onclick=async()=>{if(!confirm('Remove this vehicle from the active fleet?'))return;const {error}=await db.from('vehicles').update({active:false}).eq('id',btn.dataset.vehicleDelete);if(error){showNotice(error.message,'error');render();return;}const v=state.fleet.find(x=>x.id===btn.dataset.vehicleDelete);if(v)v.active=false;showNotice('Vehicle removed from active fleet.','ok');render();});
     const showFleetModal=(type,vehicleId)=>{const v=state.fleet.find(x=>x.id===vehicleId);const node=document.getElementById('fleet-modal');if(!node)return;node.innerHTML=`<div class="modalback" data-action="fleet-close"><section class="customermodal fleet-modal" onclick="event.stopPropagation()"><div class="modalhead"><div><small>${type==='fuel'?'FUEL LOG':'MAINTENANCE LOG'}</small><h2>${esc(v?.registration||v?.name||'Vehicle')}</h2></div><button type="button" data-action="fleet-close">×</button></div><form id="fleet-log-form"><input type="hidden" name="vehicle_id" value="${vehicleId}"><div class="grid two">${type==='fuel'?`<label>Date<input name="log_date" type="date" value="${todayISO()}" required></label><label>Litres<input name="litres" type="number" step="0.01" min="0" required></label><label>Cost<input name="cost" type="number" step="0.01" min="0" required></label><label>Mileage<input name="mileage" type="number" min="0"></label>`:`<label>Date<input name="log_date" type="date" value="${todayISO()}" required></label><label>Category<select name="category"><option>Service</option><option>MOT</option><option>Repair</option><option>Tyres</option><option>Tail Lift</option><option>Other</option></select></label><label>Description<input name="description" required></label><label>Cost<input name="cost" type="number" step="0.01" min="0" required></label><label>Supplier<input name="supplier"></label><label>Mileage<input name="mileage" type="number" min="0"></label>`}</div><div class="actions"><button type="button" class="secondary" data-action="fleet-close">Cancel</button><button class="primary">Save</button></div></form></section></div>`;node.querySelectorAll('[data-action="fleet-close"]').forEach(x=>x.onclick=()=>{node.innerHTML=''});node.querySelector('#fleet-log-form').onsubmit=async e=>{e.preventDefault();try{const values=Object.fromEntries(new FormData(e.currentTarget));values.user_id=state.user.id;values.cost=Number(values.cost||0);if(values.mileage)values.mileage=Number(values.mileage);if(values.litres)values.litres=Number(values.litres);const table=type==='fuel'?'fuel_logs':'vehicle_maintenance';const {data,error}=await db.from(table).insert(values).select().single();if(error)throw error;(type==='fuel'?state.fuelLogs:state.maintenance).unshift(data);if(values.mileage){await db.from('vehicles').update({current_mileage:values.mileage}).eq('id',vehicleId);if(v)v.current_mileage=values.mileage;}showNotice(type==='fuel'?'Fuel entry saved.':'Maintenance entry saved.','ok');render();}catch(error){showNotice(error.message,'error');render();}};};

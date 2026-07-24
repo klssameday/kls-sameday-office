@@ -1,8 +1,6 @@
 {
-  "name": "kls-sameday-office-v13-fleet-management",
+  "name": "kls-sameday-office-v14-booking-calendar",
   "private": true,
-  "version": "13.0.0",
-  "scripts": {
-    "build": "node build.js"
-  }
+  "version": "14.0.0",
+  "scripts": { "build": "node build.js" }
 }

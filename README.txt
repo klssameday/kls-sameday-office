@@ -1,23 +1,21 @@
-KLS SameDay Office v17 — Live Tracking Centre
+KLS SameDay Office v18 — Smart Dispatch
 
-WHAT'S NEW
-- New Live Tracking page in the office navigation
-- Live vehicle map for every active GPS-reporting job
-- GPS health: Live now, recent, stale or not started
-- Quick access to driver job, customer tracking link and latest location
-- Customer public tracking page now includes an embedded live map
-- Customer ETA countdown updates automatically
-- Existing Driver App GPS, POD, dispatch, portal and accounts features retained
+WHAT IS NEW
+- Smart Dispatch page
+- Automatic analysis of pending quotes and active jobs
+- Estimated operating cost, profit and margin
+- Accept / Review / Low margin recommendation
+- Suggested driver based on current assigned workload
+- Driver workload panel and projected workload totals
+
+IMPORTANT
+- No new Supabase SQL is required for v18.
+- Cost figures are operational estimates and should be reviewed before accepting a job.
+- This is rule-based decision support; it does not automatically accept work.
 
 INSTALL
-1. No new Supabase SQL is required for v17 if v9 live tracking and v16 customer portal are already working.
-2. Replace app.js, styles.css, index.html, manifest.json, sw.js, build.js and package.json in GitHub.
-3. Keep your existing config.js.
-4. Commit summary: Upgrade to v17 Live Tracking Centre
-5. Wait for Vercel Ready and hard refresh the website.
-
-TEST
-1. Open an active job in Driver App on a phone.
-2. Press Start Live Tracking and allow location access.
-3. Open Live Tracking in the office system.
-4. Copy the customer tracking link and open it in a private browser window.
+1. Replace app.js, styles.css, index.html, manifest.json, sw.js, build.js and package.json in GitHub.
+2. Keep your existing config.js.
+3. Commit: Upgrade to v18 Smart Dispatch
+4. Wait for Vercel Ready.
+5. Hard refresh the website.

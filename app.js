@@ -104,7 +104,7 @@
     </section></div>`;
   }
 
-  const navItems = [['dashboard','Dashboard'],['operations','Today’s Planner'],['dispatch','Dispatch Centre'],['driver','Driver App'],['tracking','Live Tracking'],['fleet','Fleet Management'],['schedule','Booking Calendar'],['portalrequests','Customer Portal'],['newquote','New Quote'],['quotes','Quotes'],['jobs','Jobs'],['invoices','Invoices'],['accounts','Accounts & Payments'],['customers','CRM / Customers'],['settings','Settings']];
+  const navItems = [['dashboard','Dashboard'],['smart','Smart Dispatch'],['operations','Today’s Planner'],['dispatch','Dispatch Centre'],['driver','Driver App'],['tracking','Live Tracking'],['fleet','Fleet Management'],['schedule','Booking Calendar'],['portalrequests','Customer Portal'],['newquote','New Quote'],['quotes','Quotes'],['jobs','Jobs'],['invoices','Invoices'],['accounts','Accounts & Payments'],['customers','CRM / Customers'],['settings','Settings']];
 
   function layout(content) {
     const title = navItems.find(([key]) => key === state.page)?.[1] || 'Dashboard';
@@ -542,6 +542,51 @@
   }
 
 
+  function dispatchIntelligence() {
+    const activeJobs = state.jobs.filter(j => !['Delivered','Cancelled'].includes(j.job_status));
+    const assignedCounts = Object.fromEntries(state.drivers.map(d => [d.id, activeJobs.filter(j => j.assigned_driver_id === d.id).length]));
+    const availableDrivers = state.drivers.filter(d => !d.availability || ['Available','Online'].includes(d.availability));
+    const driverPool = availableDrivers.length ? availableDrivers : state.drivers;
+    const bestDriver = driverPool.slice().sort((a,b) => (assignedCounts[a.id]||0) - (assignedCounts[b.id]||0))[0];
+    return { activeJobs, assignedCounts, bestDriver };
+  }
+
+  function estimatedOperatingCost(item) {
+    const miles = Number(item.miles || 0);
+    const vehicle = item.vehicle || 'Luton Tail Lift';
+    const perMile = vehicle === 'Small Van' ? 0.42 : vehicle === 'Medium Van' ? 0.52 : vehicle === 'LWB' ? 0.64 : 0.82;
+    const driverAllowance = miles ? Math.max(25, (miles / 45) * 18) : 25;
+    return Math.round((miles * perMile + driverAllowance) * 100) / 100;
+  }
+
+  function smartRecommendation(item) {
+    const revenue = Number(item.quoted_price || item.total_price || 0);
+    const cost = Number(item.costs || 0) || estimatedOperatingCost(item);
+    const profit = revenue - cost;
+    const margin = revenue > 0 ? (profit / revenue) * 100 : 0;
+    const result = margin >= 45 ? 'Accept' : margin >= 25 ? 'Review' : 'Low margin';
+    return { revenue, cost, profit, margin, result };
+  }
+
+  function smartDispatchView() {
+    const { activeJobs, assignedCounts, bestDriver } = dispatchIntelligence();
+    const candidates = [
+      ...state.quotes.filter(q => q.status === 'Pending').map(q => ({...q, source:'Quote', label:q.quote_number || 'Pending quote'})),
+      ...activeJobs.map(j => ({...j, source:'Job', label:j.job_number || 'Active job'}))
+    ].slice(0,12);
+    const analysed = candidates.map(item => ({item, score:smartRecommendation(item)}));
+    const projectedRevenue = analysed.reduce((s,x)=>s+x.score.revenue,0);
+    const projectedProfit = analysed.reduce((s,x)=>s+x.score.profit,0);
+    const highMargin = analysed.filter(x=>x.score.margin>=45).length;
+    const rows = analysed.length ? analysed.map(({item,score}) => {
+      const suggested = bestDriver ? `${bestDriver.name}${bestDriver.vehicle ? ` · ${bestDriver.vehicle}` : ''}` : 'Add a driver';
+      return `<article class="intelligence-card"><div class="intelligence-head"><span><small>${esc(item.source)}</small><b>${esc(item.label)}</b></span><span class="decision ${score.result.toLowerCase().replace(/\s+/g,'-')}">${score.result}</span></div><h3>${esc(item.customer_name || item.contact_name || 'Customer')}</h3><div class="intelligence-route"><p><small>COLLECT</small>${esc(item.collection_address || 'Not entered')}</p><p><small>DELIVER</small>${esc(item.delivery_address || 'Not entered')}</p></div><div class="intelligence-numbers"><div><small>Revenue</small><b>${money(score.revenue)}</b></div><div><small>Est. cost</small><b>${money(score.cost)}</b></div><div><small>Est. profit</small><b>${money(score.profit)}</b></div><div><small>Margin</small><b>${score.margin.toFixed(0)}%</b></div></div><footer><span><small>SUGGESTED DRIVER</small><b>${esc(suggested)}</b></span><button class="secondary" data-page="${item.source==='Quote'?'quotes':'dispatch'}">Open ${item.source}</button></footer></article>`;
+    }).join('') : '<div class="smart-empty"><b>No work to analyse</b><p>Create a quote or job and it will appear here automatically.</p><button class="primary" data-page="newquote">＋ New Quote</button></div>';
+    const driverRows = state.drivers.length ? state.drivers.map(d=>`<div class="driver-load-row"><span><b>${esc(d.name)}</b><small>${esc(d.vehicle||'Vehicle not set')}</small></span><strong>${assignedCounts[d.id]||0} active</strong></div>`).join('') : '<div class="fleet-empty">No drivers have been added yet.</div>';
+    return `<section class="smart-hero"><div><small>V18 OPERATIONS INTELLIGENCE</small><h2>Smart Dispatch</h2><p>Rule-based job analysis using your live quotes, drivers, workload and KLS pricing data.</p></div><button class="primary" data-page="newquote">Analyse a new quote</button></section><section class="smart-kpis">${card('Work analysed',analysed.length,'Pending quotes and active jobs')}${card('Projected revenue',money(projectedRevenue),'Current analysed workload')}${card('Projected profit',money(projectedProfit),'Before fixed overheads')}${card('Strong margins',highMargin,'Estimated margin 45%+')}</section><section class="smart-layout"><div>${panel('Dispatch recommendations',`<div class="intelligence-grid">${rows}</div>`,'Costs are estimates based on mileage, vehicle type and driver time. Review before accepting work.')}</div><aside class="smart-side">${panel('Best available driver', bestDriver ? `<div class="best-driver"><b>${esc(bestDriver.name)}</b><span>${esc(bestDriver.vehicle||'Vehicle not set')}</span><small>${assignedCounts[bestDriver.id]||0} active job(s)</small></div>` : '<div class="fleet-empty">Add a driver to receive suggestions.</div>','Lowest current assigned workload')}${panel('Driver workload',`<div class="driver-load-list">${driverRows}</div>`,'Used to balance new work')}${panel('How it decides','<div class="decision-guide"><p><b>Accept</b><span>Estimated margin 45% or more</span></p><p><b>Review</b><span>Estimated margin 25–44%</span></p><p><b>Low margin</b><span>Estimated margin below 25%</span></p></div>','This is decision support, not automatic acceptance.')}</aside></section>`;
+  }
+
+
   function portalRequestsView() {
     const pending=state.portalBookings.filter(b=>b.status==='Pending');
     const rows=state.portalBookings.length?`<div class="portal-admin-list">${state.portalBookings.map(b=>{const customer=state.customers.find(c=>c.id===b.customer_id);return `<article><div><span><b>${esc(customer?.company||'Customer')}</b><small>${fmtDate(b.collection_date)} ${esc(String(b.collection_time||'').slice(0,5))}</small></span>${portalStatusBadge(b.status)}</div><p><small>COLLECT</small>${esc(b.collection_address)}</p><p><small>DELIVER</small>${esc(b.delivery_address)}</p><p><small>VEHICLE</small>${esc(b.vehicle||'Not specified')}</p>${b.load_description?`<p><small>LOAD</small>${esc(b.load_description)}</p>`:''}<footer>${b.status==='Pending'?`<button class="primary" data-portal-approve="${b.id}">Approve & create job</button><button class="danger" data-portal-reject="${b.id}">Reject</button>`:''}</footer></article>`}).join('')}</div>`:'<div class="fleet-empty">No portal booking requests yet.</div>';
@@ -560,7 +605,7 @@
     if (state.loading) { document.getElementById('app').innerHTML = '<div class="loading">Loading KLS SameDay Office…</div>'; return; }
     if (!state.user) { document.getElementById('app').innerHTML = authView(); bindAuth(); return; }
     if (state.portalUser) { document.getElementById('app').innerHTML = customerPortalView(); bindCustomerPortal(); return; }
-    const views = { dashboard, operations: operationsView, dispatch: dispatchView, driver: driverView, tracking: liveTrackingView, fleet: fleetView, schedule: scheduleView, newquote: newQuote, quotes: quotesView, jobs: jobsView, invoices: invoicesView, accounts: accountsView, portalrequests: portalRequestsView, customers: customersView, settings: settingsView };
+    const views = { dashboard, smart: smartDispatchView, operations: operationsView, dispatch: dispatchView, driver: driverView, tracking: liveTrackingView, fleet: fleetView, schedule: scheduleView, newquote: newQuote, quotes: quotesView, jobs: jobsView, invoices: invoicesView, accounts: accountsView, portalrequests: portalRequestsView, customers: customersView, settings: settingsView };
     document.getElementById('app').innerHTML = layout(views[state.page]());
     bindApp();
     if (state.page === 'dispatch') initialiseDispatchMap();

@@ -1,7 +1,7 @@
 {
-  "name": "kls-sameday-office-v17-live-tracking",
+  "name": "kls-sameday-office-v18-smart-dispatch",
   "private": true,
-  "version": "17.0.0",
+  "version": "18.0.0",
   "scripts": {
     "build": "node build.js"
   }

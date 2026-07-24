@@ -1,25 +1,27 @@
-KLS SameDay Office v10 — Dispatch Centre
+KLS SameDay Office v11 — Driver Management
 
 INSTALL ORDER
-1. In Supabase open SQL Editor > New query.
-2. Open KLS_SameDay_v10_Dispatch_Centre_Upgrade.sql, copy all, paste into the editor and click Run.
-3. Replace the website files in the GitHub repository with:
-   app.js, styles.css, index.html, manifest.json, sw.js, build.js and package.json
-4. Commit to main with summary: Upgrade to v10 Dispatch Centre
-5. Push origin and wait for Vercel to show Ready.
-6. Refresh KLS SameDay Office and sign in again if required.
+1. Open Supabase > SQL Editor > New query.
+2. Copy all of KLS_SameDay_v11_Driver_Management_Upgrade.sql and click Run.
+3. Replace the website files in GitHub with app.js, styles.css, index.html, manifest.json, sw.js, build.js and package.json.
+4. Commit to main: Upgrade to v11 Driver Management
+5. Push and wait for Vercel to show Ready.
+6. Refresh the app. On iPhone, close and reopen the installed web app so the new service worker loads.
 
-V10 FEATURES
-- Driver records and vehicle details
-- Assign or unassign jobs from the Dispatch Centre
-- Driver workload panels
-- Open the latest live GPS position in Google Maps
-- Multi-drop addresses saved with quotes and jobs
-- Customer ETA saved against a job
-- ETA and additional stops visible on the private tracking page
-- Native phone Share button for customer tracking messages
+V11 FEATURES
+- Dedicated Driver Management page
+- Add, edit and delete driver profiles
+- Personal and emergency contact details
+- Employment type, start date and driver number
+- Vehicle, registration, mileage and service date
+- Licence, insurance, CPC and MOT expiry tracking
+- Compliance warnings for expired or soon-due documents
+- Document link fields
+- Active/inactive driver status
+- Driver job, revenue and mileage summaries
+- Searchable driver roster
 
 IMPORTANT
-- Live GPS still requires the Driver App to remain open.
-- Customer messages are shared from the phone/browser; fully automatic SMS/email requires a future server messaging integration.
-- Existing v9 quotes, jobs, invoices, tracking and POD remain in place.
+- Run the v10 SQL migration before this v11 migration.
+- Document fields store secure links; direct file uploads require a later Supabase Storage module.
+- Existing quotes, jobs, invoices, CRM, tracking and POD remain in place.

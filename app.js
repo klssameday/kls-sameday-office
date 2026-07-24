@@ -59,6 +59,7 @@
     selectedCustomerId: null,
     quoteCustomerId: null,
     selectedDriverJobId: null,
+    selectedDriverId: null,
     publicTracking: null
   };
 
@@ -89,7 +90,7 @@
     </section></div>`;
   }
 
-  const navItems = [['dashboard','Dashboard'],['operations','Today’s Planner'],['dispatch','Dispatch Centre'],['driver','Driver App'],['newquote','New Quote'],['quotes','Quotes'],['jobs','Jobs'],['invoices','Invoices'],['customers','CRM / Customers'],['settings','Settings']];
+  const navItems = [['dashboard','Dashboard'],['operations','Today’s Planner'],['dispatch','Dispatch Centre'],['drivers','Driver Management'],['driver','Driver App'],['newquote','New Quote'],['quotes','Quotes'],['jobs','Jobs'],['invoices','Invoices'],['customers','CRM / Customers'],['settings','Settings']];
 
   function layout(content) {
     const title = navItems.find(([key]) => key === state.page)?.[1] || 'Dashboard';
@@ -307,10 +308,77 @@
       const live = jobs.find(j => j.last_latitude && j.last_longitude);
       return `<section class="driver-dispatch-card"><div class="driver-dispatch-head"><div><span class="driver-status-dot ${driver.active===false?'off':''}"></span><h3>${esc(driver.name)}</h3><p>${esc(driver.vehicle || 'Vehicle TBC')} · ${esc(driver.phone || 'No phone')}</p></div><b>${jobs.length} job${jobs.length===1?'':'s'}</b></div>${live ? `<a class="secondary button-link" target="_blank" href="https://www.google.com/maps?q=${live.last_latitude},${live.last_longitude}">Open live location</a>` : '<small class="muted">No live GPS update yet</small>'}<div class="driver-job-stack">${jobs.map(dispatchCard).join('') || '<div class="dispatch-empty">No jobs assigned</div>'}</div></section>`;
     }).join('');
-    return `<section class="dispatch-toolbar"><div><small>V10 LIVE OPERATIONS</small><h2>Dispatch Centre</h2><p>Assign jobs to drivers, update stages, set ETAs and open live locations.</p></div><div><button class="secondary" data-page="jobs">Table view</button><button class="primary" data-page="newquote">＋ New Quote</button></div></section>
+    return `<section class="dispatch-toolbar"><div><small>V11 LIVE OPERATIONS</small><h2>Dispatch Centre</h2><p>Assign jobs to drivers, update stages, set ETAs and open live locations.</p></div><div><button class="secondary" data-page="jobs">Table view</button><button class="primary" data-page="newquote">＋ New Quote</button></div></section>
       <section class="dispatch-kpis">${card('Active jobs',active.length,'Not delivered','jobs')}${card('Unassigned',unassigned.length,'Needs a driver','dispatch')}${card('Drivers',state.drivers.length,'Manage below','dispatch')}${card('Live GPS',active.filter(j=>j.last_latitude&&j.last_longitude).length,'Jobs reporting location','driver')}</section>
       <section class="driver-manager"><div><h2>Drivers</h2><p>Add a driver or vehicle, then assign work from each job card.</p></div><form id="driver-form"><input name="name" placeholder="Driver name" required><input name="phone" placeholder="Phone"><input name="vehicle" placeholder="Vehicle / registration"><button class="primary">Add Driver</button></form></section>
       <section class="dispatch-centre-grid"><div><h2>Unassigned work</h2><div class="driver-job-stack">${unassigned.map(dispatchCard).join('') || '<div class="dispatch-empty">Everything is assigned.</div>'}</div></div><div class="driver-roster">${driverPanels || '<div class="dispatch-empty">Add your first driver above.</div>'}</div></section>${driverModal()}`;
+  }
+
+
+  function expiryState(value) {
+    if (!value) return { label: 'Not recorded', className: 'neutral' };
+    const days = Math.ceil((new Date(value).getTime() - Date.now()) / 86400000);
+    if (days < 0) return { label: `Expired ${Math.abs(days)} day${Math.abs(days)===1?'':'s'} ago`, className: 'expired' };
+    if (days <= 30) return { label: `Expires in ${days} day${days===1?'':'s'}`, className: 'warning' };
+    return { label: `Valid until ${fmtDate(value)}`, className: 'valid' };
+  }
+
+  function driverMetrics(driver) {
+    const jobs = state.jobs.filter(job => job.assigned_driver_id === driver.id && job.job_status !== 'Cancelled');
+    const delivered = jobs.filter(job => job.job_status === 'Delivered');
+    const active = jobs.filter(job => !['Delivered','Cancelled'].includes(job.job_status));
+    const revenue = delivered.reduce((sum, job) => sum + Number(job.total_price || 0), 0);
+    const miles = delivered.reduce((sum, job) => sum + Number(job.miles || 0), 0);
+    const today = todayISO();
+    const todayJobs = jobs.filter(job => String(job.collection_date || '').slice(0,10) === today);
+    return { jobs, delivered, active, revenue, miles, todayJobs };
+  }
+
+  function driverProfileModal() {
+    if (!state.selectedDriverId) return '';
+    const isNew = state.selectedDriverId === 'new';
+    const driver = isNew ? {
+      name:'', phone:'', email:'', address:'', emergency_contact:'', emergency_phone:'',
+      employment_type:'Subcontractor', start_date:'', driver_number:'', vehicle:'', registration:'',
+      licence_expiry:'', insurance_expiry:'', cpc_expiry:'', mot_expiry:'', service_due_date:'',
+      current_mileage:'', licence_url:'', insurance_url:'', cpc_url:'', notes:'', active:true
+    } : state.drivers.find(item => item.id === state.selectedDriverId);
+    if (!driver) return '';
+    const metrics = isNew ? {jobs:[],delivered:[],active:[],revenue:0,miles:0,todayJobs:[]} : driverMetrics(driver);
+    const licence = expiryState(driver.licence_expiry);
+    const insurance = expiryState(driver.insurance_expiry);
+    const cpc = expiryState(driver.cpc_expiry);
+    const mot = expiryState(driver.mot_expiry);
+    return `<div class="modalback" data-action="driver-profile-close"><section class="customermodal driver-profile-modal" onclick="event.stopPropagation()">
+      <div class="modalhead"><div><small>${isNew?'NEW DRIVER':'DRIVER PROFILE'}</small><h2>${esc(driver.name || 'Add driver')}</h2><p>${isNew?'Create a complete driver record':`${esc(driver.vehicle || 'Vehicle not assigned')} · ${driver.active===false?'Inactive':'Active'}`}</p></div><button data-action="driver-profile-close">×</button></div>
+      ${isNew?'':`<div class="driver-profile-kpis"><div><small>Jobs today</small><b>${metrics.todayJobs.length}</b></div><div><small>Active jobs</small><b>${metrics.active.length}</b></div><div><small>Completed</small><b>${metrics.delivered.length}</b></div><div><small>Revenue</small><b>${money(metrics.revenue)}</b></div><div><small>Miles</small><b>${Math.round(metrics.miles).toLocaleString('en-GB')}</b></div></div>`}
+      <form id="driver-profile-form">
+        <div class="driver-section"><div><small>PERSONAL</small><h3>Driver details</h3></div><div class="grid two"><label>Full name *<input name="name" required value="${esc(driver.name||'')}"></label><label>Driver number<input name="driver_number" value="${esc(driver.driver_number||'')}"></label><label>Mobile<input name="phone" value="${esc(driver.phone||'')}"></label><label>Email<input name="email" type="email" value="${esc(driver.email||'')}"></label><label>Home address<textarea name="address">${esc(driver.address||'')}</textarea></label><label>Emergency contact<div class="split-fields"><input name="emergency_contact" placeholder="Name" value="${esc(driver.emergency_contact||'')}"><input name="emergency_phone" placeholder="Phone" value="${esc(driver.emergency_phone||'')}"></div></label></div></div>
+        <div class="driver-section"><div><small>EMPLOYMENT & VEHICLE</small><h3>Work information</h3></div><div class="grid two"><label>Employment type<select name="employment_type">${['Employee','Subcontractor','Self-employed','Agency'].map(x=>`<option ${driver.employment_type===x?'selected':''}>${x}</option>`).join('')}</select></label><label>Start date<input name="start_date" type="date" value="${esc(driver.start_date||'')}"></label><label>Assigned vehicle<input name="vehicle" value="${esc(driver.vehicle||'')}"></label><label>Registration<input name="registration" value="${esc(driver.registration||'')}"></label><label>Current mileage<input name="current_mileage" type="number" min="0" value="${esc(driver.current_mileage||'')}"></label><label>Service due<input name="service_due_date" type="date" value="${esc(driver.service_due_date||'')}"></label></div></div>
+        <div class="driver-section"><div><small>COMPLIANCE</small><h3>Documents and expiry dates</h3></div><div class="compliance-grid">
+          <label>Driving licence expiry<input name="licence_expiry" type="date" value="${esc(driver.licence_expiry||'')}"><span class="expiry ${licence.className}">${esc(licence.label)}</span></label>
+          <label>Insurance expiry<input name="insurance_expiry" type="date" value="${esc(driver.insurance_expiry||'')}"><span class="expiry ${insurance.className}">${esc(insurance.label)}</span></label>
+          <label>CPC expiry<input name="cpc_expiry" type="date" value="${esc(driver.cpc_expiry||'')}"><span class="expiry ${cpc.className}">${esc(cpc.label)}</span></label>
+          <label>Vehicle MOT expiry<input name="mot_expiry" type="date" value="${esc(driver.mot_expiry||'')}"><span class="expiry ${mot.className}">${esc(mot.label)}</span></label>
+        </div><div class="grid"><label>Licence document link<input name="licence_url" type="url" value="${esc(driver.licence_url||'')}"></label><label>Insurance document link<input name="insurance_url" type="url" value="${esc(driver.insurance_url||'')}"></label><label>CPC document link<input name="cpc_url" type="url" value="${esc(driver.cpc_url||'')}"></label></div></div>
+        <div class="driver-section"><div><small>NOTES & STATUS</small><h3>Office notes</h3></div><label>Notes<textarea name="notes">${esc(driver.notes||'')}</textarea></label><label class="toggle-label"><input name="active" type="checkbox" ${driver.active!==false?'checked':''}> Driver is active and available for assignment</label></div>
+        <div class="actions driver-profile-actions">${isNew?'':`<button type="button" class="danger" data-delete-driver="${driver.id}">Delete Driver</button>`}<button type="button" class="secondary" data-action="driver-profile-close">Cancel</button><button class="primary">${isNew?'Add Driver':'Save Driver'}</button></div>
+      </form>
+    </section></div>`;
+  }
+
+  function driversView() {
+    const rows = state.drivers.map(driver => {
+      const metrics = driverMetrics(driver);
+      const expiries = [driver.licence_expiry,driver.insurance_expiry,driver.cpc_expiry,driver.mot_expiry].filter(Boolean).map(v=>new Date(v)).sort((a,b)=>a-b);
+      const next = expiries[0];
+      const nextState = next ? expiryState(next.toISOString().slice(0,10)) : {label:'No expiry dates',className:'neutral'};
+      return `<article class="driver-management-card" data-driver-profile="${driver.id}" tabindex="0"><div class="driver-management-head"><div class="driver-avatar">${esc((driver.name||'?').split(/\s+/).map(x=>x[0]).join('').slice(0,2).toUpperCase())}</div><div><h3>${esc(driver.name)}</h3><p>${esc(driver.vehicle||'Vehicle not assigned')}${driver.registration?` · ${esc(driver.registration)}`:''}</p></div><span class="driver-state ${driver.active===false?'off':''}">${driver.active===false?'Inactive':'Active'}</span></div><div class="driver-management-stats"><div><small>Today</small><b>${metrics.todayJobs.length}</b></div><div><small>Active</small><b>${metrics.active.length}</b></div><div><small>Completed</small><b>${metrics.delivered.length}</b></div><div><small>Revenue</small><b>${money(metrics.revenue)}</b></div></div><div class="driver-compliance-line"><span class="expiry ${nextState.className}">${esc(nextState.label)}</span><small>${esc(driver.phone||'No phone saved')}</small></div></article>`;
+    }).join('');
+    const complianceIssues = state.drivers.filter(d => [d.licence_expiry,d.insurance_expiry,d.cpc_expiry,d.mot_expiry].some(v => v && expiryState(v).className !== 'valid')).length;
+    return `<section class="drivers-hero"><div><small>V11 DRIVER MANAGEMENT</small><h2>Your drivers, vehicles and compliance</h2><p>Keep contact details, vehicle assignments, document dates and performance together.</p></div><button class="primary" data-driver-profile="new">＋ Add Driver</button></section>
+      <section class="dispatch-kpis">${card('Drivers',state.drivers.length,'All driver records','drivers')}${card('Active',state.drivers.filter(d=>d.active!==false).length,'Available for work','drivers')}${card('Compliance alerts',complianceIssues,'Expired or due within 30 days','drivers')}${card('Assigned jobs',state.jobs.filter(j=>j.assigned_driver_id&&!['Delivered','Cancelled'].includes(j.job_status)).length,'Currently active','dispatch')}</section>
+      <section class="panel"><div class="panelhead"><div><h2>Driver roster</h2><p>Select a driver to open the complete profile.</p></div><label class="search">Search <input id="driver-search" placeholder="Name, vehicle or registration"></label></div><div class="driver-management-grid">${rows || '<div class="empty">No drivers yet. Add your first driver.</div>'}</div></section>${driverProfileModal()}`;
   }
 
 
@@ -381,7 +449,7 @@
     if (trackToken) { document.getElementById('app').innerHTML = publicTrackingView(state.publicTracking, state.loading, state.notice?.type === 'error' ? state.notice.text : ''); return; }
     if (state.loading) { document.getElementById('app').innerHTML = '<div class="loading">Loading KLS SameDay Office…</div>'; return; }
     if (!state.user) { document.getElementById('app').innerHTML = authView(); bindAuth(); return; }
-    const views = { dashboard, operations: operationsView, dispatch: dispatchView, driver: driverView, newquote: newQuote, quotes: quotesView, jobs: jobsView, invoices: invoicesView, customers: customersView, settings: settingsView };
+    const views = { dashboard, operations: operationsView, dispatch: dispatchView, drivers: driversView, driver: driverView, newquote: newQuote, quotes: quotesView, jobs: jobsView, invoices: invoicesView, customers: customersView, settings: settingsView };
     document.getElementById('app').innerHTML = layout(views[state.page]());
     bindApp();
   }
@@ -463,6 +531,8 @@
   }
 
   function bindApp() {
+    document.querySelectorAll('[data-driver-profile]').forEach(card => card.onclick = () => { state.selectedDriverId = card.dataset.driverProfile; render(); });
+    document.querySelectorAll('[data-action="driver-profile-close"]').forEach(button => button.onclick = () => { state.selectedDriverId = null; render(); });
     document.querySelectorAll('[data-page]').forEach(button => button.onclick = () => { state.page = button.dataset.page; render(); });
     document.querySelectorAll('[data-driver-open]').forEach(button => button.onclick = () => { state.selectedDriverJobId = button.dataset.driverOpen; render(); });
     document.querySelectorAll('[data-action="driver-close"]').forEach(button => button.onclick = () => { state.selectedDriverJobId = null; render(); });
@@ -504,6 +574,41 @@
 
     const driverForm = document.getElementById('driver-form');
     if(driverForm) driverForm.onsubmit=async e=>{e.preventDefault();const values=Object.fromEntries(new FormData(driverForm));values.user_id=state.user.id;values.active=true;try{const{data,error}=await db.from('drivers').insert(values).select().single();if(error)throw error;state.drivers.push(data);showNotice(`${data.name} added as a driver.`,'ok');render();}catch(error){showNotice(error.message,'error');render();}};
+
+    const driverSearch = document.getElementById('driver-search');
+    if (driverSearch) driverSearch.oninput = () => {
+      const q = driverSearch.value.toLowerCase();
+      document.querySelectorAll('.driver-management-card').forEach(card => { card.style.display = card.textContent.toLowerCase().includes(q) ? '' : 'none'; });
+    };
+
+    const driverProfileForm = document.getElementById('driver-profile-form');
+    if (driverProfileForm) driverProfileForm.onsubmit = async e => {
+      e.preventDefault();
+      const values = Object.fromEntries(new FormData(driverProfileForm));
+      values.user_id = state.user.id;
+      values.active = driverProfileForm.active.checked;
+      values.current_mileage = values.current_mileage ? Number(values.current_mileage) : null;
+      ['start_date','service_due_date','licence_expiry','insurance_expiry','cpc_expiry','mot_expiry'].forEach(key => { if (!values[key]) values[key] = null; });
+      ['email','address','emergency_contact','emergency_phone','driver_number','vehicle','registration','licence_url','insurance_url','cpc_url','notes','phone'].forEach(key => { if (!values[key]) values[key] = null; });
+      try {
+        if (state.selectedDriverId === 'new') {
+          const {data,error} = await db.from('drivers').insert(values).select().single(); if (error) throw error;
+          state.drivers.push(data); state.drivers.sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+          showNotice(`${data.name} added to Driver Management.`, 'ok');
+        } else {
+          const {data,error} = await db.from('drivers').update(values).eq('id',state.selectedDriverId).select().single(); if (error) throw error;
+          const index = state.drivers.findIndex(d=>d.id===data.id); if(index>=0) state.drivers[index]=data;
+          showNotice(`${data.name} updated.`, 'ok');
+        }
+        state.selectedDriverId = null; render();
+      } catch (error) { showNotice(error.message, 'error'); render(); }
+    };
+    document.querySelectorAll('[data-delete-driver]').forEach(button => button.onclick = async () => {
+      const driver = state.drivers.find(d=>d.id===button.dataset.deleteDriver); if(!driver) return;
+      if(!confirm(`Delete ${driver.name}? Assigned jobs will remain but become unassigned.`)) return;
+      const {error}=await db.from('drivers').delete().eq('id',driver.id); if(error){showNotice(error.message,'error');render();return;}
+      state.drivers=state.drivers.filter(d=>d.id!==driver.id); state.selectedDriverId=null; showNotice(`${driver.name} deleted.`, 'ok'); render();
+    });
 
     const quoteForm = document.getElementById('quote-form');
     if (quoteForm) {

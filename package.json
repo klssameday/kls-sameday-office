@@ -1,7 +1,7 @@
 {
-  "name": "kls-sameday-office-v23-driver-mode",
+  "name": "kls-sameday-office-v24-driver-only",
   "private": true,
-  "version": "23.0.0",
+  "version": "25.0.0",
   "scripts": {
     "build": "node build.js"
   }

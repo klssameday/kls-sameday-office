@@ -49,6 +49,9 @@
     user: null,
     customers: [],
     drivers: [],
+    fleet: [],
+    fuelLogs: [],
+    maintenance: [],
     quotes: [],
     jobs: [],
     invoices: [],
@@ -89,7 +92,7 @@
     </section></div>`;
   }
 
-  const navItems = [['dashboard','Dashboard'],['operations','Today’s Planner'],['dispatch','Dispatch Centre'],['driver','Driver App'],['newquote','New Quote'],['quotes','Quotes'],['jobs','Jobs'],['invoices','Invoices'],['customers','CRM / Customers'],['settings','Settings']];
+  const navItems = [['dashboard','Dashboard'],['operations','Today’s Planner'],['dispatch','Dispatch Centre'],['driver','Driver App'],['fleet','Fleet Management'],['newquote','New Quote'],['quotes','Quotes'],['jobs','Jobs'],['invoices','Invoices'],['customers','CRM / Customers'],['settings','Settings']];
 
   function layout(content) {
     const title = navItems.find(([key]) => key === state.page)?.[1] || 'Dashboard';
@@ -372,6 +375,33 @@
     </section></div>`;
   }
 
+  function fleetView() {
+    const today = todayISO();
+    const dueSoon = date => date && new Date(date).getTime() <= Date.now() + 30*86400000;
+    const active = state.fleet.filter(v => v.active !== false);
+    const totalFuel = state.fuelLogs.reduce((s,x)=>s+Number(x.cost||0),0);
+    const maintenanceCost = state.maintenance.reduce((s,x)=>s+Number(x.cost||0),0);
+    const alerts = active.flatMap(v => [
+      v.mot_expiry && dueSoon(v.mot_expiry) ? `${v.registration || v.name}: MOT ${v.mot_expiry < today ? 'expired' : 'due soon'}` : '',
+      v.insurance_expiry && dueSoon(v.insurance_expiry) ? `${v.registration || v.name}: insurance ${v.insurance_expiry < today ? 'expired' : 'due soon'}` : '',
+      v.service_due_mileage && Number(v.current_mileage||0) >= Number(v.service_due_mileage) ? `${v.registration || v.name}: service mileage reached` : ''
+    ]).filter(Boolean);
+    const vehicleCards = active.map(v => {
+      const fuel = state.fuelLogs.filter(x=>x.vehicle_id===v.id);
+      const repairs = state.maintenance.filter(x=>x.vehicle_id===v.id);
+      const spent = fuel.reduce((s,x)=>s+Number(x.cost||0),0)+repairs.reduce((s,x)=>s+Number(x.cost||0),0);
+      return `<article class="fleet-card"><div class="fleet-card-head"><div><small>${esc(v.vehicle_type||'VEHICLE')}</small><h3>${esc(v.name||v.registration||'Vehicle')}</h3><p>${esc(v.registration||'No registration')} · ${Number(v.current_mileage||0).toLocaleString('en-GB')} miles</p></div><span>${v.active===false?'Inactive':'Active'}</span></div><div class="fleet-dates"><p><small>MOT</small><b>${fmtDate(v.mot_expiry)}</b></p><p><small>Insurance</small><b>${fmtDate(v.insurance_expiry)}</b></p><p><small>Service due</small><b>${v.service_due_mileage ? Number(v.service_due_mileage).toLocaleString('en-GB')+' mi' : fmtDate(v.service_due_date)}</b></p></div><div class="fleet-cost"><span>Recorded running cost</span><b>${money(spent)}</b></div><div class="fleet-actions"><button class="secondary" data-fuel-vehicle="${v.id}">Add fuel</button><button class="secondary" data-maint-vehicle="${v.id}">Add maintenance</button><button class="danger" data-vehicle-delete="${v.id}">Remove</button></div></article>`;
+    }).join('') || '<div class="fleet-empty">No vehicles added yet.</div>';
+    return `<section class="fleet-hero"><div><small>V13 FLEET CONTROL</small><h2>Fleet Management</h2><p>Vehicles, compliance dates, fuel and maintenance in one place.</p></div><button class="primary" data-action="vehicle-form-focus">＋ Add Vehicle</button></section>
+      <section class="cards fleet-kpis">${card('Active vehicles',active.length)}${card('Compliance alerts',alerts.length,alerts.length?'Action required':'All clear')}${card('Fuel recorded',money(totalFuel))}${card('Maintenance spend',money(maintenanceCost))}</section>
+      ${alerts.length?panel('Needs attention',`<div class="fleet-alerts">${alerts.map(x=>`<div>⚠ ${esc(x)}</div>`).join('')}</div>`,'MOT, insurance and service reminders within 30 days.'):''}
+      <section class="fleet-layout"><div>${panel('Vehicles',`<div class="fleet-grid">${vehicleCards}</div>`,'Your current working fleet.')}</div><div class="fleet-side">
+      ${panel('Add vehicle',`<form id="vehicle-form"><label>Vehicle name<input name="name" placeholder="Luton Tail Lift" required></label><div class="grid two"><label>Registration<input name="registration" placeholder="AB12 CDE"></label><label>Vehicle type<select name="vehicle_type">${Object.keys(vehicles).map(x=>`<option>${x}</option>`).join('')}</select></label><label>Current mileage<input name="current_mileage" type="number" min="0"></label><label>Service due mileage<input name="service_due_mileage" type="number" min="0"></label><label>MOT expiry<input name="mot_expiry" type="date"></label><label>Insurance expiry<input name="insurance_expiry" type="date"></label></div><div class="actions"><button class="primary">Save Vehicle</button></div></form>`)}
+      ${panel('Recent costs',`<div class="fleet-log">${[...state.fuelLogs.map(x=>({...x,kind:'Fuel'})),...state.maintenance.map(x=>({...x,kind:x.category||'Maintenance'}))].sort((a,b)=>new Date(b.log_date||b.created_at)-new Date(a.log_date||a.created_at)).slice(0,8).map(x=>{const v=state.fleet.find(v=>v.id===x.vehicle_id);return `<p><span><b>${esc(x.kind)}</b><small>${esc(v?.registration||v?.name||'Vehicle')} · ${fmtDate(x.log_date||x.created_at)}</small></span><strong>${money(x.cost)}</strong></p>`}).join('')||'<div class="fleet-empty">No costs recorded.</div>'}`)}
+      </div></section>
+      <div id="fleet-modal"></div>`;
+  }
+
   function settingsView() {
     const fields = { trading_name:'Trading name',legal_name:'Legal company name',phone:'Telephone',whatsapp:'WhatsApp',email:'Email',website:'Website',address_line:'Business address',bank_name:'Bank name',sort_code:'Sort code',account_number:'Account number',default_terms:'Payment terms (days)' };
     return panel('Business settings', `<form id="settings-form"><div class="grid two">${Object.entries(fields).map(([key,label]) => `<label>${label}<input name="${key}" value="${esc(state.settings[key] ?? '')}" ${key === 'default_terms' ? 'type="number"' : ''}></label>`).join('')}</div><div class="actions"><button class="primary">Save Settings</button></div></form><p class="saved">✓ Saved securely in Supabase.</p>`);
@@ -382,7 +412,7 @@
     if (trackToken) { document.getElementById('app').innerHTML = publicTrackingView(state.publicTracking, state.loading, state.notice?.type === 'error' ? state.notice.text : ''); return; }
     if (state.loading) { document.getElementById('app').innerHTML = '<div class="loading">Loading KLS SameDay Office…</div>'; return; }
     if (!state.user) { document.getElementById('app').innerHTML = authView(); bindAuth(); return; }
-    const views = { dashboard, operations: operationsView, dispatch: dispatchView, driver: driverView, newquote: newQuote, quotes: quotesView, jobs: jobsView, invoices: invoicesView, customers: customersView, settings: settingsView };
+    const views = { dashboard, operations: operationsView, dispatch: dispatchView, driver: driverView, fleet: fleetView, newquote: newQuote, quotes: quotesView, jobs: jobsView, invoices: invoicesView, customers: customersView, settings: settingsView };
     document.getElementById('app').innerHTML = layout(views[state.page]());
     bindApp();
     if (state.page === 'dispatch') initialiseDispatchMap();
@@ -443,17 +473,23 @@
   async function loadAll() {
     state.loading = true; render();
     try {
-      const [customers, drivers, quotes, jobs, invoices, settings] = await Promise.all([
+      const [customers, drivers, fleet, fuelLogs, maintenance, quotes, jobs, invoices, settings] = await Promise.all([
         db.from('customers').select('*').order('created_at', { ascending: false }),
         db.from('drivers').select('*').order('name', { ascending: true }),
+        db.from('vehicles').select('*').order('created_at', { ascending: false }),
+        db.from('fuel_logs').select('*').order('log_date', { ascending: false }),
+        db.from('vehicle_maintenance').select('*').order('log_date', { ascending: false }),
         db.from('quotes').select('*').order('created_at', { ascending: false }),
         db.from('jobs').select('*').order('created_at', { ascending: false }),
         db.from('invoices').select('*').order('created_at', { ascending: false }),
         db.from('business_settings').select('*').maybeSingle()
       ]);
-      for (const result of [customers, drivers, quotes, jobs, invoices, settings]) if (result.error) throw result.error;
+      for (const result of [customers, drivers, fleet, fuelLogs, maintenance, quotes, jobs, invoices, settings]) if (result.error) throw result.error;
       state.customers = customers.data || [];
       state.drivers = drivers.data || [];
+      state.fleet = fleet.data || [];
+      state.fuelLogs = fuelLogs.data || [];
+      state.maintenance = maintenance.data || [];
       state.quotes = quotes.data || [];
       state.jobs = (jobs.data || []).map(j => ({ ...j, customer_name: j.customer_name || j.contact_name || '' }));
       state.invoices = invoices.data || [];
@@ -533,10 +569,29 @@
     document.querySelector('[data-action="menu-open"]')?.addEventListener('click', () => document.getElementById('side').classList.add('open'));
     document.querySelector('[data-action="menu-close"]')?.addEventListener('click', () => document.getElementById('side').classList.remove('open'));
     document.querySelector('[data-action="notice-close"]')?.addEventListener('click', () => { state.notice = null; render(); });
-    document.querySelector('[data-action="signout"]')?.addEventListener('click', async () => { await db.auth.signOut(); state.user = null; state.customers=[]; state.drivers=[]; state.quotes=[]; state.jobs=[]; state.invoices=[]; render(); });
+    document.querySelector('[data-action="signout"]')?.addEventListener('click', async () => { await db.auth.signOut(); state.user = null; state.customers=[]; state.drivers=[]; state.fleet=[]; state.fuelLogs=[]; state.maintenance=[]; state.quotes=[]; state.jobs=[]; state.invoices=[]; render(); });
 
     const driverForm = document.getElementById('driver-form');
     if(driverForm) driverForm.onsubmit=async e=>{e.preventDefault();const values=Object.fromEntries(new FormData(driverForm));values.user_id=state.user.id;values.active=true;values.availability_status='Available';values.last_seen_at=new Date().toISOString();try{const{data,error}=await db.from('drivers').insert(values).select().single();if(error)throw error;state.drivers.push(data);showNotice(`${data.name} added as a driver.`,'ok');render();}catch(error){showNotice(error.message,'error');render();}};
+
+    const vehicleForm = document.getElementById('vehicle-form');
+    if (vehicleForm) vehicleForm.onsubmit = async e => {
+      e.preventDefault();
+      try {
+        const values = Object.fromEntries(new FormData(vehicleForm));
+        values.user_id = state.user.id; values.active = true;
+        values.current_mileage = Number(values.current_mileage||0);
+        values.service_due_mileage = values.service_due_mileage ? Number(values.service_due_mileage) : null;
+        for (const k of ['mot_expiry','insurance_expiry']) if (!values[k]) values[k]=null;
+        const {data,error}=await db.from('vehicles').insert(values).select().single(); if(error) throw error;
+        state.fleet.unshift(data); showNotice(`${data.registration||data.name} added to the fleet.`,'ok'); render();
+      } catch(error){showNotice(error.message,'error');render();}
+    };
+    document.querySelector('[data-action="vehicle-form-focus"]')?.addEventListener('click',()=>document.querySelector('#vehicle-form input')?.focus());
+    document.querySelectorAll('[data-vehicle-delete]').forEach(btn=>btn.onclick=async()=>{if(!confirm('Remove this vehicle from the active fleet?'))return;const {error}=await db.from('vehicles').update({active:false}).eq('id',btn.dataset.vehicleDelete);if(error){showNotice(error.message,'error');render();return;}const v=state.fleet.find(x=>x.id===btn.dataset.vehicleDelete);if(v)v.active=false;showNotice('Vehicle removed from active fleet.','ok');render();});
+    const showFleetModal=(type,vehicleId)=>{const v=state.fleet.find(x=>x.id===vehicleId);const node=document.getElementById('fleet-modal');if(!node)return;node.innerHTML=`<div class="modalback" data-action="fleet-close"><section class="customermodal fleet-modal" onclick="event.stopPropagation()"><div class="modalhead"><div><small>${type==='fuel'?'FUEL LOG':'MAINTENANCE LOG'}</small><h2>${esc(v?.registration||v?.name||'Vehicle')}</h2></div><button type="button" data-action="fleet-close">×</button></div><form id="fleet-log-form"><input type="hidden" name="vehicle_id" value="${vehicleId}"><div class="grid two">${type==='fuel'?`<label>Date<input name="log_date" type="date" value="${todayISO()}" required></label><label>Litres<input name="litres" type="number" step="0.01" min="0" required></label><label>Cost<input name="cost" type="number" step="0.01" min="0" required></label><label>Mileage<input name="mileage" type="number" min="0"></label>`:`<label>Date<input name="log_date" type="date" value="${todayISO()}" required></label><label>Category<select name="category"><option>Service</option><option>MOT</option><option>Repair</option><option>Tyres</option><option>Tail Lift</option><option>Other</option></select></label><label>Description<input name="description" required></label><label>Cost<input name="cost" type="number" step="0.01" min="0" required></label><label>Supplier<input name="supplier"></label><label>Mileage<input name="mileage" type="number" min="0"></label>`}</div><div class="actions"><button type="button" class="secondary" data-action="fleet-close">Cancel</button><button class="primary">Save</button></div></form></section></div>`;node.querySelectorAll('[data-action="fleet-close"]').forEach(x=>x.onclick=()=>{node.innerHTML=''});node.querySelector('#fleet-log-form').onsubmit=async e=>{e.preventDefault();try{const values=Object.fromEntries(new FormData(e.currentTarget));values.user_id=state.user.id;values.cost=Number(values.cost||0);if(values.mileage)values.mileage=Number(values.mileage);if(values.litres)values.litres=Number(values.litres);const table=type==='fuel'?'fuel_logs':'vehicle_maintenance';const {data,error}=await db.from(table).insert(values).select().single();if(error)throw error;(type==='fuel'?state.fuelLogs:state.maintenance).unshift(data);if(values.mileage){await db.from('vehicles').update({current_mileage:values.mileage}).eq('id',vehicleId);if(v)v.current_mileage=values.mileage;}showNotice(type==='fuel'?'Fuel entry saved.':'Maintenance entry saved.','ok');render();}catch(error){showNotice(error.message,'error');render();}};};
+    document.querySelectorAll('[data-fuel-vehicle]').forEach(b=>b.onclick=()=>showFleetModal('fuel',b.dataset.fuelVehicle));
+    document.querySelectorAll('[data-maint-vehicle]').forEach(b=>b.onclick=()=>showFleetModal('maintenance',b.dataset.maintVehicle));
 
     const quoteForm = document.getElementById('quote-form');
     if (quoteForm) {

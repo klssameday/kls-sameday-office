@@ -48,6 +48,7 @@
     page: 'dashboard',
     user: null,
     customers: [],
+    drivers: [],
     quotes: [],
     jobs: [],
     invoices: [],
@@ -88,7 +89,7 @@
     </section></div>`;
   }
 
-  const navItems = [['dashboard','Dashboard'],['operations','Today’s Planner'],['dispatch','Dispatch Board'],['driver','Driver App'],['newquote','New Quote'],['quotes','Quotes'],['jobs','Jobs'],['invoices','Invoices'],['customers','CRM / Customers'],['settings','Settings']];
+  const navItems = [['dashboard','Dashboard'],['operations','Today’s Planner'],['dispatch','Dispatch Centre'],['driver','Driver App'],['newquote','New Quote'],['quotes','Quotes'],['jobs','Jobs'],['invoices','Invoices'],['customers','CRM / Customers'],['settings','Settings']];
 
   function layout(content) {
     const title = navItems.find(([key]) => key === state.page)?.[1] || 'Dashboard';
@@ -208,7 +209,7 @@
       <div class="quote-builder-head"><div><small>KLS PRICING ENGINE</small><h3>Build a consistent quote in seconds</h3><p>Enter the route mileage, choose a vehicle and add any extras. The total updates instantly.</p></div><div class="rate-pill">Minimum or mileage rate — whichever is higher</div></div>
       <div class="grid"><label>Customer / company *<input name="company" required value="${esc(selected.company || '')}"></label><label>Contact name<input name="contact_name" value="${esc(selected.contact_name || '')}"></label><label>Telephone / WhatsApp<input name="phone" value="${esc(selected.phone || '')}"></label></div>
       <div class="grid"><label>Email<input name="email" type="email" value="${esc(selected.email || '')}"></label><label>Collection date<input name="collection_date" type="date" value="${todayISO()}"></label><label>Collection time<input name="collection_time" type="time"></label></div>
-      <div class="grid two"><label>Collection address / postcode *<textarea name="collection_address" required></textarea></label><label>Delivery address / postcode *<textarea name="delivery_address" required></textarea></label></div>
+      <div class="grid two"><label>Collection address / postcode *<textarea name="collection_address" required></textarea></label><label>Main delivery address / postcode *<textarea name="delivery_address" required></textarea></label></div><label>Additional delivery stops (one per line)<textarea name="route_stops" placeholder="Drop 2 address\nDrop 3 address\nDrop 4 address"></textarea><em>These are saved to the quote and job as a multi-drop route.</em></label>
       <div class="route-tools"><button type="button" class="secondary" data-action="open-route">Open route in Google Maps</button><span>Use the route mileage shown by Google Maps, then enter it below.</span></div>
       <div class="grid"><label>Vehicle<select name="vehicle">${Object.keys(vehicles).map(v => `<option>${v}</option>`).join('')}</select></label><label>Distance (miles)<input name="miles" type="number" min="0" step="0.1" value="0"></label><label>Base delivery charge<input name="base_charge" type="number" readonly></label></div>
       <div class="extras-box"><div class="extras-title"><div><small>OPTIONAL EXTRAS</small><h3>Add only what applies</h3></div><button type="button" class="secondary" data-action="clear-extras">Clear extras</button></div>
@@ -269,14 +270,14 @@
     const job = state.jobs.find(j => j.id === state.selectedDriverJobId);
     if (!job) return '';
     const hasPod = Boolean(job.pod_photo_url || job.pod_signature_url || job.recipient_name);
-    return `<div class="modalback" data-action="driver-close"><section class="customermodal driver-modal" onclick="event.stopPropagation()"><div class="modalhead"><div><small>DRIVER JOB</small><h2>${esc(job.job_number || 'Job')}</h2><p>${esc(job.customer_name || '')}</p></div><button data-action="driver-close">×</button></div><div class="driver-route large"><p><small>COLLECTION</small>${esc(job.collection_address || '')}</p><p><small>DELIVERY</small>${esc(job.delivery_address || '')}</p></div><div class="driver-status-grid">${driverStatuses.map(status => `<button type="button" class="${job.job_status === status ? 'primary' : 'secondary'}" data-driver-status="${job.id}" data-status="${status}">${status}</button>`).join('')}</div><div class="tracking-controls"><button class="primary" data-action="start-tracking" data-job="${job.id}">Start Live Tracking</button><button class="secondary" data-action="stop-tracking">Stop Tracking</button><button class="secondary" data-copy-track="${job.id}">Copy Customer Link</button><small>Location updates while this Driver App remains open and location permission is allowed.</small></div><form id="pod-form"><h3>Proof of Delivery</h3><div class="grid two"><label>Recipient name<input name="recipient_name" value="${esc(job.recipient_name || '')}" required></label><label>Delivery notes<input name="pod_notes" value="${esc(job.pod_notes || '')}"></label></div><label>Delivery photo<input name="pod_photo" type="file" accept="image/*" capture="environment"></label><label>Recipient signature<div class="signature-wrap"><canvas id="signature-canvas" width="700" height="240"></canvas><button type="button" class="secondary" data-action="clear-signature">Clear signature</button></div></label>${hasPod ? `<div class="existing-pod">Existing POD saved ${job.delivered_at ? fmtDate(job.delivered_at) : ''}${job.pod_photo_url ? `<a href="${esc(job.pod_photo_url)}" target="_blank">View photo</a>` : ''}${job.pod_signature_url ? `<a href="${esc(job.pod_signature_url)}" target="_blank">View signature</a>` : ''}</div>` : ''}<div class="actions"><button type="button" class="secondary" data-action="driver-close">Cancel</button><button class="primary">Save POD & Mark Delivered</button></div></form></section></div>`;
+    return `<div class="modalback" data-action="driver-close"><section class="customermodal driver-modal" onclick="event.stopPropagation()"><div class="modalhead"><div><small>DRIVER JOB</small><h2>${esc(job.job_number || 'Job')}</h2><p>${esc(job.customer_name || '')}</p></div><button data-action="driver-close">×</button></div><div class="driver-route large"><p><small>COLLECTION</small>${esc(job.collection_address || '')}</p><p><small>DELIVERY</small>${esc(job.delivery_address || '')}</p></div><div class="driver-status-grid">${driverStatuses.map(status => `<button type="button" class="${job.job_status === status ? 'primary' : 'secondary'}" data-driver-status="${job.id}" data-status="${status}">${status}</button>`).join('')}</div><div class="driver-assignment-strip"><label>Assigned driver<select data-driver-assign="${job.id}"><option value="">Unassigned</option>${state.drivers.map(d=>`<option value="${d.id}" ${job.assigned_driver_id===d.id?'selected':''}>${esc(d.name)} · ${esc(d.vehicle||'Vehicle TBC')}</option>`).join('')}</select></label><label>Customer ETA<input type="datetime-local" data-job-eta="${job.id}" value="${job.eta_at ? String(job.eta_at).slice(0,16) : ''}"></label><button type="button" class="secondary" data-save-eta="${job.id}">Save ETA</button></div><div class="tracking-controls"><button class="primary" data-action="start-tracking" data-job="${job.id}">Start Live Tracking</button><button class="secondary" data-action="stop-tracking">Stop Tracking</button><button class="secondary" data-copy-track="${job.id}">Copy Customer Link</button><button class="secondary" data-share-track="${job.id}">Share Tracking</button><small>Location updates while this Driver App remains open and location permission is allowed.</small></div><form id="pod-form"><h3>Proof of Delivery</h3><div class="grid two"><label>Recipient name<input name="recipient_name" value="${esc(job.recipient_name || '')}" required></label><label>Delivery notes<input name="pod_notes" value="${esc(job.pod_notes || '')}"></label></div><label>Delivery photo<input name="pod_photo" type="file" accept="image/*" capture="environment"></label><label>Recipient signature<div class="signature-wrap"><canvas id="signature-canvas" width="700" height="240"></canvas><button type="button" class="secondary" data-action="clear-signature">Clear signature</button></div></label>${hasPod ? `<div class="existing-pod">Existing POD saved ${job.delivered_at ? fmtDate(job.delivered_at) : ''}${job.pod_photo_url ? `<a href="${esc(job.pod_photo_url)}" target="_blank">View photo</a>` : ''}${job.pod_signature_url ? `<a href="${esc(job.pod_signature_url)}" target="_blank">View signature</a>` : ''}</div>` : ''}<div class="actions"><button type="button" class="secondary" data-action="driver-close">Cancel</button><button class="primary">Save POD & Mark Delivered</button></div></form></section></div>`;
   }
 
   function publicTrackingView(data, loading=false, error='') {
     if (loading) return `<div class="public-track"><div class="track-card"><div class="track-logo"><b>KLS</b><span>SameDay Live Tracking</span></div><div class="loading">Loading delivery…</div></div></div>`;
     if (error || !data) return `<div class="public-track"><div class="track-card"><div class="track-logo"><b>KLS</b><span>SameDay Live Tracking</span></div><h1>Tracking unavailable</h1><p>${esc(error || 'This tracking link is invalid or has expired.')}</p></div></div>`;
     const maps = data.last_latitude && data.last_longitude ? `https://www.google.com/maps?q=${data.last_latitude},${data.last_longitude}` : '';
-    return `<div class="public-track"><div class="track-card"><div class="track-logo"><b>KLS</b><span>SameDay Live Tracking</span></div><small>JOB ${esc(data.job_number || '')}</small><h1>${esc(data.status || 'Booked')}</h1><div class="track-progress">${driverStatuses.map((s,i) => `<span class="${i <= Math.max(driverStatuses.indexOf(data.status),0) ? 'done' : ''}"></span>`).join('')}</div><div class="track-route"><p><small>COLLECTION</small>${esc(data.collection_area || 'Collection arranged')}</p><p><small>DELIVERY</small>${esc(data.delivery_area || 'Delivery arranged')}</p></div>${maps ? `<a class="primary button-link map-link" href="${maps}" target="_blank">View latest driver location</a>` : '<div class="track-waiting">Live location will appear once the driver starts tracking.</div>'}<div class="track-update">Last update: ${data.location_updated_at ? new Date(data.location_updated_at).toLocaleString('en-GB') : 'Not started'}</div>${data.status === 'Delivered' ? `<div class="delivered-box"><b>Delivered</b><span>${data.delivered_at ? new Date(data.delivered_at).toLocaleString('en-GB') : ''}</span><span>${data.recipient_name ? `Received by ${esc(data.recipient_name)}` : ''}</span></div>` : ''}<footer>Dedicated vehicle • No shared loads<br>0330 043 5237 · info@klssameday.co.uk</footer></div></div>`;
+    return `<div class="public-track"><div class="track-card"><div class="track-logo"><b>KLS</b><span>SameDay Live Tracking</span></div><small>JOB ${esc(data.job_number || '')}</small><h1>${esc(data.status || 'Booked')}</h1><div class="track-progress">${driverStatuses.map((s,i) => `<span class="${i <= Math.max(driverStatuses.indexOf(data.status),0) ? 'done' : ''}"></span>`).join('')}</div><div class="track-route"><p><small>COLLECTION</small>${esc(data.collection_area || 'Collection arranged')}</p><p><small>DELIVERY</small>${esc(data.delivery_area || 'Delivery arranged')}</p></div>${Array.isArray(data.route_stops) && data.route_stops.length ? `<div class="track-stops"><small>ADDITIONAL STOPS</small>${data.route_stops.map((stop,i)=>`<p>${i+2}. ${esc(stop)}</p>`).join('')}</div>` : ''}${data.eta_at ? `<div class="eta-box"><small>ESTIMATED ARRIVAL</small><b>${new Date(data.eta_at).toLocaleString('en-GB')}</b></div>` : ''}${maps ? `<a class="primary button-link map-link" href="${maps}" target="_blank">View latest driver location</a>` : '<div class="track-waiting">Live location will appear once the driver starts tracking.</div>'}<div class="track-update">Last update: ${data.location_updated_at ? new Date(data.location_updated_at).toLocaleString('en-GB') : 'Not started'}</div>${data.status === 'Delivered' ? `<div class="delivered-box"><b>Delivered</b><span>${data.delivered_at ? new Date(data.delivered_at).toLocaleString('en-GB') : ''}</span><span>${data.recipient_name ? `Received by ${esc(data.recipient_name)}` : ''}</span></div>` : ''}<footer>Dedicated vehicle • No shared loads<br>0330 043 5237 · info@klssameday.co.uk</footer></div></div>`;
   }
 
   const dispatchStatuses = ['Booked','En Route to Collection','Arrived at Collection','Collected','In Transit','Arrived at Delivery','Delivered'];
@@ -286,23 +287,30 @@
     const previous = statusIndex > 0 ? dispatchStatuses[statusIndex - 1] : '';
     const next = statusIndex >= 0 && statusIndex < dispatchStatuses.length - 1 ? dispatchStatuses[statusIndex + 1] : '';
     const time = job.collection_time ? String(job.collection_time).slice(0,5) : 'Time TBC';
+    const stops = Array.isArray(job.route_stops) ? job.route_stops : [];
     return `<article class="dispatch-card" draggable="true" data-dispatch-job="${job.id}">
       <div class="dispatch-card-head"><b>${esc(job.job_number || 'Job')}</b><span>${esc(time)}</span></div>
       <h3>${esc(job.customer_name || job.contact_name || 'Customer')}</h3>
-      <div class="dispatch-route"><p><small>COLLECT</small>${esc(job.collection_address || 'Not set')}</p><span>↓</span><p><small>DELIVER</small>${esc(job.delivery_address || 'Not set')}</p></div>
+      <div class="dispatch-route"><p><small>COLLECT</small>${esc(job.collection_address || 'Not set')}</p><span>↓</span><p><small>DELIVER</small>${esc(job.delivery_address || 'Not set')}</p>${stops.length ? `<p><small>EXTRA STOPS</small>${stops.map((x,i)=>`${i+2}. ${esc(x)}`).join('<br>')}</p>` : ''}</div>
+      <div class="dispatch-assignment"><label>Driver<select data-assign-job="${job.id}"><option value="">Unassigned</option>${state.drivers.map(d=>`<option value="${d.id}" ${job.assigned_driver_id===d.id?'selected':''}>${esc(d.name)}</option>`).join('')}</select></label>${job.eta_at ? `<span class="eta-pill">ETA ${new Date(job.eta_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}</span>` : ''}</div>
       <div class="dispatch-meta"><span>${esc(job.vehicle || 'Vehicle TBC')}</span><span>${money(job.total_price)}</span></div>
-      <div class="dispatch-card-actions">${previous ? `<button class="secondary" data-move-job="${job.id}" data-move-status="${previous}">← ${esc(previous)}</button>` : ''}${next ? `<button class="primary" data-move-job="${job.id}" data-move-status="${next}">${esc(next)} →</button>` : `<button class="primary" data-page="jobs">Open job</button>`}</div>
+      <div class="dispatch-card-actions">${previous ? `<button class="secondary" data-move-job="${job.id}" data-move-status="${previous}">←</button>` : ''}<button class="secondary" data-driver-open="${job.id}">Open</button>${next ? `<button class="primary" data-move-job="${job.id}" data-move-status="${next}">${esc(next)} →</button>` : ''}</div>
       ${job.invoice_status === 'Invoiced' ? '<div class="dispatch-badge">INVOICED</div>' : ''}
     </article>`;
   }
 
   function dispatchView() {
-    const active = state.jobs.filter(job => job.job_status !== 'Cancelled');
-    const columns = dispatchStatuses.map(status => {
-      const jobs = active.filter(job => job.job_status === status);
-      return `<section class="dispatch-column" data-drop-status="${status}"><div class="dispatch-column-head"><div><h2>${status}</h2><p>${jobs.length} job${jobs.length === 1 ? '' : 's'}</p></div><span>${jobs.length}</span></div><div class="dispatch-list">${jobs.length ? jobs.map(dispatchCard).join('') : `<div class="dispatch-empty">Drop a job here</div>`}</div></section>`;
+    const active = state.jobs.filter(job => !['Cancelled','Delivered'].includes(job.job_status));
+    const unassigned = active.filter(job => !job.assigned_driver_id);
+    const driverPanels = state.drivers.map(driver => {
+      const jobs = active.filter(job => job.assigned_driver_id === driver.id);
+      const live = jobs.find(j => j.last_latitude && j.last_longitude);
+      return `<section class="driver-dispatch-card"><div class="driver-dispatch-head"><div><span class="driver-status-dot ${driver.active===false?'off':''}"></span><h3>${esc(driver.name)}</h3><p>${esc(driver.vehicle || 'Vehicle TBC')} · ${esc(driver.phone || 'No phone')}</p></div><b>${jobs.length} job${jobs.length===1?'':'s'}</b></div>${live ? `<a class="secondary button-link" target="_blank" href="https://www.google.com/maps?q=${live.last_latitude},${live.last_longitude}">Open live location</a>` : '<small class="muted">No live GPS update yet</small>'}<div class="driver-job-stack">${jobs.map(dispatchCard).join('') || '<div class="dispatch-empty">No jobs assigned</div>'}</div></section>`;
     }).join('');
-    return `<section class="dispatch-toolbar"><div><small>LIVE OPERATIONS</small><h2>Dispatch Board</h2><p>Drag jobs between stages or use the move buttons on mobile.</p></div><div><button class="secondary" data-page="jobs">Table view</button><button class="primary" data-page="newquote">＋ New Quote</button></div></section><div class="dispatch-board">${columns}</div>`;
+    return `<section class="dispatch-toolbar"><div><small>V10 LIVE OPERATIONS</small><h2>Dispatch Centre</h2><p>Assign jobs to drivers, update stages, set ETAs and open live locations.</p></div><div><button class="secondary" data-page="jobs">Table view</button><button class="primary" data-page="newquote">＋ New Quote</button></div></section>
+      <section class="dispatch-kpis">${card('Active jobs',active.length,'Not delivered','jobs')}${card('Unassigned',unassigned.length,'Needs a driver','dispatch')}${card('Drivers',state.drivers.length,'Manage below','dispatch')}${card('Live GPS',active.filter(j=>j.last_latitude&&j.last_longitude).length,'Jobs reporting location','driver')}</section>
+      <section class="driver-manager"><div><h2>Drivers</h2><p>Add a driver or vehicle, then assign work from each job card.</p></div><form id="driver-form"><input name="name" placeholder="Driver name" required><input name="phone" placeholder="Phone"><input name="vehicle" placeholder="Vehicle / registration"><button class="primary">Add Driver</button></form></section>
+      <section class="dispatch-centre-grid"><div><h2>Unassigned work</h2><div class="driver-job-stack">${unassigned.map(dispatchCard).join('') || '<div class="dispatch-empty">Everything is assigned.</div>'}</div></div><div class="driver-roster">${driverPanels || '<div class="dispatch-empty">Add your first driver above.</div>'}</div></section>${driverModal()}`;
   }
 
 
@@ -404,15 +412,17 @@
   async function loadAll() {
     state.loading = true; render();
     try {
-      const [customers, quotes, jobs, invoices, settings] = await Promise.all([
+      const [customers, drivers, quotes, jobs, invoices, settings] = await Promise.all([
         db.from('customers').select('*').order('created_at', { ascending: false }),
+        db.from('drivers').select('*').order('name', { ascending: true }),
         db.from('quotes').select('*').order('created_at', { ascending: false }),
         db.from('jobs').select('*').order('created_at', { ascending: false }),
         db.from('invoices').select('*').order('created_at', { ascending: false }),
         db.from('business_settings').select('*').maybeSingle()
       ]);
-      for (const result of [customers, quotes, jobs, invoices, settings]) if (result.error) throw result.error;
+      for (const result of [customers, drivers, quotes, jobs, invoices, settings]) if (result.error) throw result.error;
       state.customers = customers.data || [];
+      state.drivers = drivers.data || [];
       state.quotes = quotes.data || [];
       state.jobs = (jobs.data || []).map(j => ({ ...j, customer_name: j.customer_name || j.contact_name || '' }));
       state.invoices = invoices.data || [];
@@ -458,6 +468,9 @@
     document.querySelectorAll('[data-action="driver-close"]').forEach(button => button.onclick = () => { state.selectedDriverJobId = null; render(); });
     document.querySelectorAll('[data-driver-nav]').forEach(button => button.onclick = () => { const j=state.jobs.find(x=>x.id===button.dataset.driverNav); if(j) window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(j.job_status === 'Booked' ? j.collection_address : j.delivery_address)}&travelmode=driving`,'_blank','noopener'); });
     document.querySelectorAll('[data-copy-track]').forEach(button => button.onclick = async () => { const j=state.jobs.find(x=>x.id===button.dataset.copyTrack); if(!j?.tracking_token){showNotice('Run the v9 Supabase upgrade first.','error');render();return;} await navigator.clipboard.writeText(trackingUrl(j)); showNotice('Customer tracking link copied.','ok'); render(); });
+    document.querySelectorAll('[data-share-track]').forEach(button => button.onclick = async () => { const j=state.jobs.find(x=>x.id===button.dataset.shareTrack); if(!j)return; const text=`${state.settings.trading_name}: Your delivery ${j.job_number || ''} is ${j.job_status || 'booked'}.${j.eta_at ? ` ETA ${new Date(j.eta_at).toLocaleString('en-GB')}.` : ''} Track here: ${trackingUrl(j)}`; if(navigator.share){await navigator.share({title:'KLS SameDay tracking',text,url:trackingUrl(j)}).catch(()=>{});}else{await navigator.clipboard.writeText(text);showNotice('Tracking message copied.','ok');render();} });
+    document.querySelectorAll('[data-assign-job],[data-driver-assign]').forEach(select => select.onchange = async () => { const jobId=select.dataset.assignJob||select.dataset.driverAssign; const driver=state.drivers.find(d=>d.id===select.value); const payload={assigned_driver_id:driver?.id||null,assigned_driver_name:driver?.name||null}; const {error}=await db.from('jobs').update(payload).eq('id',jobId); if(error){showNotice(error.message,'error');render();return;} const job=state.jobs.find(j=>j.id===jobId); if(job)Object.assign(job,payload); showNotice(driver?`${job.job_number} assigned to ${driver.name}.`:`${job.job_number} unassigned.`,'ok'); render(); });
+    document.querySelectorAll('[data-save-eta]').forEach(button => button.onclick = async () => { const input=document.querySelector(`[data-job-eta="${button.dataset.saveEta}"]`); const eta=input?.value ? new Date(input.value).toISOString() : null; const {error}=await db.from('jobs').update({eta_at:eta}).eq('id',button.dataset.saveEta); if(error){showNotice(error.message,'error');render();return;} const job=state.jobs.find(j=>j.id===button.dataset.saveEta); if(job)job.eta_at=eta; showNotice('Customer ETA saved.','ok'); render(); });
     document.querySelectorAll('[data-driver-status]').forEach(button => button.onclick = async () => { const job=state.jobs.find(j=>j.id===button.dataset.driverStatus); if(!job)return; const previous=job.job_status; job.job_status=button.dataset.status; render(); const payload={job_status:button.dataset.status}; if(button.dataset.status==='Delivered') payload.delivered_at=new Date().toISOString(); const {error}=await db.from('jobs').update(payload).eq('id',job.id); if(error){job.job_status=previous;showNotice(error.message,'error');render();} });
     document.querySelector('[data-action="start-tracking"]')?.addEventListener('click', () => startLocationTracking(document.querySelector('[data-action="start-tracking"]').dataset.job));
     document.querySelector('[data-action="stop-tracking"]')?.addEventListener('click', stopLocationTracking);
@@ -487,7 +500,10 @@
     document.querySelector('[data-action="menu-open"]')?.addEventListener('click', () => document.getElementById('side').classList.add('open'));
     document.querySelector('[data-action="menu-close"]')?.addEventListener('click', () => document.getElementById('side').classList.remove('open'));
     document.querySelector('[data-action="notice-close"]')?.addEventListener('click', () => { state.notice = null; render(); });
-    document.querySelector('[data-action="signout"]')?.addEventListener('click', async () => { await db.auth.signOut(); state.user = null; state.customers=[]; state.quotes=[]; state.jobs=[]; state.invoices=[]; render(); });
+    document.querySelector('[data-action="signout"]')?.addEventListener('click', async () => { await db.auth.signOut(); state.user = null; state.customers=[]; state.drivers=[]; state.quotes=[]; state.jobs=[]; state.invoices=[]; render(); });
+
+    const driverForm = document.getElementById('driver-form');
+    if(driverForm) driverForm.onsubmit=async e=>{e.preventDefault();const values=Object.fromEntries(new FormData(driverForm));values.user_id=state.user.id;values.active=true;try{const{data,error}=await db.from('drivers').insert(values).select().single();if(error)throw error;state.drivers.push(data);showNotice(`${data.name} added as a driver.`,'ok');render();}catch(error){showNotice(error.message,'error');render();}};
 
     const quoteForm = document.getElementById('quote-form');
     if (quoteForm) {
@@ -542,7 +558,7 @@
             contact_name: form.contact_name || null, phone: form.phone || null, email: form.email || null,
             collection_date: form.collection_date || null, collection_time: form.collection_time || null,
             collection_address: form.collection_address, delivery_address: form.delivery_address, vehicle: form.vehicle,
-            goods_description: form.goods_description || null, miles, quoted_price: Number(form.quoted_price || suggested), notes: savedNotes || null, status: 'Pending'
+            goods_description: form.goods_description || null, route_stops: String(form.route_stops || '').split(/\n+/).map(x=>x.trim()).filter(Boolean), miles, quoted_price: Number(form.quoted_price || suggested), notes: savedNotes || null, status: 'Pending'
           };
           const { data, error } = await db.from('quotes').insert(payload).select().single();
           if (error) throw error;
@@ -559,7 +575,7 @@
         const jobPayload = {
           user_id: state.user.id, customer_id: quote.customer_id, contact_name: quote.customer_name, customer_email: quote.email,
           collection_date: quote.collection_date, collection_time: quote.collection_time, collection_address: quote.collection_address,
-          delivery_address: quote.delivery_address, vehicle: quote.vehicle, goods_description: quote.goods_description,
+          delivery_address: quote.delivery_address, route_stops: quote.route_stops || [], vehicle: quote.vehicle, goods_description: quote.goods_description,
           miles: quote.miles, base_price: quote.quoted_price, extras: 0, total_price: quote.quoted_price, costs: 0,
           job_status: 'Booked', quote_status: 'Accepted', invoice_status: 'Not Invoiced'
         };

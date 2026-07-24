@@ -24,3 +24,9 @@ Chrome: open the site and use Install KLS SameDay Office from the address-bar/me
 
 IMPORTANT
 The app requires internet access for live Supabase data. The offline page prevents a broken blank screen, but live records cannot be edited while offline.
+
+
+LOGO UPDATE
+-----------
+This package uses the supplied official KLS SameDay logo for the Mac Dock, iPhone Home Screen and PWA icons.
+After deployment, remove any old installed KLS app, hard-refresh Safari, then add it again so macOS/iPhone fetches the new icon.

@@ -1,18 +1,23 @@
-KLS SameDay Office v16.5 — Customer Portal Polish
+KLS SameDay Office v17 — Live Tracking Centre
 
-NO NEW SUPABASE SQL IS REQUIRED.
+WHAT'S NEW
+- New Live Tracking page in the office navigation
+- Live vehicle map for every active GPS-reporting job
+- GPS health: Live now, recent, stale or not started
+- Quick access to driver job, customer tracking link and latest location
+- Customer public tracking page now includes an embedded live map
+- Customer ETA countdown updates automatically
+- Existing Driver App GPS, POD, dispatch, portal and accounts features retained
 
 INSTALL
-1. Replace app.js, styles.css, index.html, manifest.json, sw.js, build.js and package.json in GitHub.
-2. Keep your existing config.js if it already contains the correct Supabase connection.
-3. Commit summary: Upgrade to v16.5 Customer Portal Polish
-4. Wait for Vercel to show Ready.
-5. Hard refresh the website (Command + Shift + R on Mac).
+1. No new Supabase SQL is required for v17 if v9 live tracking and v16 customer portal are already working.
+2. Replace app.js, styles.css, index.html, manifest.json, sw.js, build.js and package.json in GitHub.
+3. Keep your existing config.js.
+4. Commit summary: Upgrade to v17 Live Tracking Centre
+5. Wait for Vercel Ready and hard refresh the website.
 
-IMPROVEMENTS
-- Portal Requests renamed Customer Portal
-- Red notification badge for pending customer requests
-- Pending portal requests appear on the main dashboard
-- Settings shows linked customer portal accounts
-- Customer portal access can be disabled
-- Existing v16 portal, jobs, invoices, POD and tracking retained
+TEST
+1. Open an active job in Driver App on a phone.
+2. Press Start Live Tracking and allow location access.
+3. Open Live Tracking in the office system.
+4. Copy the customer tracking link and open it in a private browser window.

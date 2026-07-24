@@ -1,7 +1,7 @@
 {
-  "name": "kls-sameday-office-v16-5-portal-polish",
+  "name": "kls-sameday-office-v17-live-tracking",
   "private": true,
-  "version": "16.5.0",
+  "version": "17.0.0",
   "scripts": {
     "build": "node build.js"
   }

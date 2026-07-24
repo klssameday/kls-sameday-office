@@ -104,7 +104,7 @@
     </section></div>`;
   }
 
-  const navItems = [['dashboard','Dashboard'],['operations','Today’s Planner'],['dispatch','Dispatch Centre'],['driver','Driver App'],['fleet','Fleet Management'],['schedule','Booking Calendar'],['portalrequests','Customer Portal'],['newquote','New Quote'],['quotes','Quotes'],['jobs','Jobs'],['invoices','Invoices'],['accounts','Accounts & Payments'],['customers','CRM / Customers'],['settings','Settings']];
+  const navItems = [['dashboard','Dashboard'],['operations','Today’s Planner'],['dispatch','Dispatch Centre'],['driver','Driver App'],['tracking','Live Tracking'],['fleet','Fleet Management'],['schedule','Booking Calendar'],['portalrequests','Customer Portal'],['newquote','New Quote'],['quotes','Quotes'],['jobs','Jobs'],['invoices','Invoices'],['accounts','Accounts & Payments'],['customers','CRM / Customers'],['settings','Settings']];
 
   function layout(content) {
     const title = navItems.find(([key]) => key === state.page)?.[1] || 'Dashboard';
@@ -295,7 +295,7 @@
     if (loading) return `<div class="public-track"><div class="track-card"><div class="track-logo"><b>KLS</b><span>SameDay Live Tracking</span></div><div class="loading">Loading delivery…</div></div></div>`;
     if (error || !data) return `<div class="public-track"><div class="track-card"><div class="track-logo"><b>KLS</b><span>SameDay Live Tracking</span></div><h1>Tracking unavailable</h1><p>${esc(error || 'This tracking link is invalid or has expired.')}</p></div></div>`;
     const maps = data.last_latitude && data.last_longitude ? `https://www.google.com/maps?q=${data.last_latitude},${data.last_longitude}` : '';
-    return `<div class="public-track"><div class="track-card"><div class="track-logo"><b>KLS</b><span>SameDay Live Tracking</span></div><small>JOB ${esc(data.job_number || '')}</small><h1>${esc(data.status || 'Booked')}</h1><div class="track-progress">${driverStatuses.map((s,i) => `<span class="${i <= Math.max(driverStatuses.indexOf(data.status),0) ? 'done' : ''}"></span>`).join('')}</div><div class="track-route"><p><small>COLLECTION</small>${esc(data.collection_area || 'Collection arranged')}</p><p><small>DELIVERY</small>${esc(data.delivery_area || 'Delivery arranged')}</p></div>${Array.isArray(data.route_stops) && data.route_stops.length ? `<div class="track-stops"><small>ADDITIONAL STOPS</small>${data.route_stops.map((stop,i)=>`<p>${i+2}. ${esc(stop)}</p>`).join('')}</div>` : ''}${data.eta_at ? `<div class="eta-box"><small>ESTIMATED ARRIVAL</small><b>${new Date(data.eta_at).toLocaleString('en-GB')}</b></div>` : ''}${maps ? `<a class="primary button-link map-link" href="${maps}" target="_blank">View latest driver location</a>` : '<div class="track-waiting">Live location will appear once the driver starts tracking.</div>'}<div class="track-update">Last update: ${data.location_updated_at ? new Date(data.location_updated_at).toLocaleString('en-GB') : 'Not started'}</div>${data.status === 'Delivered' ? `<div class="delivered-box"><b>Delivered</b><span>${data.delivered_at ? new Date(data.delivered_at).toLocaleString('en-GB') : ''}</span><span>${data.recipient_name ? `Received by ${esc(data.recipient_name)}` : ''}</span></div>` : ''}<footer>Dedicated vehicle • No shared loads<br>0330 043 5237 · info@klssameday.co.uk</footer></div></div>`;
+    return `<div class="public-track"><div class="track-card"><div class="track-logo"><b>KLS</b><span>SameDay Live Tracking</span></div><small>JOB ${esc(data.job_number || '')}</small><h1>${esc(data.status || 'Booked')}</h1><div class="track-progress">${driverStatuses.map((s,i) => `<span class="${i <= Math.max(driverStatuses.indexOf(data.status),0) ? 'done' : ''}"></span>`).join('')}</div><div class="track-route"><p><small>COLLECTION</small>${esc(data.collection_area || 'Collection arranged')}</p><p><small>DELIVERY</small>${esc(data.delivery_area || 'Delivery arranged')}</p></div>${Array.isArray(data.route_stops) && data.route_stops.length ? `<div class="track-stops"><small>ADDITIONAL STOPS</small>${data.route_stops.map((stop,i)=>`<p>${i+2}. ${esc(stop)}</p>`).join('')}</div>` : ''}${data.eta_at ? `<div class="eta-box"><small>ESTIMATED ARRIVAL</small><b>${new Date(data.eta_at).toLocaleString('en-GB')}</b></div>` : ''}${maps ? `<div id="public-track-map" class="public-track-map" data-lat="${data.last_latitude}" data-lng="${data.last_longitude}"></div><a class="secondary button-link map-link" href="${maps}" target="_blank">Open in Google Maps</a>` : '<div class="track-waiting">Live location will appear once the driver starts tracking.</div>'}<div class="track-update">Last update: ${data.location_updated_at ? new Date(data.location_updated_at).toLocaleString('en-GB') : 'Not started'}</div>${data.eta_at ? `<div class="eta-countdown" data-eta="${data.eta_at}">Calculating ETA countdown…</div>` : ''}${data.status === 'Delivered' ? `<div class="delivered-box"><b>Delivered</b><span>${data.delivered_at ? new Date(data.delivered_at).toLocaleString('en-GB') : ''}</span><span>${data.recipient_name ? `Received by ${esc(data.recipient_name)}` : ''}</span></div>` : ''}<footer>Dedicated vehicle • No shared loads<br>0330 043 5237 · info@klssameday.co.uk</footer></div></div>`;
   }
 
   const dispatchStatuses = ['Booked','En Route to Collection','Arrived at Collection','Collected','In Transit','Arrived at Delivery','Delivered'];
@@ -473,6 +473,28 @@
   }
 
 
+
+  function trackingAge(job) {
+    if (!job?.location_updated_at) return { minutes: null, label: 'Not started', className: 'offline' };
+    const minutes = Math.max(0, Math.floor((Date.now() - new Date(job.location_updated_at).getTime()) / 60000));
+    if (minutes < 2) return { minutes, label: 'Live now', className: 'live' };
+    if (minutes < 10) return { minutes, label: `${minutes} min ago`, className: 'recent' };
+    return { minutes, label: `${minutes} min ago`, className: 'stale' };
+  }
+
+  function liveTrackingView() {
+    const active = state.jobs.filter(j => !['Delivered','Cancelled'].includes(j.job_status));
+    const reporting = active.filter(j => j.last_latitude && j.last_longitude);
+    const fresh = reporting.filter(j => trackingAge(j).className === 'live');
+    const stale = reporting.filter(j => trackingAge(j).className === 'stale');
+    const rows = active.length ? active.map(job => {
+      const age = trackingAge(job);
+      const driver = job.assigned_driver_name || 'Unassigned';
+      return `<article class="tracking-job-card"><div class="tracking-job-head"><span><small>${esc(job.job_number || 'JOB')}</small><b>${esc(job.customer_name || 'Customer')}</b></span><span class="tracking-health ${age.className}">${age.label}</span></div><p><small>DRIVER</small>${esc(driver)}</p><p><small>STATUS</small>${esc(job.job_status || 'Booked')}</p><p><small>ROUTE</small>${esc(job.collection_address || '')} → ${esc(job.delivery_address || '')}</p>${job.eta_at ? `<p><small>CUSTOMER ETA</small>${new Date(job.eta_at).toLocaleString('en-GB')}</p>` : ''}<footer><button class="secondary" data-driver-open="${job.id}">Open driver job</button>${job.tracking_token ? `<button class="secondary" data-copy-track="${job.id}">Copy tracking link</button>` : ''}${job.last_latitude && job.last_longitude ? `<a class="primary button-link" target="_blank" href="https://www.google.com/maps?q=${job.last_latitude},${job.last_longitude}">Open location</a>` : ''}</footer></article>`;
+    }).join('') : '<div class="fleet-empty">No active jobs to track.</div>';
+    return `<section class="tracking-hero"><div><small>V17 LIVE TRACKING CENTRE</small><h2>Live Tracking</h2><p>See every active job, GPS health, customer ETA and the latest driver position.</p></div><button class="secondary" data-action="refresh-tracking">Refresh</button></section><section class="tracking-kpis">${card('Active jobs',active.length,'Not completed')}${card('Reporting GPS',reporting.length,'With a location')}${card('Live now',fresh.length,'Updated under 2 mins')}${card('Needs attention',stale.length,'GPS over 10 mins old')}</section><section class="live-map-panel"><div class="live-map-head"><div><small>LIVE VEHICLE MAP</small><h2>Latest driver positions</h2><p>The map refreshes from the latest job GPS updates.</p></div></div><div id="tracking-centre-map" class="dispatch-map"></div><div id="tracking-centre-empty" class="map-empty hidden">No GPS positions yet. Open a job in Driver App and press Start Live Tracking.</div></section><section class="panel"><div class="panelhead"><div><h2>Tracking status</h2><p>Stale locations may mean the driver closed the app or lost signal.</p></div></div><div class="tracking-job-grid">${rows}</div></section>`;
+  }
+
   function portalStatusBadge(status) {
     const value = String(status || 'Pending');
     return `<span class="portal-status ${value.toLowerCase().replace(/\s+/g,'-')}">${esc(value)}</span>`;
@@ -534,14 +556,15 @@
 
   function render() {
     const trackToken = new URLSearchParams(location.search).get('track');
-    if (trackToken) { document.getElementById('app').innerHTML = publicTrackingView(state.publicTracking, state.loading, state.notice?.type === 'error' ? state.notice.text : ''); return; }
+    if (trackToken) { document.getElementById('app').innerHTML = publicTrackingView(state.publicTracking, state.loading, state.notice?.type === 'error' ? state.notice.text : ''); setTimeout(initialisePublicTrackingExtras, 0); return; }
     if (state.loading) { document.getElementById('app').innerHTML = '<div class="loading">Loading KLS SameDay Office…</div>'; return; }
     if (!state.user) { document.getElementById('app').innerHTML = authView(); bindAuth(); return; }
     if (state.portalUser) { document.getElementById('app').innerHTML = customerPortalView(); bindCustomerPortal(); return; }
-    const views = { dashboard, operations: operationsView, dispatch: dispatchView, driver: driverView, fleet: fleetView, schedule: scheduleView, newquote: newQuote, quotes: quotesView, jobs: jobsView, invoices: invoicesView, accounts: accountsView, portalrequests: portalRequestsView, customers: customersView, settings: settingsView };
+    const views = { dashboard, operations: operationsView, dispatch: dispatchView, driver: driverView, tracking: liveTrackingView, fleet: fleetView, schedule: scheduleView, newquote: newQuote, quotes: quotesView, jobs: jobsView, invoices: invoicesView, accounts: accountsView, portalrequests: portalRequestsView, customers: customersView, settings: settingsView };
     document.getElementById('app').innerHTML = layout(views[state.page]());
     bindApp();
     if (state.page === 'dispatch') initialiseDispatchMap();
+    if (state.page === 'tracking') initialiseTrackingCentreMap();
   }
 
 
@@ -571,6 +594,24 @@
     });
     if (bounds.length === 1) dispatchMap.setView(bounds[0], 13); else dispatchMap.fitBounds(bounds, { padding: [35,35] });
     setTimeout(() => dispatchMap?.invalidateSize(), 50);
+  }
+
+
+  let trackingCentreMap = null;
+  function initialiseTrackingCentreMap() {
+    const mapNode = document.getElementById('tracking-centre-map');
+    if (!mapNode || !window.L) return;
+    if (trackingCentreMap) { trackingCentreMap.remove(); trackingCentreMap = null; }
+    const jobs = state.jobs.filter(j => j.last_latitude && j.last_longitude && !['Cancelled','Delivered'].includes(j.job_status));
+    const empty = document.getElementById('tracking-centre-empty');
+    if (!jobs.length) { mapNode.classList.add('hidden'); empty?.classList.remove('hidden'); return; }
+    mapNode.classList.remove('hidden'); empty?.classList.add('hidden');
+    trackingCentreMap = L.map(mapNode);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap contributors'}).addTo(trackingCentreMap);
+    const bounds=[];
+    jobs.forEach(job=>{ const lat=Number(job.last_latitude),lng=Number(job.last_longitude); if(!Number.isFinite(lat)||!Number.isFinite(lng))return; bounds.push([lat,lng]); const age=trackingAge(job); L.marker([lat,lng]).addTo(trackingCentreMap).bindPopup(`<b>${esc(job.assigned_driver_name||'Unassigned')}</b><br>${esc(job.job_number||'Job')} · ${esc(job.job_status||'')}<br><small>${esc(age.label)}</small>`); });
+    if(bounds.length===1)trackingCentreMap.setView(bounds[0],13);else trackingCentreMap.fitBounds(bounds,{padding:[35,35]});
+    setTimeout(()=>trackingCentreMap?.invalidateSize(),50);
   }
 
   function bindAuth() {
@@ -690,6 +731,7 @@
     document.querySelectorAll('[data-save-eta]').forEach(button => button.onclick = async () => { const input=document.querySelector(`[data-job-eta="${button.dataset.saveEta}"]`); const eta=input?.value ? new Date(input.value).toISOString() : null; const {error}=await db.from('jobs').update({eta_at:eta}).eq('id',button.dataset.saveEta); if(error){showNotice(error.message,'error');render();return;} const job=state.jobs.find(j=>j.id===button.dataset.saveEta); if(job)job.eta_at=eta; showNotice('Customer ETA saved.','ok'); render(); });
     document.querySelectorAll('[data-driver-availability]').forEach(select => select.onchange = async () => { const driver=state.drivers.find(d=>d.id===select.dataset.driverAvailability); if(!driver)return; const previous=driver.availability_status||'Available'; driver.availability_status=select.value; const {error}=await db.from('drivers').update({availability_status:select.value,last_seen_at:new Date().toISOString()}).eq('id',driver.id); if(error){driver.availability_status=previous;showNotice(error.message,'error');render();return;} showNotice(`${driver.name} is now ${select.value}.`,'ok');render(); });
     document.querySelector('[data-action="refresh-map"]')?.addEventListener('click', initialiseDispatchMap);
+    document.querySelector('[data-action="refresh-tracking"]')?.addEventListener('click', async()=>{ await loadAll(); state.page='tracking'; render(); });
     document.querySelectorAll('[data-driver-status]').forEach(button => button.onclick = async () => { const job=state.jobs.find(j=>j.id===button.dataset.driverStatus); if(!job)return; const previous=job.job_status; job.job_status=button.dataset.status; render(); const payload={job_status:button.dataset.status}; if(button.dataset.status==='Delivered') payload.delivered_at=new Date().toISOString(); const {error}=await db.from('jobs').update(payload).eq('id',job.id); if(error){job.job_status=previous;showNotice(error.message,'error');render();} });
     document.querySelector('[data-action="start-tracking"]')?.addEventListener('click', () => startLocationTracking(document.querySelector('[data-action="start-tracking"]').dataset.job));
     document.querySelector('[data-action="stop-tracking"]')?.addEventListener('click', stopLocationTracking);
@@ -1037,6 +1079,14 @@
   }
   function stopLocationTracking(show=true){if(locationWatchId!==null){navigator.geolocation.clearWatch(locationWatchId);locationWatchId=null;}if(show){showNotice('Live tracking stopped.','ok');render();}}
   async function uploadPodFile(job,file,type){const ext=type==='signature'?'png':((file.name||'photo.jpg').split('.').pop()||'jpg').toLowerCase();const path=`${state.user.id}/${job.id}/${type}-${Date.now()}.${ext}`;const{error}=await db.storage.from('pod').upload(path,file,{contentType:file.type||'image/jpeg',upsert:false});if(error)throw error;const{data}=db.storage.from('pod').getPublicUrl(path);return data.publicUrl;}
+
+
+  function initialisePublicTrackingExtras() {
+    const node=document.getElementById('public-track-map');
+    if(node && window.L){ const lat=Number(node.dataset.lat),lng=Number(node.dataset.lng); if(Number.isFinite(lat)&&Number.isFinite(lng)){ const map=L.map(node,{zoomControl:false,attributionControl:true}).setView([lat,lng],13); L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap'}).addTo(map); L.marker([lat,lng]).addTo(map).bindPopup('Latest driver location').openPopup(); setTimeout(()=>map.invalidateSize(),50); } }
+    const countdown=document.querySelector('[data-eta]');
+    if(countdown){ const update=()=>{ const ms=new Date(countdown.dataset.eta).getTime()-Date.now(); if(ms<=0){countdown.textContent='Estimated arrival time has passed — check the latest status above.';return;} const mins=Math.ceil(ms/60000); const h=Math.floor(mins/60),m=mins%60; countdown.textContent=`Estimated arrival in ${h?`${h} hr `:''}${m} min`; }; update(); setTimeout(update,60000); }
+  }
 
   async function initialise() {
     const trackToken = new URLSearchParams(location.search).get('track');

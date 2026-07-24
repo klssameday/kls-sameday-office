@@ -58,6 +58,11 @@
     jobs: [],
     invoices: [],
     expenses: [],
+    portalUser: null,
+    portalCustomer: null,
+    portalBookings: [],
+    portalJobs: [],
+    portalInvoices: [],
     settings: { ...defaults },
     notice: null,
     loading: true,
@@ -98,7 +103,7 @@
     </section></div>`;
   }
 
-  const navItems = [['dashboard','Dashboard'],['operations','Today’s Planner'],['dispatch','Dispatch Centre'],['driver','Driver App'],['fleet','Fleet Management'],['schedule','Booking Calendar'],['newquote','New Quote'],['quotes','Quotes'],['jobs','Jobs'],['invoices','Invoices'],['accounts','Accounts & Payments'],['customers','CRM / Customers'],['settings','Settings']];
+  const navItems = [['dashboard','Dashboard'],['operations','Today’s Planner'],['dispatch','Dispatch Centre'],['driver','Driver App'],['fleet','Fleet Management'],['schedule','Booking Calendar'],['portalrequests','Portal Requests'],['newquote','New Quote'],['quotes','Quotes'],['jobs','Jobs'],['invoices','Invoices'],['accounts','Accounts & Payments'],['customers','CRM / Customers'],['settings','Settings']];
 
   function layout(content) {
     const title = navItems.find(([key]) => key === state.page)?.[1] || 'Dashboard';
@@ -463,9 +468,63 @@
       ${panel('Recurring bookings',`<form id="recurring-form"><label>Customer<input name="customer_name" required></label><label>Collection address<input name="collection_address" required></label><label>Delivery address<input name="delivery_address" required></label><div class="grid two"><label>Frequency<select name="frequency"><option>Daily</option><option>Weekly</option><option>Fortnightly</option><option>Monthly</option></select></label><label>Next date<input name="next_run_date" type="date" value="${todayISO()}" required></label><label>Time<input name="collection_time" type="time"></label><label>Vehicle<select name="vehicle">${Object.keys(vehicles).map(v=>`<option>${v}</option>`).join('')}</select></label></div><button class="primary" style="width:100%">Save Repeat Booking</button></form><div class="repeat-list">${state.recurringJobs.map(r=>`<p><span><b>${esc(r.customer_name)}</b><small>${esc(r.frequency)} · next ${fmtDate(r.next_run_date)}</small></span><button class="secondary" data-recurring-generate="${r.id}">${r.next_run_date<=todayISO()?'Generate due job':'Generate next'}</button></p>`).join('')||'<div class="fleet-empty">No repeat bookings.</div>'}</div>${dueRecurring.length?`<button class="primary" data-generate-all-recurring style="width:100%">Generate ${dueRecurring.length} due job${dueRecurring.length===1?'':'s'}</button>`:''}`,'Repeat jobs are generated when you press the button, so nothing is booked accidentally.')}</div></section>`;
   }
 
+
+  function portalStatusBadge(status) {
+    const value = String(status || 'Pending');
+    return `<span class="portal-status ${value.toLowerCase().replace(/\s+/g,'-')}">${esc(value)}</span>`;
+  }
+
+  function customerPortalView() {
+    const customer = state.portalCustomer || {};
+    const active = state.portalJobs.filter(j => !['Delivered','Cancelled'].includes(j.job_status));
+    const completed = state.portalJobs.filter(j => j.job_status === 'Delivered');
+    const outstanding = state.portalInvoices.reduce((sum, inv) => sum + invoiceBalance(inv), 0);
+    const recentJobs = state.portalJobs.slice(0, 8);
+    const requests = state.portalBookings.slice(0, 6);
+    return `<div class="portal-shell"><header class="portal-top"><div class="portal-brand"><b>KLS</b><span>SameDay Customer Portal</span></div><div><strong>${esc(customer.company || state.user?.email || 'Customer')}</strong><button class="secondary" data-action="portal-signout">Sign out</button></div></header><main class="portal-main">
+      ${state.notice ? `<div class="notice ${state.notice.type}">${esc(state.notice.text)}<button data-action="notice-close">×</button></div>` : ''}
+      <section class="portal-hero"><div><small>WELCOME TO KLS SAMEDAY</small><h1>${esc(customer.company || 'Your account')}</h1><p>Book collections, follow active deliveries and access your account documents.</p></div><button class="primary" data-action="portal-book-focus">＋ Book a collection</button></section>
+      <section class="portal-kpis">${card('Active jobs',active.length,'Currently in progress')}${card('Completed jobs',completed.length,'Delivery history')}${card('Outstanding',money(outstanding),`${state.portalInvoices.filter(i=>invoiceBalance(i)>0).length} invoice${state.portalInvoices.filter(i=>invoiceBalance(i)>0).length===1?'':'s'}`)}${card('Booking requests',state.portalBookings.filter(b=>b.status==='Pending').length,'Awaiting office approval')}</section>
+      <section class="portal-grid"><div>
+        ${panel('Book a collection', `<form id="portal-booking-form"><div class="grid two"><label>Collection date<input name="collection_date" type="date" min="${todayISO()}" value="${todayISO()}" required></label><label>Collection time<input name="collection_time" type="time"></label><label>Collection address<textarea name="collection_address" required></textarea></label><label>Delivery address<textarea name="delivery_address" required></textarea></label><label>Vehicle required<select name="vehicle">${Object.keys(vehicles).map(v=>`<option>${v}</option>`).join('')}</select></label><label>Contact telephone<input name="contact_phone" value="${esc(customer.phone || '')}"></label><label>Load description<textarea name="load_description"></textarea></label><label>Special instructions<textarea name="special_instructions"></textarea></label></div><div class="actions"><button class="primary">Submit booking request</button></div></form>`, 'The KLS office will review and confirm the price and driver.')}
+        ${panel('Your jobs', recentJobs.length ? `<div class="portal-job-list">${recentJobs.map(j=>`<article><div><b>${esc(j.job_number||'Job')}</b>${portalStatusBadge(j.job_status)}</div><h3>${fmtDate(j.collection_date)} ${esc(String(j.collection_time||'').slice(0,5))}</h3><p><small>COLLECT</small>${esc(j.collection_address||'')}</p><p><small>DELIVER</small>${esc(j.delivery_address||'')}</p><footer>${j.tracking_token ? `<a class="secondary button-link" href="?track=${encodeURIComponent(j.tracking_token)}">Track job</a>` : ''}${j.pod_photo_url ? `<a class="secondary button-link" href="${esc(j.pod_photo_url)}" target="_blank" rel="noopener">View POD</a>` : ''}<button class="secondary" data-portal-rebook="${j.id}">Rebook</button></footer></article>`).join('')}</div>` : '<div class="fleet-empty">No jobs are visible on your account yet.</div>', 'Live and completed deliveries.')}
+      </div><aside class="portal-side">
+        ${panel('Booking requests', requests.length ? `<div class="portal-request-list">${requests.map(b=>`<p><span><b>${fmtDate(b.collection_date)}</b><small>${esc(b.collection_address)} → ${esc(b.delivery_address)}</small></span>${portalStatusBadge(b.status)}</p>`).join('')}</div>` : '<div class="fleet-empty">No booking requests yet.</div>')}
+        ${panel('Invoices', state.portalInvoices.length ? `<div class="portal-invoice-list">${state.portalInvoices.slice(0,10).map(inv=>`<p><span><b>${esc(inv.invoice_number||'Invoice')}</b><small>Due ${fmtDate(inv.due_date)}</small></span><strong>${money(invoiceBalance(inv))}</strong></p>`).join('')}</div>` : '<div class="fleet-empty">No invoices available.</div>', `Outstanding balance ${money(outstanding)}`)}
+        ${panel('Need help?', `<div class="portal-help"><p>Call <b>${esc(state.settings.phone)}</b></p><p>WhatsApp <b>${esc(state.settings.whatsapp)}</b></p><p>Email <b>${esc(state.settings.email)}</b></p></div>`)}
+      </aside></section></main></div>`;
+  }
+
+  function bindCustomerPortal() {
+    document.querySelector('[data-action="portal-signout"]')?.addEventListener('click', async()=>{ await db.auth.signOut(); state.user=null; state.portalUser=null; state.portalCustomer=null; state.loading=false; render(); });
+    document.querySelector('[data-action="notice-close"]')?.addEventListener('click',()=>{state.notice=null;render();});
+    document.querySelector('[data-action="portal-book-focus"]')?.addEventListener('click',()=>document.querySelector('#portal-booking-form input')?.focus());
+    document.getElementById('portal-booking-form')?.addEventListener('submit', async e=>{
+      e.preventDefault();
+      try {
+        const form=Object.fromEntries(new FormData(e.currentTarget));
+        const payload={...form,customer_id:state.portalCustomer.id,owner_id:state.portalUser.owner_id,requested_by:state.user.id,status:'Pending'};
+        const {data,error}=await db.from('portal_bookings').insert(payload).select().single();
+        if(error)throw error;
+        state.portalBookings.unshift(data); showNotice('Booking request sent to KLS SameDay.','ok'); render();
+      } catch(error){showNotice(error.message,'error');render();}
+    });
+    document.querySelectorAll('[data-portal-rebook]').forEach(btn=>btn.addEventListener('click', async()=>{
+      const job=state.portalJobs.find(j=>j.id===btn.dataset.portalRebook); if(!job)return;
+      try{const payload={owner_id:state.portalUser.owner_id,customer_id:state.portalCustomer.id,requested_by:state.user.id,collection_date:todayISO(),collection_time:job.collection_time||null,collection_address:job.collection_address,delivery_address:job.delivery_address,vehicle:job.vehicle||'Luton Tail Lift',load_description:`Rebook of ${job.job_number||'previous job'}`,status:'Pending'};const{data,error}=await db.from('portal_bookings').insert(payload).select().single();if(error)throw error;state.portalBookings.unshift(data);showNotice('Rebooking request sent. Choose the final date with the office if needed.','ok');render();}catch(error){showNotice(error.message,'error');render();}
+    }));
+  }
+
+
+  function portalRequestsView() {
+    const pending=state.portalBookings.filter(b=>b.status==='Pending');
+    const rows=state.portalBookings.length?`<div class="portal-admin-list">${state.portalBookings.map(b=>{const customer=state.customers.find(c=>c.id===b.customer_id);return `<article><div><span><b>${esc(customer?.company||'Customer')}</b><small>${fmtDate(b.collection_date)} ${esc(String(b.collection_time||'').slice(0,5))}</small></span>${portalStatusBadge(b.status)}</div><p><small>COLLECT</small>${esc(b.collection_address)}</p><p><small>DELIVER</small>${esc(b.delivery_address)}</p><p><small>VEHICLE</small>${esc(b.vehicle||'Not specified')}</p>${b.load_description?`<p><small>LOAD</small>${esc(b.load_description)}</p>`:''}<footer>${b.status==='Pending'?`<button class="primary" data-portal-approve="${b.id}">Approve & create job</button><button class="danger" data-portal-reject="${b.id}">Reject</button>`:''}</footer></article>`}).join('')}</div>`:'<div class="fleet-empty">No portal booking requests yet.</div>';
+    return `<section class="fleet-hero"><div><small>V16 CUSTOMER PORTAL</small><h2>Portal Booking Requests</h2><p>Review requests sent directly by customer accounts.</p></div><strong>${pending.length} pending</strong></section>${panel('Customer requests',rows,'Approved requests create a confirmed job in your booking calendar.')}`;
+  }
+
   function settingsView() {
     const fields = { trading_name:'Trading name',legal_name:'Legal company name',phone:'Telephone',whatsapp:'WhatsApp',email:'Email',website:'Website',address_line:'Business address',bank_name:'Bank name',sort_code:'Sort code',account_number:'Account number',default_terms:'Payment terms (days)' };
-    return panel('Business settings', `<form id="settings-form"><div class="grid two">${Object.entries(fields).map(([key,label]) => `<label>${label}<input name="${key}" value="${esc(state.settings[key] ?? '')}" ${key === 'default_terms' ? 'type="number"' : ''}></label>`).join('')}</div><div class="actions"><button class="primary">Save Settings</button></div></form><p class="saved">✓ Saved securely in Supabase.</p>`);
+    return panel('Business settings', `<form id="settings-form"><div class="grid two">${Object.entries(fields).map(([key,label]) => `<label>${label}<input name="${key}" value="${esc(state.settings[key] ?? '')}" ${key === 'default_terms' ? 'type="number"' : ''}></label>`).join('')}</div><div class="actions"><button class="primary">Save Settings</button></div></form><p class="saved">✓ Saved securely in Supabase.</p><hr class="portal-divider"><h2>Customer Portal Access</h2><p>Ask the customer to create an account using their email address, then link that login here.</p><form id="portal-access-form"><div class="grid two"><label>Customer<select name="customer_id" required><option value="">Choose customer</option>${state.customers.map(c=>`<option value="${c.id}">${esc(c.company)}</option>`).join('')}</select></label><label>Customer login email<input name="email" type="email" required></label></div><div class="actions"><button class="primary">Enable Customer Portal</button></div></form>`);
   }
 
   function render() {
@@ -473,7 +532,8 @@
     if (trackToken) { document.getElementById('app').innerHTML = publicTrackingView(state.publicTracking, state.loading, state.notice?.type === 'error' ? state.notice.text : ''); return; }
     if (state.loading) { document.getElementById('app').innerHTML = '<div class="loading">Loading KLS SameDay Office…</div>'; return; }
     if (!state.user) { document.getElementById('app').innerHTML = authView(); bindAuth(); return; }
-    const views = { dashboard, operations: operationsView, dispatch: dispatchView, driver: driverView, fleet: fleetView, schedule: scheduleView, newquote: newQuote, quotes: quotesView, jobs: jobsView, invoices: invoicesView, accounts: accountsView, customers: customersView, settings: settingsView };
+    if (state.portalUser) { document.getElementById('app').innerHTML = customerPortalView(); bindCustomerPortal(); return; }
+    const views = { dashboard, operations: operationsView, dispatch: dispatchView, driver: driverView, fleet: fleetView, schedule: scheduleView, newquote: newQuote, quotes: quotesView, jobs: jobsView, invoices: invoicesView, accounts: accountsView, portalrequests: portalRequestsView, customers: customersView, settings: settingsView };
     document.getElementById('app').innerHTML = layout(views[state.page]());
     bindApp();
     if (state.page === 'dispatch') initialiseDispatchMap();
@@ -534,7 +594,23 @@
   async function loadAll() {
     state.loading = true; render();
     try {
-      const [customers, drivers, fleet, fuelLogs, maintenance, recurringJobs, quotes, jobs, invoices, expenses, settings] = await Promise.all([
+      const { data: portalUser, error: portalLookupError } = await db.from('customer_users').select('*, customers(*)').eq('auth_user_id', state.user.id).eq('active', true).maybeSingle();
+      if (portalLookupError && portalLookupError.code !== '42P01') throw portalLookupError;
+      if (portalUser) {
+        state.portalUser = portalUser;
+        state.portalCustomer = portalUser.customers || null;
+        const [bookings, jobs, invoices, settings] = await Promise.all([
+          db.from('portal_bookings').select('*').eq('customer_id', portalUser.customer_id).order('created_at',{ascending:false}),
+          db.from('jobs').select('*').eq('customer_id', portalUser.customer_id).eq('customer_visible', true).order('created_at',{ascending:false}),
+          db.from('invoices').select('*').eq('customer_id', portalUser.customer_id).eq('portal_visible', true).order('created_at',{ascending:false}),
+          db.from('business_settings').select('*').eq('user_id', portalUser.owner_id).maybeSingle()
+        ]);
+        for (const result of [bookings,jobs,invoices,settings]) if(result.error) throw result.error;
+        state.portalBookings=bookings.data||[]; state.portalJobs=jobs.data||[]; state.portalInvoices=invoices.data||[]; state.settings={...defaults,...(settings.data||{})};
+        state.loading=false; render(); return;
+      }
+      state.portalUser = null;
+      const [customers, drivers, fleet, fuelLogs, maintenance, recurringJobs, quotes, jobs, invoices, expenses, portalBookings, settings] = await Promise.all([
         db.from('customers').select('*').order('created_at', { ascending: false }),
         db.from('drivers').select('*').order('name', { ascending: true }),
         db.from('vehicles').select('*').order('created_at', { ascending: false }),
@@ -545,9 +621,10 @@
         db.from('jobs').select('*').order('created_at', { ascending: false }),
         db.from('invoices').select('*').order('created_at', { ascending: false }),
         db.from('expenses').select('*').order('expense_date', { ascending: false }),
+        db.from('portal_bookings').select('*').order('created_at', { ascending: false }),
         db.from('business_settings').select('*').maybeSingle()
       ]);
-      for (const result of [customers, drivers, fleet, fuelLogs, maintenance, recurringJobs, quotes, jobs, invoices, expenses, settings]) if (result.error) throw result.error;
+      for (const result of [customers, drivers, fleet, fuelLogs, maintenance, recurringJobs, quotes, jobs, invoices, expenses, portalBookings, settings]) if (result.error) throw result.error;
       state.customers = customers.data || [];
       state.drivers = drivers.data || [];
       state.fleet = fleet.data || [];
@@ -558,6 +635,7 @@
       state.jobs = (jobs.data || []).map(j => ({ ...j, customer_name: j.customer_name || j.contact_name || '' }));
       state.invoices = invoices.data || [];
       state.expenses = expenses.data || [];
+      state.portalBookings = portalBookings.data || [];
       state.settings = { ...defaults, ...(settings.data || {}) };
     } catch (error) {
       showNotice(`Database setup needed: ${error.message}`, 'error');
@@ -839,6 +917,32 @@
       } catch (error) { showNotice(error.message, 'error'); render(); }
     };
 
+
+    document.querySelectorAll('[data-portal-approve]').forEach(button=>button.addEventListener('click',async()=>{
+      const request=state.portalBookings.find(b=>b.id===button.dataset.portalApprove); if(!request)return;
+      const customer=state.customers.find(c=>c.id===request.customer_id);
+      try{
+        const payload={user_id:state.user.id,customer_id:request.customer_id,customer_name:customer?.company||'Customer',contact_name:customer?.contact_name||customer?.company||'Customer',customer_email:customer?.email||null,collection_date:request.collection_date,collection_time:request.collection_time||null,collection_address:request.collection_address,delivery_address:request.delivery_address,vehicle:request.vehicle||'Luton Tail Lift',total_price:0,base_price:0,extras:0,costs:0,job_status:'Booked',quote_status:'Portal Booking',invoice_status:'Not Invoiced',booking_notes:[request.load_description,request.special_instructions].filter(Boolean).join(' — ')||null,customer_visible:true};
+        const {data:job,error:jobError}=await db.from('jobs').insert(payload).select().single(); if(jobError)throw jobError;
+        const {error}=await db.from('portal_bookings').update({status:'Converted',office_notes:`Created ${job.job_number||'job'}`}).eq('id',request.id); if(error)throw error;
+        request.status='Converted'; state.jobs.unshift(job); showNotice(`${job.job_number||'Job'} created from portal request.`,'ok'); render();
+      }catch(error){showNotice(error.message,'error');render();}
+    }));
+    document.querySelectorAll('[data-portal-reject]').forEach(button=>button.addEventListener('click',async()=>{
+      const request=state.portalBookings.find(b=>b.id===button.dataset.portalReject); if(!request)return;
+      const {error}=await db.from('portal_bookings').update({status:'Rejected'}).eq('id',request.id); if(error)showNotice(error.message,'error'); else {request.status='Rejected';showNotice('Portal request rejected.','ok');} render();
+    }));
+
+    const portalAccessForm = document.getElementById('portal-access-form');
+    if (portalAccessForm) portalAccessForm.onsubmit = async e => {
+      e.preventDefault();
+      try {
+        const form=Object.fromEntries(new FormData(portalAccessForm));
+        const {data,error}=await db.rpc('link_customer_portal',{p_customer_id:form.customer_id,p_email:form.email});
+        if(error)throw error;
+        showNotice(data || 'Customer portal access enabled.','ok'); render();
+      } catch(error){showNotice(error.message,'error');render();}
+    };
 
     document.querySelectorAll('[data-customer]').forEach(card => {
       const open = () => { state.selectedCustomerId = card.dataset.customer; render(); };

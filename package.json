@@ -1,8 +1,6 @@
 {
-  "name": "kls-sameday-office-v15-accounts-payments",
+  "name": "kls-sameday-office-v16-customer-portal",
   "private": true,
-  "version": "15.0.0",
-  "scripts": {
-    "build": "node build.js"
-  }
+  "version": "16.0.0",
+  "scripts": { "build": "node build.js" }
 }

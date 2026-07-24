@@ -1,7 +1,7 @@
 {
-  "name": "kls-sameday-office-v18-smart-dispatch",
+  "name": "kls-sameday-office-v19-route-planner",
   "private": true,
-  "version": "18.0.0",
+  "version": "19.0.0",
   "scripts": {
     "build": "node build.js"
   }

@@ -71,7 +71,9 @@
     selectedCustomerId: null,
     quoteCustomerId: null,
     selectedDriverJobId: null,
-    publicTracking: null
+    publicTracking: null,
+    routeStops: [],
+    routeDate: new Date().toISOString().slice(0,10)
   };
 
   let locationWatchId = null;
@@ -104,7 +106,7 @@
     </section></div>`;
   }
 
-  const navItems = [['dashboard','Dashboard'],['smart','Smart Dispatch'],['operations','Today’s Planner'],['dispatch','Dispatch Centre'],['driver','Driver App'],['tracking','Live Tracking'],['fleet','Fleet Management'],['schedule','Booking Calendar'],['portalrequests','Customer Portal'],['newquote','New Quote'],['quotes','Quotes'],['jobs','Jobs'],['invoices','Invoices'],['accounts','Accounts & Payments'],['customers','CRM / Customers'],['settings','Settings']];
+  const navItems = [['dashboard','Dashboard'],['smart','Smart Dispatch'],['routes','Route Planner'],['operations','Today’s Planner'],['dispatch','Dispatch Centre'],['driver','Driver App'],['tracking','Live Tracking'],['fleet','Fleet Management'],['schedule','Booking Calendar'],['portalrequests','Customer Portal'],['newquote','New Quote'],['quotes','Quotes'],['jobs','Jobs'],['invoices','Invoices'],['accounts','Accounts & Payments'],['customers','CRM / Customers'],['settings','Settings']];
 
   function layout(content) {
     const title = navItems.find(([key]) => key === state.page)?.[1] || 'Dashboard';
@@ -587,6 +589,28 @@
   }
 
 
+
+  function routePlannerView() {
+    const date = state.routeDate || todayISO();
+    const routeJobs = state.jobs.filter(job => String(job.collection_date || '').slice(0,10) === date && !['Cancelled','Delivered'].includes(job.job_status));
+    const stopMap = new Map(state.routeStops.filter(stop => stop.route_date === date).map(stop => [stop.job_id, stop]));
+    const laneFor = job => stopMap.get(job.id)?.driver_id || job.assigned_driver_id || '';
+    const orderFor = job => Number(stopMap.get(job.id)?.stop_order || 9999);
+    const unassigned = routeJobs.filter(job => !laneFor(job)).sort((a,b)=>orderFor(a)-orderFor(b));
+    const activeDrivers = state.drivers.filter(d => d.active !== false);
+    const jobCard = job => `<article class="route-job-card" draggable="true" data-route-job="${job.id}"><div><small>${esc(String(job.collection_time||'').slice(0,5) || 'Time TBC')}</small><b>${esc(job.job_number||'Job')}</b><span>${esc(job.customer_name||'Customer')}</span></div><p><small>COLLECT</small>${esc(job.collection_address||'')}</p><p><small>DELIVER</small>${esc(job.delivery_address||'')}</p><footer><span>${Number(job.miles||0)} miles</span><span>${money(job.total_price||0)}</span></footer></article>`;
+    const unassignedHtml = unassigned.length ? unassigned.map(jobCard).join('') : '<div class="route-empty">No unassigned jobs for this date.</div>';
+    const driverLanes = activeDrivers.map(driver => {
+      const jobs = routeJobs.filter(job => laneFor(job) === driver.id).sort((a,b)=>orderFor(a)-orderFor(b));
+      const miles = jobs.reduce((sum,j)=>sum+Number(j.miles||0),0);
+      const revenue = jobs.reduce((sum,j)=>sum+Number(j.total_price||0),0);
+      return `<section class="route-driver-lane" data-route-lane="${driver.id}"><header><div><small>DRIVER</small><h3>${esc(driver.name)}</h3><p>${esc(driver.vehicle||'Vehicle not set')}</p></div><div><b>${jobs.length} stop${jobs.length===1?'':'s'}</b><span>${miles.toFixed(0)} miles · ${money(revenue)}</span></div></header><div class="route-dropzone" data-route-drop="${driver.id}">${jobs.length ? jobs.map((job,index)=>`<div class="route-stop-wrap"><span class="stop-number">${index+1}</span>${jobCard(job)}</div>`).join('') : '<div class="route-empty">Drop jobs here</div>'}</div></section>`;
+    }).join('');
+    const totalMiles = routeJobs.reduce((sum,j)=>sum+Number(j.miles||0),0);
+    const totalRevenue = routeJobs.reduce((sum,j)=>sum+Number(j.total_price||0),0);
+    return `<section class="route-hero"><div><small>V19 ROUTE PLANNING</small><h2>Route Planner</h2><p>Plan each driver's delivery order by dragging jobs into a route.</p></div><label>Planning date<input id="route-date" type="date" value="${esc(date)}"></label></section><section class="route-kpis">${card('Jobs to plan',routeJobs.length,'Active jobs on selected date')}${card('Unassigned',unassigned.length,'Waiting for a driver')}${card('Planned miles',totalMiles.toFixed(0),'Based on job mileage')}${card('Route revenue',money(totalRevenue),'Selected date')}</section><section class="route-board"><aside class="route-unassigned" data-route-drop=""><div class="route-column-head"><div><small>UNASSIGNED</small><h2>Jobs waiting</h2></div><span>${unassigned.length}</span></div><div class="route-dropzone">${unassignedHtml}</div></aside><div class="route-lanes">${driverLanes || '<div class="fleet-empty">Add a driver before planning routes.</div>'}</div></section><section class="panel route-help"><h3>How to use it</h3><p>Drag a job into a driver lane. Drop it above or below another job to change the stop order. Changes save immediately.</p><p><b>Note:</b> v19 organises your route order using the mileage already stored on each job. It does not use paid traffic or postcode routing APIs.</p></section>`;
+  }
+
   function portalRequestsView() {
     const pending=state.portalBookings.filter(b=>b.status==='Pending');
     const rows=state.portalBookings.length?`<div class="portal-admin-list">${state.portalBookings.map(b=>{const customer=state.customers.find(c=>c.id===b.customer_id);return `<article><div><span><b>${esc(customer?.company||'Customer')}</b><small>${fmtDate(b.collection_date)} ${esc(String(b.collection_time||'').slice(0,5))}</small></span>${portalStatusBadge(b.status)}</div><p><small>COLLECT</small>${esc(b.collection_address)}</p><p><small>DELIVER</small>${esc(b.delivery_address)}</p><p><small>VEHICLE</small>${esc(b.vehicle||'Not specified')}</p>${b.load_description?`<p><small>LOAD</small>${esc(b.load_description)}</p>`:''}<footer>${b.status==='Pending'?`<button class="primary" data-portal-approve="${b.id}">Approve & create job</button><button class="danger" data-portal-reject="${b.id}">Reject</button>`:''}</footer></article>`}).join('')}</div>`:'<div class="fleet-empty">No portal booking requests yet.</div>';
@@ -605,7 +629,7 @@
     if (state.loading) { document.getElementById('app').innerHTML = '<div class="loading">Loading KLS SameDay Office…</div>'; return; }
     if (!state.user) { document.getElementById('app').innerHTML = authView(); bindAuth(); return; }
     if (state.portalUser) { document.getElementById('app').innerHTML = customerPortalView(); bindCustomerPortal(); return; }
-    const views = { dashboard, smart: smartDispatchView, operations: operationsView, dispatch: dispatchView, driver: driverView, tracking: liveTrackingView, fleet: fleetView, schedule: scheduleView, newquote: newQuote, quotes: quotesView, jobs: jobsView, invoices: invoicesView, accounts: accountsView, portalrequests: portalRequestsView, customers: customersView, settings: settingsView };
+    const views = { dashboard, smart: smartDispatchView, routes: routePlannerView, operations: operationsView, dispatch: dispatchView, driver: driverView, tracking: liveTrackingView, fleet: fleetView, schedule: scheduleView, newquote: newQuote, quotes: quotesView, jobs: jobsView, invoices: invoicesView, accounts: accountsView, portalrequests: portalRequestsView, customers: customersView, settings: settingsView };
     document.getElementById('app').innerHTML = layout(views[state.page]());
     bindApp();
     if (state.page === 'dispatch') initialiseDispatchMap();
@@ -701,7 +725,7 @@
         state.loading=false; render(); return;
       }
       state.portalUser = null;
-      const [customers, drivers, fleet, fuelLogs, maintenance, recurringJobs, quotes, jobs, invoices, expenses, portalBookings, portalAccessUsers, settings] = await Promise.all([
+      const [customers, drivers, fleet, fuelLogs, maintenance, recurringJobs, quotes, jobs, invoices, expenses, portalBookings, portalAccessUsers, routeStops, settings] = await Promise.all([
         db.from('customers').select('*').order('created_at', { ascending: false }),
         db.from('drivers').select('*').order('name', { ascending: true }),
         db.from('vehicles').select('*').order('created_at', { ascending: false }),
@@ -714,9 +738,10 @@
         db.from('expenses').select('*').order('expense_date', { ascending: false }),
         db.from('portal_bookings').select('*').order('created_at', { ascending: false }),
         db.from('customer_users').select('*, customers(company)').order('created_at', { ascending: false }),
+        db.from('route_stops').select('*').order('stop_order', { ascending: true }),
         db.from('business_settings').select('*').maybeSingle()
       ]);
-      for (const result of [customers, drivers, fleet, fuelLogs, maintenance, recurringJobs, quotes, jobs, invoices, expenses, portalBookings, portalAccessUsers, settings]) if (result.error) throw result.error;
+      for (const result of [customers, drivers, fleet, fuelLogs, maintenance, recurringJobs, quotes, jobs, invoices, expenses, portalBookings, portalAccessUsers, routeStops, settings]) if (result.error) throw result.error;
       state.customers = customers.data || [];
       state.drivers = drivers.data || [];
       state.fleet = fleet.data || [];
@@ -729,6 +754,7 @@
       state.expenses = expenses.data || [];
       state.portalBookings = portalBookings.data || [];
       state.portalAccessUsers = portalAccessUsers.data || [];
+      state.routeStops = routeStops.data || [];
       state.settings = { ...defaults, ...(settings.data || {}) };
     } catch (error) {
       showNotice(`Database setup needed: ${error.message}`, 'error');
@@ -767,6 +793,29 @@
 
   function bindApp() {
     document.querySelectorAll('[data-page]').forEach(button => button.onclick = () => { state.page = button.dataset.page; render(); });
+    document.getElementById('route-date')?.addEventListener('change', event => { state.routeDate = event.target.value || todayISO(); render(); });
+    document.querySelectorAll('[data-route-job]').forEach(card => {
+      card.addEventListener('dragstart', event => { card.classList.add('dragging'); event.dataTransfer.effectAllowed='move'; event.dataTransfer.setData('text/plain', card.dataset.routeJob); });
+      card.addEventListener('dragend', () => card.classList.remove('dragging'));
+    });
+    document.querySelectorAll('[data-route-drop]').forEach(zone => {
+      zone.addEventListener('dragover', event => { event.preventDefault(); zone.classList.add('drag-over'); });
+      zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+      zone.addEventListener('drop', async event => {
+        event.preventDefault(); zone.classList.remove('drag-over');
+        const jobId = event.dataTransfer.getData('text/plain');
+        const driverId = zone.dataset.routeDrop || null;
+        const date = state.routeDate || todayISO();
+        const sameLane = state.routeStops.filter(stop => stop.route_date===date && (stop.driver_id||null)===(driverId||null) && stop.job_id!==jobId).sort((a,b)=>Number(a.stop_order)-Number(b.stop_order));
+        const payload = { user_id: state.user.id, job_id: jobId, driver_id: driverId, route_date: date, stop_order: sameLane.length + 1 };
+        const { data, error } = await db.from('route_stops').upsert(payload,{onConflict:'user_id,job_id,route_date'}).select().single();
+        if(error){ showNotice(error.message,'error'); render(); return; }
+        state.routeStops = state.routeStops.filter(stop => !(stop.job_id===jobId && stop.route_date===date)); state.routeStops.push(data);
+        const job = state.jobs.find(j=>j.id===jobId); const driver = state.drivers.find(d=>d.id===driverId);
+        if(job){ job.assigned_driver_id=driverId; job.assigned_driver_name=driver?.name||null; await db.from('jobs').update({assigned_driver_id:driverId,assigned_driver_name:driver?.name||null}).eq('id',jobId); }
+        showNotice(driver ? `${job?.job_number||'Job'} added to ${driver.name}'s route.` : `${job?.job_number||'Job'} moved to unassigned.`,'ok'); render();
+      });
+    });
     document.querySelectorAll('[data-driver-open]').forEach(button => button.onclick = () => { state.selectedDriverJobId = button.dataset.driverOpen; render(); });
     document.querySelectorAll('[data-action="driver-close"]').forEach(button => button.onclick = () => { state.selectedDriverJobId = null; render(); });
     document.querySelectorAll('[data-driver-nav]').forEach(button => button.onclick = () => { const j=state.jobs.find(x=>x.id===button.dataset.driverNav); if(j) window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(j.job_status === 'Booked' ? j.collection_address : j.delivery_address)}&travelmode=driving`,'_blank','noopener'); });

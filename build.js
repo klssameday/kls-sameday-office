@@ -20,4 +20,4 @@ fs.writeFileSync(
   'utf8'
 );
 
-console.log('Built KLS SameDay Office v11 to dist/');
+console.log('Built KLS SameDay Office Supabase V2 to dist/');

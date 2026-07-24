@@ -1,27 +1,22 @@
-KLS SameDay Office v11 — Driver Management
+KLS SameDay Office v12 — Live Dispatch Map
 
 INSTALL ORDER
 1. Open Supabase > SQL Editor > New query.
-2. Copy all of KLS_SameDay_v11_Driver_Management_Upgrade.sql and click Run.
-3. Replace the website files in GitHub with app.js, styles.css, index.html, manifest.json, sw.js, build.js and package.json.
-4. Commit to main: Upgrade to v11 Driver Management
-5. Push and wait for Vercel to show Ready.
-6. Refresh the app. On iPhone, close and reopen the installed web app so the new service worker loads.
+2. Copy and run KLS_SameDay_v12_Live_Dispatch_Map.sql.
+3. Replace these website files in GitHub:
+   app.js, styles.css, index.html, manifest.json, sw.js, build.js, package.json
+4. Commit summary: Upgrade to v12 Live Dispatch Map
+5. Push origin and wait for Vercel to show Ready.
+6. Hard refresh KLS SameDay Office.
 
-V11 FEATURES
-- Dedicated Driver Management page
-- Add, edit and delete driver profiles
-- Personal and emergency contact details
-- Employment type, start date and driver number
-- Vehicle, registration, mileage and service date
-- Licence, insurance, CPC and MOT expiry tracking
-- Compliance warnings for expired or soon-due documents
-- Document link fields
-- Active/inactive driver status
-- Driver job, revenue and mileage summaries
-- Searchable driver roster
+V12 FEATURES
+- Real live fleet map in Dispatch Centre using OpenStreetMap and Leaflet
+- Map markers show assigned driver, job, status and latest update
+- Automatic map fit around all live vehicles
+- Driver availability: Available, On Job, Break or Offline
+- Availability saved in Supabase
+- Existing v11 Driver Management, tracking, POD, quotes, jobs, CRM and invoices retained
 
 IMPORTANT
-- Run the v10 SQL migration before this v11 migration.
-- Document fields store secure links; direct file uploads require a later Supabase Storage module.
-- Existing quotes, jobs, invoices, CRM, tracking and POD remain in place.
+- A vehicle appears on the map after live GPS tracking has started for its job.
+- Browser tracking still requires the Driver App to remain open.

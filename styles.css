@@ -184,3 +184,6 @@ input,textarea,select{border-color:#dedee2!important;background:#fff;transition:
 
 /* v26.7 driver linking and add controls */
 .driver-add-top{display:inline-flex!important;align-items:center;justify-content:center;min-height:40px;background:#fff!important;color:#111!important;border:1px solid #d4d4d8!important;visibility:visible!important;opacity:1!important}.driver-admin-form .driver-add-submit{position:relative;z-index:2}.driver-control-grid #add-driver-panel{min-height:auto!important}@media(max-width:700px){.driver-control-grid #add-driver-panel .panelhead{display:grid;gap:12px}.driver-add-top{width:100%}}
+
+/* v26.13 Jobs detail and assignment */
+.job-open-link{appearance:none;border:0;background:transparent;color:#fff;padding:0;font-weight:900;text-decoration:underline;text-underline-offset:3px;cursor:pointer}.job-open-link:hover{opacity:.75}.job-editor-modal{max-width:900px}.job-editor-modal textarea{min-height:90px}

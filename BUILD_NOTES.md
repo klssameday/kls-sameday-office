@@ -1,6 +1,6 @@
-# KLS SameDay v26.12
+# KLS SameDay v26.13 — Jobs Open & Assignment
 
-- Restored the missing `appView()` function in the Driver App.
-- This was the confirmed cause of the permanent “Loading KLS Driver…” screen after a driver record was found.
-- Driver lookup now matches the visible `drivers` schema without requiring an `active` column.
-- No Supabase SQL required.
+- Job numbers and Open job buttons now open a real job details modal.
+- Jobs can be assigned to a driver from the Jobs screen.
+- Collection, delivery, vehicle, status, price and goods details can be edited.
+- No Supabase migration required.

@@ -68,6 +68,7 @@
     settings: { ...defaults },
     notice: null,
     loading: true,
+    jobEditorId: null,
     authMode: 'signin',
     selectedCustomerId: null,
     quoteCustomerId: null,
@@ -323,14 +324,22 @@
   }
 
   function jobTable(rows) {
-    return table(['Job','Customer','Route','Vehicle','Price','Status','Invoice'], rows.map(j => [
-      esc(j.job_number || 'Pending'), esc(j.customer_name || j.contact_name || ''), `${esc(j.collection_address)}<br><i>→ ${esc(j.delivery_address)}</i>`, esc(j.vehicle), money(j.total_price),
+    return table(['Job','Customer','Route','Vehicle','Price','Status','Invoice','Actions'], rows.map(j => [
+      `<button type="button" class="job-open-link" data-open-job="${j.id}">${esc(j.job_number || 'Pending')}</button>`,
+      esc(j.customer_name || j.contact_name || ''), `${esc(j.collection_address)}<br><i>→ ${esc(j.delivery_address)}</i>`, esc(j.vehicle), money(j.total_price),
       `<select data-job-status="${j.id}">${['Booked','En Route to Collection','Arrived at Collection','Collected','In Transit','Arrived at Delivery','Delivered','Cancelled'].map(s => `<option ${j.job_status === s ? 'selected' : ''}>${s}</option>`).join('')}</select>`,
-      `<button data-invoice="${j.id}" ${j.job_status !== 'Delivered' ? 'disabled' : ''}>Create Invoice</button>`
+      `<button data-invoice="${j.id}" ${j.job_status !== 'Delivered' ? 'disabled' : ''}>Create Invoice</button>`,
+      `<button type="button" class="primary" data-open-job="${j.id}">Open job</button>`
     ]));
   }
 
-  function jobsView() { return panel('Jobs', jobTable(state.jobs), '', '<label class="search">Search <input id="job-search"></label>'); }
+  function jobEditorModal() {
+    const job = state.jobs.find(j => j.id === state.jobEditorId);
+    if (!job) return '';
+    return `<div class="modalback" data-action="job-close"><section class="customermodal job-editor-modal" onclick="event.stopPropagation()"><div class="modalhead"><div><small>JOB DETAILS</small><h2>${esc(job.job_number || 'Job')}</h2><p>${esc(job.customer_name || job.contact_name || '')}</p></div><button type="button" data-action="job-close">×</button></div><form id="job-editor-form"><div class="grid two"><label>Collection date<input name="collection_date" type="date" value="${esc(String(job.collection_date||'').slice(0,10))}"></label><label>Collection time<input name="collection_time" type="time" value="${esc(String(job.collection_time||'').slice(0,5))}"></label><label>Vehicle<select name="vehicle">${Object.keys(vehicles).map(v=>`<option ${job.vehicle===v?'selected':''}>${v}</option>`).join('')}</select></label><label>Status<select name="job_status">${['Booked','En Route to Collection','Arrived at Collection','Collected','In Transit','Arrived at Delivery','Delivered','Cancelled'].map(v=>`<option ${job.job_status===v?'selected':''}>${v}</option>`).join('')}</select></label><label>Assigned driver<select name="assigned_driver_id"><option value="">Unassigned</option>${state.drivers.map(d=>`<option value="${d.id}" ${job.assigned_driver_id===d.id?'selected':''}>${esc(d.name)} · ${esc(d.vehicle||'Vehicle TBC')}</option>`).join('')}</select></label><label>Job price (£)<input name="total_price" type="number" min="0" step="0.01" value="${Number(job.total_price||0)}"></label></div><label>Collection address<textarea name="collection_address" required>${esc(job.collection_address||'')}</textarea></label><label>Delivery address<textarea name="delivery_address" required>${esc(job.delivery_address||'')}</textarea></label><label>Goods / job details<textarea name="goods_description">${esc(job.goods_description||'')}</textarea></label><div class="actions"><button type="button" class="secondary" data-action="job-close">Cancel</button><button class="primary">Save job</button></div></form></section></div>`;
+  }
+
+  function jobsView() { return panel('Jobs', jobTable(state.jobs), 'Click the job number or Open job to view, edit and assign it.', '<label class="search">Search <input id="job-search"></label>') + jobEditorModal(); }
 
   const driverStatuses = ['Booked','En Route to Collection','Arrived at Collection','Collected','In Transit','Arrived at Delivery','Delivered'];
 
@@ -1400,6 +1409,39 @@
         showNotice(`${job.job_number || 'Job'} created.`, 'ok');
         await loadAll();
       } catch (error) { showNotice(error.message, 'error'); render(); }
+    });
+
+    document.querySelectorAll('[data-open-job]').forEach(button => button.onclick = () => { state.jobEditorId = button.dataset.openJob; render(); });
+    document.querySelectorAll('[data-action="job-close"]').forEach(button => button.onclick = () => { state.jobEditorId = null; render(); });
+    document.getElementById('job-editor-form')?.addEventListener('submit', async event => {
+      event.preventDefault();
+      const job = state.jobs.find(j => j.id === state.jobEditorId);
+      if (!job) return;
+      const values = Object.fromEntries(new FormData(event.currentTarget));
+      const payload = {
+        collection_date: values.collection_date || null,
+        collection_time: values.collection_time || null,
+        collection_address: values.collection_address,
+        delivery_address: values.delivery_address,
+        vehicle: values.vehicle,
+        job_status: values.job_status,
+        assigned_driver_id: values.assigned_driver_id || null,
+        total_price: Number(values.total_price || 0),
+        goods_description: values.goods_description || null
+      };
+      const saveButton = event.currentTarget.querySelector('button[type="submit"],button.primary');
+      try {
+        if (saveButton) { saveButton.disabled = true; saveButton.textContent = 'Saving…'; }
+        const { data, error } = await db.from('jobs').update(payload).eq('id', job.id).select().single();
+        if (error) throw error;
+        Object.assign(job, data || payload);
+        state.jobEditorId = null;
+        showNotice(`${job.job_number || 'Job'} saved and driver assignment updated.`, 'ok');
+        render();
+      } catch (error) {
+        showNotice(error.message, 'error');
+        render();
+      }
     });
 
     document.querySelectorAll('[data-job-status]').forEach(select => select.onchange = async () => {

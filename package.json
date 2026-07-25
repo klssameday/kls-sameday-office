@@ -1,8 +1,1 @@
-{
-  "name": "kls-sameday-office-v24-driver-only",
-  "private": true,
-  "version": "25.0.0",
-  "scripts": {
-    "build": "node build.js"
-  }
-}
+{"name":"kls-sameday-platform","version":"4.0.0","private":true,"scripts":{"build":"node build.js"}}

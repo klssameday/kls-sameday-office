@@ -132,3 +132,6 @@ main{padding:0 24px 36px}header{height:76px}header h1{font-size:22px}header p{fo
 .hero,.command-hero,.dispatch-v4-hero,.ops-hero,.crm-hero,.tracking-hero,.fleet-hero,.schedule-hero,.route-hero{border-radius:18px;padding:24px}
 .primary,.secondary,.danger,.hero button,td button{border-radius:9px}
 @media(max-width:700px){main{padding:0 12px 24px}.side{width:var(--kls-sidebar);left:calc(var(--kls-sidebar) * -1)}header{height:68px}.cards{grid-template-columns:1fr}.panel{padding:14px}}
+
+/* v25.1 — complete navigation restored without removing working modules */
+.side{overflow-y:auto}.side nav{display:block}.nav-group{display:grid;gap:4px;margin:0 0 14px}.nav-section{display:block;padding:0 10px 5px;color:#71717a;font-size:9px;font-weight:900;letter-spacing:.14em;text-transform:uppercase}.nav-app-link{display:flex;align-items:center;justify-content:space-between;min-height:42px;padding:10px 11px;border:1px solid #3f3f46;border-radius:9px;color:#fff;text-decoration:none;font-size:13px;font-weight:800;background:#18181b}.nav-app-link:hover{background:#27272a;border-color:#71717a}.sidefooter{padding-bottom:8px}

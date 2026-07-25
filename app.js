@@ -118,14 +118,34 @@
     </section></div>`;
   }
 
-  const navItems = [
-    ['dashboard','Dashboard'],
-    ['jobs','Jobs'],
-    ['quotes','Quotes'],
-    ['customers','Customers'],
-    ['dispatch','Drivers'],
-    ['invoices','Invoices'],
-    ['settings','Settings']
+  const navGroups = [
+    ['Core', [
+      ['dashboard','Dashboard'],
+      ['operations','Today’s Planner'],
+      ['dispatch','Live Dispatch'],
+      ['jobs','Jobs']
+    ]],
+    ['Sales & Customers', [
+      ['newquote','New Quote'],
+      ['quotes','Quotes'],
+      ['quoterequests','Online Requests'],
+      ['customers','Customers'],
+      ['portalrequests','Customer Portal']
+    ]],
+    ['Drivers & Tracking', [
+      ['driver','Driver Control'],
+      ['tracking','Live Tracking'],
+      ['exchange','Driver Exchange'],
+      ['routes','Route Planner'],
+      ['schedule','Booking Calendar']
+    ]],
+    ['Finance', [
+      ['invoices','Invoices'],
+      ['accounts','Accounts & Payments']
+    ]],
+    ['System', [
+      ['settings','Settings']
+    ]]
   ];
 
   const pageTitles = {
@@ -142,7 +162,7 @@
       <div class="logo"><b>KLS</b><span>SameDay Office</span></div>
       <button class="close" data-action="menu-close">×</button>
       <div class="account">${esc(state.user?.email || '')}</div>
-      <nav>${navItems.map(([key,label]) => { const pendingPortal = key === 'portalrequests' ? state.portalBookings.filter(b=>b.status==='Pending').length : (key === 'quoterequests' ? state.quoteRequests.filter(b=>b.status==='Pending').length : 0); return `<button class="${state.page === key ? 'active' : ''}" data-page="${key}">${label}${pendingPortal ? `<span class="nav-badge">${pendingPortal}</span>` : ''}</button>`; }).join('')}</nav>
+      <nav>${navGroups.map(([group,items]) => `<section class="nav-group"><small class="nav-section">${group}</small>${items.map(([key,label]) => { const pendingPortal = key === 'portalrequests' ? state.portalBookings.filter(b=>b.status==='Pending').length : (key === 'quoterequests' ? state.quoteRequests.filter(b=>b.status==='Pending').length : 0); return `<button class="${state.page === key ? 'active' : ''}" data-page="${key}">${label}${pendingPortal ? `<span class="nav-badge">${pendingPortal}</span>` : ''}</button>`; }).join('')}</section>`).join('')}<section class="nav-group"><small class="nav-section">Mobile</small><a class="nav-app-link" href="/driver.html" target="_blank" rel="noopener">Open Driver App ↗</a></section></nav>
       <div class="sidefooter"><span class="connection"><span class="dot"></span> Supabase connected</span><button data-action="signout">Sign out</button></div>
     </aside><main>
       <header><button class="hamb" data-action="menu-open">☰</button><div><h1>${title}</h1><p>KLS SameDay business control centre</p></div><button class="primary" data-page="newquote">＋ New Quote</button></header>

@@ -410,7 +410,7 @@
         <div class="driver-control-main"><span class="driver-status-dot ${driver.active===false||driver.availability_status==='Offline'?'off':''}"></span><div><h3>${esc(driver.name || 'Driver')}</h3><p>${esc(driver.phone || 'No phone')} · ${esc(driver.vehicle || 'Vehicle not set')}</p></div></div>
         <div class="driver-control-details"><div><small>LOGIN EMAIL</small><b>${esc(account?.email || 'Not linked')}</b></div><div><small>STATUS</small><select data-driver-availability="${driver.id}">${['Available','On Job','Break','Offline'].map(x=>`<option ${String(driver.availability_status||'Available')===x?'selected':''}>${x}</option>`).join('')}</select></div><div><small>ACTIVE JOBS</small><b>${jobs.length}</b></div><div><small>GPS</small><b>${live?'Live':'Not reporting'}</b></div></div>
         ${current ? `<div class="driver-current-job"><small>CURRENT JOB</small><b>${esc(current.job_number || 'Job')} · ${esc(current.customer_name || current.contact_name || 'Customer')}</b><span>${esc(current.job_status || 'Booked')}</span></div>` : '<div class="driver-current-job empty-job">No active job assigned</div>'}
-        <footer>${!account ? `<button class="secondary" data-link-driver="${driver.id}">Link login</button>` : ''}${live ? `<a class="secondary button-link" target="_blank" href="https://www.google.com/maps?q=${current.last_latitude},${current.last_longitude}">Open GPS</a>` : ''}<button class="secondary" data-edit-driver="${driver.id}">Edit</button><button class="danger" data-delete-driver="${driver.id}">Delete</button></footer>
+        <footer>${!account ? `<button class="secondary" data-link-driver="${driver.id}">Link login</button>` : ''}${account && !account.auth_user_id && String(account.email||'').trim().toLowerCase()===String(state.user?.email||'').trim().toLowerCase() ? `<button class="primary" data-repair-driver-login="${driver.id}">Activate my login</button>` : ''}${live ? `<a class="secondary button-link" target="_blank" href="https://www.google.com/maps?q=${current.last_latitude},${current.last_longitude}">Open GPS</a>` : ''}<a class="secondary button-link" href="/driver.html" target="_blank" rel="noopener">Open app</a><button class="secondary" data-edit-driver="${driver.id}">Edit</button><button class="danger" data-delete-driver="${driver.id}">Delete</button></footer>
       </article>`;
     }).join('');
     const unlinked = state.drivers.filter(d => !accountFor(d.id));
@@ -1045,6 +1045,24 @@
       state.routeStops = routeStops.data || [];
       state.quoteRequests = quoteRequests.data || [];
       state.driverAccounts = driverAccounts.data || [];
+      // When the office user is also testing the Driver App with the same login,
+      // attach that authenticated user to the prepared driver account immediately.
+      // This repairs older records that were created with only an email address.
+      const signedInEmail = String(state.user?.email || '').trim().toLowerCase();
+      const repairableAccounts = state.driverAccounts.filter(account =>
+        signedInEmail &&
+        String(account.email || '').trim().toLowerCase() === signedInEmail &&
+        !account.auth_user_id &&
+        account.active !== false
+      );
+      if (repairableAccounts.length) {
+        const repairs = await Promise.all(repairableAccounts.map(account =>
+          db.from('driver_accounts').update({ auth_user_id: state.user.id }).eq('id', account.id).select().single()
+        ));
+        repairs.forEach((result, index) => {
+          if (!result.error && result.data) Object.assign(repairableAccounts[index], result.data);
+        });
+      }
       state.exchangeJobs = exchangeJobs.data || [];
       state.exchangeBids = exchangeBids.data || [];
       state.settings = { ...defaults, ...(settings.data || {}) };
@@ -1223,15 +1241,28 @@
     document.querySelector('[data-action="signout"]')?.addEventListener('click', async () => { await db.auth.signOut(); state.user = null; state.customers=[]; state.drivers=[]; state.fleet=[]; state.fuelLogs=[]; state.maintenance=[]; state.recurringJobs=[]; state.quotes=[]; state.jobs=[]; state.invoices=[]; state.expenses=[]; render(); });
 
     const driverForm = document.getElementById('driver-form');
-    if(driverForm) driverForm.onsubmit=async e=>{e.preventDefault();const values=Object.fromEntries(new FormData(driverForm));const loginEmail=String(values.login_email||'').trim().toLowerCase();delete values.login_email;values.user_id=state.user.id;values.active=true;values.availability_status='Available';values.last_seen_at=new Date().toISOString();try{const{data,error}=await db.from('drivers').insert(values).select().single();if(error)throw error;const{data:account,error:accountError}=await db.from('driver_accounts').insert({owner_id:state.user.id,driver_id:data.id,email:loginEmail,active:true}).select().single();if(accountError){await db.from('drivers').delete().eq('id',data.id);throw accountError;}state.drivers.push(data);state.driverAccounts.unshift(account);showNotice(`${data.name} added. Driver login: ${loginEmail}`,'ok');render();}catch(error){showNotice(error.message,'error');render();}};
+    if(driverForm) driverForm.onsubmit=async e=>{e.preventDefault();const values=Object.fromEntries(new FormData(driverForm));const loginEmail=String(values.login_email||'').trim().toLowerCase();delete values.login_email;values.user_id=state.user.id;values.active=true;values.availability_status='Available';values.last_seen_at=new Date().toISOString();try{const{data,error}=await db.from('drivers').insert(values).select().single();if(error)throw error;const accountPayload={owner_id:state.user.id,driver_id:data.id,email:loginEmail,active:true,auth_user_id:loginEmail===String(state.user?.email||'').trim().toLowerCase()?state.user.id:null};const{data:account,error:accountError}=await db.from('driver_accounts').insert(accountPayload).select().single();if(accountError){await db.from('drivers').delete().eq('id',data.id);throw accountError;}state.drivers.push(data);state.driverAccounts.unshift(account);showNotice(`${data.name} added. Driver login: ${loginEmail}`,'ok');render();}catch(error){showNotice(error.message,'error');render();}};
     const driverLinkForm = document.getElementById('driver-link-form');
-    if(driverLinkForm) driverLinkForm.onsubmit=async e=>{e.preventDefault();const values=Object.fromEntries(new FormData(driverLinkForm));try{const email=String(values.email||'').trim().toLowerCase();const{data,error}=await db.from('driver_accounts').insert({owner_id:state.user.id,driver_id:values.driver_id,email,active:true}).select().single();if(error)throw error;state.driverAccounts.unshift(data);const driver=state.drivers.find(d=>d.id===values.driver_id);showNotice(`${driver?.name||'Driver'} linked to ${email}.`,'ok');render();}catch(error){showNotice(error.message,'error');render();}};
+    if(driverLinkForm) driverLinkForm.onsubmit=async e=>{e.preventDefault();const values=Object.fromEntries(new FormData(driverLinkForm));try{const email=String(values.email||'').trim().toLowerCase();const accountPayload={owner_id:state.user.id,driver_id:values.driver_id,email,active:true,auth_user_id:email===String(state.user?.email||'').trim().toLowerCase()?state.user.id:null};const{data,error}=await db.from('driver_accounts').insert(accountPayload).select().single();if(error)throw error;state.driverAccounts.unshift(data);const driver=state.drivers.find(d=>d.id===values.driver_id);showNotice(`${driver?.name||'Driver'} linked to ${email}.`,'ok');render();}catch(error){showNotice(error.message,'error');render();}};
 
+
+    document.querySelectorAll('[data-repair-driver-login]').forEach(button => button.onclick = async () => {
+      const driver = state.drivers.find(d => d.id === button.dataset.repairDriverLogin);
+      const account = state.driverAccounts.find(a => a.driver_id === driver?.id && a.active !== false);
+      if (!driver || !account) return;
+      try {
+        const { data, error } = await db.from('driver_accounts').update({ auth_user_id: state.user.id, active: true }).eq('id', account.id).select().single();
+        if (error) throw error;
+        Object.assign(account, data);
+        showNotice(`${driver.name} can now use the Driver App with ${account.email}.`, 'ok');
+        render();
+      } catch (error) { showNotice(error.message, 'error'); render(); }
+    });
 
     document.querySelectorAll('[data-edit-driver]').forEach(button => button.onclick = () => { state.selectedDriverId = button.dataset.editDriver; render(); });
     document.querySelectorAll('[data-action="driver-admin-close"]').forEach(button => button.onclick = () => { state.selectedDriverId = null; render(); });
     const driverEditForm = document.getElementById('driver-edit-form');
-    if (driverEditForm) driverEditForm.onsubmit = async e => { e.preventDefault(); const driver=state.drivers.find(d=>d.id===state.selectedDriverId); if(!driver)return; try { const values=Object.fromEntries(new FormData(driverEditForm)); const email=String(values.login_email||'').trim().toLowerCase(); delete values.login_email; values.active=values.active==='true'; values.last_seen_at=new Date().toISOString(); const {data,error}=await db.from('drivers').update(values).eq('id',driver.id).select().single(); if(error)throw error; const account=state.driverAccounts.find(a=>a.driver_id===driver.id&&a.active!==false); if(email){ if(account){const{data:updated,error:ae}=await db.from('driver_accounts').update({email,active:true}).eq('id',account.id).select().single();if(ae)throw ae;Object.assign(account,updated);}else{const{data:created,error:ae}=await db.from('driver_accounts').insert({owner_id:state.user.id,driver_id:driver.id,email,active:true}).select().single();if(ae)throw ae;state.driverAccounts.unshift(created);}} Object.assign(driver,data); state.selectedDriverId=null; showNotice(`${driver.name} updated.`,'ok'); render(); } catch(error){showNotice(error.message,'error');render();} };
+    if (driverEditForm) driverEditForm.onsubmit = async e => { e.preventDefault(); const driver=state.drivers.find(d=>d.id===state.selectedDriverId); if(!driver)return; try { const values=Object.fromEntries(new FormData(driverEditForm)); const email=String(values.login_email||'').trim().toLowerCase(); delete values.login_email; values.active=values.active==='true'; values.last_seen_at=new Date().toISOString(); const {data,error}=await db.from('drivers').update(values).eq('id',driver.id).select().single(); if(error)throw error; const account=state.driverAccounts.find(a=>a.driver_id===driver.id&&a.active!==false); if(email){ if(account){const{data:updated,error:ae}=await db.from('driver_accounts').update({email,active:true,auth_user_id:email===String(state.user?.email||'').trim().toLowerCase()?state.user.id:account.auth_user_id||null}).eq('id',account.id).select().single();if(ae)throw ae;Object.assign(account,updated);}else{const{data:created,error:ae}=await db.from('driver_accounts').insert({owner_id:state.user.id,driver_id:driver.id,email,active:true,auth_user_id:email===String(state.user?.email||'').trim().toLowerCase()?state.user.id:null}).select().single();if(ae)throw ae;state.driverAccounts.unshift(created);}} Object.assign(driver,data); state.selectedDriverId=null; showNotice(`${driver.name} updated.`,'ok'); render(); } catch(error){showNotice(error.message,'error');render();} };
 
     document.querySelectorAll('[data-link-driver]').forEach(button => button.onclick = () => {
       const select = document.querySelector('#driver-link-form select[name="driver_id"]');

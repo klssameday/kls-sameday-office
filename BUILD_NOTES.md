@@ -1,13 +1,11 @@
-# KLS SameDay Platform v26.4
+# KLS SameDay Platform v26.5
 
-## Driver Control upgrade
-- Added live Driver Control KPI cards.
-- Added editable driver records.
-- Added Driver App email updates and linking.
-- Added availability controls directly on each driver card.
-- Added current assigned job and GPS reporting status.
-- Added one-click live GPS location when available.
-- Preserved every existing office module and separate Driver App.
+## Fixes
+- Repairs a Driver App login when the office and driver use the same authenticated email.
+- New driver links now attach the current authenticated user automatically when emails match.
+- Added an Activate my login recovery action.
+- Restored clear, visible Driver Control action buttons.
+- Added an Open app button to every driver card.
 
 ## Database
-No Supabase migration required.
+No migration required.

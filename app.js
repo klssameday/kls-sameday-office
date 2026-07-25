@@ -83,7 +83,10 @@
     exchangeJobs: [],
     exchangeBids: [],
     dispatchSearch: '',
-    dispatchDriverFilter: 'all'
+    dispatchDriverFilter: 'all',
+    selectedJobId: null,
+    jobFilter: 'active',
+    jobSearch: ''
   };
 
   let locationWatchId = null;
@@ -118,7 +121,7 @@
     </section></div>`;
   }
 
-  const navItems = [['dashboard','Dashboard'],['smart','Smart Dispatch'],['routes','Route Planner'],['operations','Today’s Planner'],['dispatch','Dispatch Centre'],['exchange','Driver Exchange'],['driver','Driver App'],['tracking','Live Tracking'],['fleet','Fleet Management'],['schedule','Booking Calendar'],['portalrequests','Customer Portal'],['quoterequests','Online Requests'],['newquote','New Quote'],['quotes','Quotes'],['jobs','Jobs'],['invoices','Invoices'],['accounts','Accounts & Payments'],['customers','CRM / Customers'],['settings','Settings']];
+  const navItems = [['dashboard','Dashboard'],['jobs','Jobs'],['quotes','Quotes'],['customers','Customers'],['drivers','Drivers'],['invoices','Invoices'],['dispatch','Dispatch'],['tracking','Live Tracking'],['portalrequests','Customer Portal'],['settings','Settings']];
 
   function layout(content) {
     const title = navItems.find(([key]) => key === state.page)?.[1] || 'Dashboard';
@@ -286,7 +289,37 @@
     ]));
   }
 
-  function jobsView() { return panel('Jobs', jobTable(state.jobs), '', '<label class="search">Search <input id="job-search"></label>'); }
+  function jobStatusClass(status) { return String(status || 'Booked').toLowerCase().replace(/[^a-z0-9]+/g,'-'); }
+
+  function jobsView() {
+    const query = state.jobSearch.trim().toLowerCase();
+    const filtered = state.jobs.filter(job => {
+      const active = !['Delivered','Cancelled'].includes(job.job_status);
+      if (state.jobFilter === 'active' && !active) return false;
+      if (state.jobFilter === 'delivered' && job.job_status !== 'Delivered') return false;
+      if (state.jobFilter === 'cancelled' && job.job_status !== 'Cancelled') return false;
+      if (!query) return true;
+      return [job.job_number,job.customer_name,job.contact_name,job.collection_address,job.delivery_address,job.vehicle,job.job_status].some(v => String(v||'').toLowerCase().includes(query));
+    }).sort((a,b) => new Date(b.collection_date || b.created_at || 0) - new Date(a.collection_date || a.created_at || 0));
+    const cards = filtered.length ? filtered.map(job => {
+      const driver = state.drivers.find(d => d.id === job.assigned_driver_id);
+      return `<article class="job-card" data-open-job="${job.id}"><div class="job-card-top"><div><small>${fmtDate(job.collection_date)} ${esc(String(job.collection_time||'').slice(0,5))}</small><h3>${esc(job.job_number || 'Job')}</h3></div><span class="job-status ${jobStatusClass(job.job_status)}">${esc(job.job_status || 'Booked')}</span></div><strong>${esc(job.customer_name || job.contact_name || 'Customer')}</strong><div class="job-route-card"><p><small>COLLECT</small>${esc(job.collection_address || 'Not set')}</p><p><small>DELIVER</small>${esc(job.delivery_address || 'Not set')}</p></div><footer><span>${esc(job.vehicle || 'Vehicle TBC')}</span><span>${esc(driver?.name || job.assigned_driver_name || 'Unassigned')}</span><b>${money(job.total_price)}</b></footer></article>`;
+    }).join('') : `<div class="jobs-empty"><h3>No matching jobs</h3><p>Create a job or change the filter.</p></div>`;
+    return `<section class="jobs-head"><div><small>JOB CONTROL</small><h2>Jobs</h2><p>Create, assign and manage every delivery from one place.</p></div><button class="primary" data-action="new-job">＋ New Job</button></section><section class="jobs-toolbar"><div class="job-tabs">${[['active','Active'],['all','All'],['delivered','Delivered'],['cancelled','Cancelled']].map(([key,label])=>`<button class="${state.jobFilter===key?'active':''}" data-job-filter="${key}">${label}</button>`).join('')}</div><label class="job-search-box"><input id="job-search" placeholder="Search job, customer or postcode" value="${esc(state.jobSearch)}"></label></section><section class="job-card-grid">${cards}</section>${state.selectedJobId ? jobDetailModal() : ''}`;
+  }
+
+  function jobDetailModal() {
+    if (state.selectedJobId === 'new') return newJobModal();
+    const job = state.jobs.find(j => j.id === state.selectedJobId);
+    if (!job) return '';
+    const invoice = state.invoices.find(i => i.job_id === job.id);
+    const tracking = trackingUrl(job);
+    return `<div class="modalback" data-action="job-close"><section class="job-detail-modal" onclick="event.stopPropagation()"><div class="modalhead"><div><small>JOB RECORD</small><h2>${esc(job.job_number || 'Job')}</h2><p>${esc(job.customer_name || job.contact_name || '')}</p></div><button data-action="job-close">×</button></div><div class="job-detail-summary"><span class="job-status ${jobStatusClass(job.job_status)}">${esc(job.job_status || 'Booked')}</span><strong>${money(job.total_price)}</strong></div><form id="job-edit-form"><div class="grid"><label>Collection date<input name="collection_date" type="date" value="${esc(String(job.collection_date||'').slice(0,10))}"></label><label>Collection time<input name="collection_time" type="time" value="${esc(String(job.collection_time||'').slice(0,5))}"></label><label>Vehicle<input name="vehicle" value="${esc(job.vehicle||'')}"></label></div><div class="grid two"><label>Collection address<textarea name="collection_address">${esc(job.collection_address||'')}</textarea></label><label>Delivery address<textarea name="delivery_address">${esc(job.delivery_address||'')}</textarea></label></div><div class="grid"><label>Status<select name="job_status">${driverStatuses.concat(['Cancelled']).map(s=>`<option ${job.job_status===s?'selected':''}>${s}</option>`).join('')}</select></label><label>Assigned driver<select name="assigned_driver_id"><option value="">Unassigned</option>${state.drivers.map(d=>`<option value="${d.id}" ${job.assigned_driver_id===d.id?'selected':''}>${esc(d.name)}</option>`).join('')}</select></label><label>Total price<input name="total_price" type="number" step="0.01" value="${Number(job.total_price||0)}"></label></div><label>Goods / notes<textarea name="goods_description">${esc(job.goods_description||'')}</textarea></label><div class="job-action-row"><button type="button" class="secondary" data-action="job-close">Close</button>${tracking?`<button type="button" class="secondary" data-copy-track="${job.id}">Copy tracking link</button>`:''}${job.job_status==='Delivered'&&!invoice?`<button type="button" class="secondary" data-invoice="${job.id}">Create invoice</button>`:''}<button class="primary">Save Changes</button></div></form>${invoice?`<div class="job-linked-record"><small>INVOICE</small><b>${esc(invoice.invoice_number)}</b><span>${invoiceDisplayStatus(invoice)} · ${money(invoice.total)}</span></div>`:''}</section></div>`;
+  }
+
+  function newJobModal() {
+    return `<div class="modalback" data-action="job-close"><section class="job-detail-modal" onclick="event.stopPropagation()"><div class="modalhead"><div><small>NEW DELIVERY</small><h2>Create Job</h2><p>Add a direct booking without creating a quote first.</p></div><button data-action="job-close">×</button></div><form id="new-job-form"><div class="grid"><label>Customer / company<input name="customer_name" required></label><label>Contact name<input name="contact_name"></label><label>Email<input name="customer_email" type="email"></label></div><div class="grid"><label>Collection date<input name="collection_date" type="date" value="${todayISO()}" required></label><label>Collection time<input name="collection_time" type="time"></label><label>Vehicle<select name="vehicle">${Object.keys(vehicles).map(v=>`<option>${v}</option>`).join('')}</select></label></div><div class="grid two"><label>Collection address<textarea name="collection_address" required></textarea></label><label>Delivery address<textarea name="delivery_address" required></textarea></label></div><div class="grid"><label>Miles<input name="miles" type="number" step="0.1"></label><label>Total price<input name="total_price" type="number" step="0.01" required></label><label>Assign driver<select name="assigned_driver_id"><option value="">Unassigned</option>${state.drivers.map(d=>`<option value="${d.id}">${esc(d.name)}</option>`).join('')}</select></label></div><label>Goods / instructions<textarea name="goods_description"></textarea></label><div class="job-action-row"><button type="button" class="secondary" data-action="job-close">Cancel</button><button class="primary">Create Job</button></div></form></section></div>`;
+  }
 
   const driverStatuses = ['Booked','En Route to Collection','Arrived at Collection','Collected','In Transit','Arrived at Delivery','Delivered'];
 
@@ -809,7 +842,7 @@
     if (state.loading) { document.getElementById('app').innerHTML = '<div class="loading">Loading KLS SameDay Office…</div>'; return; }
     if (!state.user) { document.getElementById('app').innerHTML = authView(); bindAuth(); return; }
     if (state.portalUser) { document.getElementById('app').innerHTML = customerPortalView(); bindCustomerPortal(); return; }
-    const views = { dashboard, smart: smartDispatchView, routes: routePlannerView, operations: operationsView, dispatch: dispatchView, exchange: driverExchangeView, driver: driverView, tracking: liveTrackingView, fleet: fleetView, schedule: scheduleView, newquote: newQuote, quotes: quotesView, jobs: jobsView, invoices: invoicesView, accounts: accountsView, portalrequests: portalRequestsView, quoterequests: quoteRequestsView, customers: customersView, settings: settingsView };
+    const views = { dashboard, jobs: jobsView, quotes: quotesView, customers: customersView, drivers: driverExchangeView, invoices: invoicesView, dispatch: dispatchView, tracking: liveTrackingView, portalrequests: portalRequestsView, settings: settingsView, newquote: newQuote };
     document.getElementById('app').innerHTML = layout(views[state.page]());
     bindApp();
     if (state.page === 'dashboard') initialiseCommandMap();
@@ -1271,6 +1304,16 @@
       } catch (error) { showNotice(error.message, 'error'); render(); }
     });
 
+    document.querySelector('[data-action="new-job"]')?.addEventListener('click',()=>{state.selectedJobId='new';render();});
+    document.querySelectorAll('[data-open-job]').forEach(card=>card.onclick=()=>{state.selectedJobId=card.dataset.openJob;render();});
+    document.querySelectorAll('[data-action="job-close"]').forEach(button=>button.onclick=()=>{state.selectedJobId=null;render();});
+    document.querySelectorAll('[data-job-filter]').forEach(button=>button.onclick=()=>{state.jobFilter=button.dataset.jobFilter;render();});
+    const jobSearch=document.getElementById('job-search'); if(jobSearch) jobSearch.oninput=e=>{state.jobSearch=e.target.value; clearTimeout(jobSearch._timer); jobSearch._timer=setTimeout(render,180);};
+    const newJobForm=document.getElementById('new-job-form');
+    if(newJobForm)newJobForm.onsubmit=async e=>{e.preventDefault();try{const form=Object.fromEntries(new FormData(newJobForm));const driver=state.drivers.find(d=>d.id===form.assigned_driver_id);const payload={user_id:state.user.id,job_number:numberCode('JOB'),customer_name:form.customer_name,contact_name:form.contact_name||null,customer_email:form.customer_email||null,collection_date:form.collection_date,collection_time:form.collection_time||null,collection_address:form.collection_address,delivery_address:form.delivery_address,vehicle:form.vehicle,miles:Number(form.miles||0),base_price:Number(form.total_price||0),extras:0,total_price:Number(form.total_price||0),costs:0,goods_description:form.goods_description||null,assigned_driver_id:form.assigned_driver_id||null,assigned_driver_name:driver?.name||null,job_status:'Booked',quote_status:'Direct booking',invoice_status:'Not Invoiced'};const{data,error}=await db.from('jobs').insert(payload).select().single();if(error)throw error;state.jobs.unshift(data);state.selectedJobId=data.id;showNotice(`${data.job_number||'Job'} created.`,'ok');render();}catch(error){showNotice(error.message,'error');render();}};
+    const jobEditForm=document.getElementById('job-edit-form');
+    if(jobEditForm)jobEditForm.onsubmit=async e=>{e.preventDefault();try{const job=state.jobs.find(j=>j.id===state.selectedJobId);const form=Object.fromEntries(new FormData(jobEditForm));const driver=state.drivers.find(d=>d.id===form.assigned_driver_id);const payload={collection_date:form.collection_date||null,collection_time:form.collection_time||null,collection_address:form.collection_address,delivery_address:form.delivery_address,vehicle:form.vehicle||null,job_status:form.job_status,assigned_driver_id:form.assigned_driver_id||null,assigned_driver_name:driver?.name||null,total_price:Number(form.total_price||0),goods_description:form.goods_description||null};const{error}=await db.from('jobs').update(payload).eq('id',job.id);if(error)throw error;Object.assign(job,payload);showNotice(`${job.job_number||'Job'} updated.`,'ok');state.selectedJobId=null;render();}catch(error){showNotice(error.message,'error');render();}};
+
     document.querySelectorAll('[data-job-status]').forEach(select => select.onchange = async () => {
       const job = state.jobs.find(j => j.id === select.dataset.jobStatus); const previous = job.job_status; job.job_status = select.value;
       const { error } = await db.from('jobs').update({ job_status: select.value }).eq('id', job.id);
@@ -1447,8 +1490,8 @@
     const podForm=document.getElementById('pod-form');
     if(podForm) podForm.onsubmit=async e=>{e.preventDefault();const job=state.jobs.find(j=>j.id===state.selectedDriverJobId);const btn=podForm.querySelector('button.primary');btn.disabled=true;btn.textContent='Saving POD…';try{const fd=new FormData(podForm);let photoUrl=job.pod_photo_url||null;let signatureUrl=job.pod_signature_url||null;const photo=fd.get('pod_photo');if(photo&&photo.size){photoUrl=await uploadPodFile(job,photo,'photo');}if(canvas){const blank=document.createElement('canvas');blank.width=canvas.width;blank.height=canvas.height;if(canvas.toDataURL()!==blank.toDataURL()){const blob=await new Promise(r=>canvas.toBlob(r,'image/png'));signatureUrl=await uploadPodFile(job,blob,'signature');}}const position=await getOnePosition().catch(()=>null);const payload={recipient_name:fd.get('recipient_name'),pod_notes:fd.get('pod_notes')||null,pod_photo_url:photoUrl,pod_signature_url:signatureUrl,job_status:'Delivered',delivered_at:new Date().toISOString(),pod_latitude:position?.coords.latitude||job.last_latitude||null,pod_longitude:position?.coords.longitude||job.last_longitude||null};const{data,error}=await db.from('jobs').update(payload).eq('id',job.id).select().single();if(error)throw error;Object.assign(job,data);state.selectedDriverJobId=null;showNotice(`${job.job_number} POD saved and job delivered.`,'ok');render();}catch(error){showNotice(error.message,'error');render();}};
 
-    const jobSearch = document.getElementById('job-search');
-    if (jobSearch) jobSearch.oninput = () => filterRows(jobSearch.value);
+    const legacyJobSearch = document.getElementById('job-search');
+    if (legacyJobSearch && !legacyJobSearch.closest('.jobs-toolbar')) legacyJobSearch.oninput = () => filterRows(legacyJobSearch.value);
     const customerSearch = document.getElementById('customer-search');
     if (customerSearch) customerSearch.oninput = () => filterCards(customerSearch.value);
   }

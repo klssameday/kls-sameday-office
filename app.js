@@ -133,7 +133,7 @@
       ['portalrequests','Customer Portal']
     ]],
     ['Drivers & Tracking', [
-      ['driver','Driver Control'],
+      ['drivers','Driver Control'],
       ['tracking','Live Tracking'],
       ['exchange','Driver Exchange'],
       ['routes','Route Planner'],
@@ -150,7 +150,7 @@
 
   const pageTitles = {
     dashboard:'Dashboard', smart:'Smart Dispatch', routes:'Route Planner', operations:'Today’s Planner',
-    dispatch:'Drivers', exchange:'Driver Exchange', driver:'Driver App', tracking:'Live Tracking',
+    dispatch:'Live Dispatch', drivers:'Driver Control', exchange:'Driver Exchange', driver:'Driver App', tracking:'Live Tracking',
     fleet:'Fleet Management', schedule:'Booking Calendar', portalrequests:'Customer Portal',
     quoterequests:'Online Requests', newquote:'New Quote', quotes:'Quotes', jobs:'Jobs',
     invoices:'Invoices', accounts:'Accounts & Payments', customers:'Customers', settings:'Settings'
@@ -158,7 +158,7 @@
 
   const navIcons = {
     dashboard:'⌂', operations:'◷', dispatch:'⇄', jobs:'▤', newquote:'＋', quotes:'◫',
-    quoterequests:'↧', customers:'◎', portalrequests:'◉', driver:'♙', tracking:'⌖',
+    quoterequests:'↧', customers:'◎', portalrequests:'◉', drivers:'♙', driver:'♙', tracking:'⌖',
     exchange:'⇆', routes:'◇', schedule:'□', invoices:'£', accounts:'◌', settings:'⚙'
   };
 
@@ -391,6 +391,26 @@
       <div class="dispatch-card-actions">${previous ? `<button class="secondary" data-move-job="${job.id}" data-move-status="${previous}">←</button>` : ''}<button class="secondary" data-driver-open="${job.id}">Open</button>${next ? `<button class="primary" data-move-job="${job.id}" data-move-status="${next}">${esc(next)} →</button>` : ''}</div>
       ${job.invoice_status === 'Invoiced' ? '<div class="dispatch-badge">INVOICED</div>' : ''}
     </article>`;
+  }
+
+
+  function driversManagementView() {
+    const accountFor = driverId => state.driverAccounts.find(a => a.driver_id === driverId && a.active !== false);
+    const activeJobsFor = driverId => state.jobs.filter(j => j.assigned_driver_id === driverId && !['Delivered','Cancelled'].includes(j.job_status));
+    const rows = state.drivers.map(driver => {
+      const account = accountFor(driver.id);
+      const jobs = activeJobsFor(driver.id);
+      return `<article class="driver-control-card">
+        <div class="driver-control-main"><span class="driver-status-dot ${driver.active===false||driver.availability_status==='Offline'?'off':''}"></span><div><h3>${esc(driver.name || 'Driver')}</h3><p>${esc(driver.phone || 'No phone')} · ${esc(driver.vehicle || 'Vehicle not set')}</p></div></div>
+        <div class="driver-control-details"><div><small>LOGIN EMAIL</small><b>${esc(account?.email || 'Not linked')}</b></div><div><small>STATUS</small><b>${esc(driver.availability_status || 'Available')}</b></div><div><small>ACTIVE JOBS</small><b>${jobs.length}</b></div></div>
+        <footer>${account ? `<span class="linked-ok">✓ Driver App linked</span>` : `<button class="secondary" data-link-driver="${driver.id}">Link login</button>`}<button class="danger" data-delete-driver="${driver.id}">Delete</button></footer>
+      </article>`;
+    }).join('');
+    const unlinked = state.drivers.filter(d => !accountFor(d.id));
+    return `<section class="drivers-hero"><div><small>DRIVER ADMINISTRATION</small><h2>Driver Control</h2><p>Add drivers and connect their exact login email to the Driver App.</p></div><a class="primary button-link" href="/driver.html" target="_blank" rel="noopener">Open Driver App ↗</a></section>
+      <section class="driver-control-grid"><div class="panel"><div class="panelhead"><div><h2>Add a driver</h2><p>The login email must exactly match the email used in the Driver App.</p></div></div><form id="driver-form" class="driver-admin-form"><label>Driver name<input name="name" required></label><label>Telephone<input name="phone"></label><label>Vehicle<input name="vehicle" placeholder="Luton Tail Lift"></label><label>Driver App login email<input name="login_email" type="email" required placeholder="driver@example.co.uk"></label><button class="primary">Add Driver & Link Login</button></form></div>
+      <div class="panel"><div class="panelhead"><div><h2>Link an existing driver</h2><p>Use this when the driver already exists but the app says “Account not linked”.</p></div></div>${unlinked.length ? `<form id="driver-link-form" class="driver-admin-form"><label>Driver<select name="driver_id" required><option value="">Select driver</option>${unlinked.map(d=>`<option value="${d.id}">${esc(d.name)}</option>`).join('')}</select></label><label>Exact Driver App email<input name="email" type="email" required value="${esc(state.user?.email || '')}"></label><button class="primary">Link Driver Login</button></form>` : '<div class="empty">Every driver is already linked to a login.</div>'}</div></section>
+      <section class="panel"><div class="panelhead"><div><h2>Your drivers</h2><p>${state.drivers.length} driver${state.drivers.length===1?'':'s'} in the system.</p></div></div><div class="driver-control-list">${rows || '<div class="empty">No drivers yet. Add your first driver above.</div>'}</div></section>`;
   }
 
   function dispatchView() {
@@ -852,7 +872,7 @@
     if (state.loading) { document.getElementById('app').innerHTML = '<div class="loading">Loading KLS SameDay Office…</div>'; return; }
     if (!state.user) { document.getElementById('app').innerHTML = authView(); bindAuth(); return; }
     if (state.portalUser) { document.getElementById('app').innerHTML = customerPortalView(); bindCustomerPortal(); return; }
-    const views = { dashboard, smart: smartDispatchView, routes: routePlannerView, operations: operationsView, dispatch: dispatchView, exchange: driverExchangeView, driver: driverView, tracking: liveTrackingView, fleet: fleetView, schedule: scheduleView, newquote: newQuote, quotes: quotesView, jobs: jobsView, invoices: invoicesView, accounts: accountsView, portalrequests: portalRequestsView, quoterequests: quoteRequestsView, customers: customersView, settings: settingsView };
+    const views = { dashboard, smart: smartDispatchView, routes: routePlannerView, operations: operationsView, dispatch: dispatchView, drivers: driversManagementView, exchange: driverExchangeView, driver: driverView, tracking: liveTrackingView, fleet: fleetView, schedule: scheduleView, newquote: newQuote, quotes: quotesView, jobs: jobsView, invoices: invoicesView, accounts: accountsView, portalrequests: portalRequestsView, quoterequests: quoteRequestsView, customers: customersView, settings: settingsView };
     document.getElementById('app').innerHTML = layout(views[state.page]());
     bindApp();
     if (state.page === 'dashboard') initialiseCommandMap();
@@ -1196,6 +1216,26 @@
     const driverLinkForm = document.getElementById('driver-link-form');
     if(driverLinkForm) driverLinkForm.onsubmit=async e=>{e.preventDefault();const values=Object.fromEntries(new FormData(driverLinkForm));try{const email=String(values.email||'').trim().toLowerCase();const{data,error}=await db.from('driver_accounts').insert({owner_id:state.user.id,driver_id:values.driver_id,email,active:true}).select().single();if(error)throw error;state.driverAccounts.unshift(data);const driver=state.drivers.find(d=>d.id===values.driver_id);showNotice(`${driver?.name||'Driver'} linked to ${email}.`,'ok');render();}catch(error){showNotice(error.message,'error');render();}};
 
+
+    document.querySelectorAll('[data-link-driver]').forEach(button => button.onclick = () => {
+      const select = document.querySelector('#driver-link-form select[name="driver_id"]');
+      const email = document.querySelector('#driver-link-form input[name="email"]');
+      if (select) select.value = button.dataset.linkDriver;
+      if (email) email.focus();
+    });
+    document.querySelectorAll('[data-delete-driver]').forEach(button => button.onclick = async () => {
+      const driver = state.drivers.find(d => d.id === button.dataset.deleteDriver);
+      if (!driver || !confirm(`Delete ${driver.name}? This will also remove the Driver App link.`)) return;
+      try {
+        const {error: accountError} = await db.from('driver_accounts').delete().eq('driver_id', driver.id);
+        if (accountError) throw accountError;
+        const {error} = await db.from('drivers').delete().eq('id', driver.id);
+        if (error) throw error;
+        state.driverAccounts = state.driverAccounts.filter(a => a.driver_id !== driver.id);
+        state.drivers = state.drivers.filter(d => d.id !== driver.id);
+        showNotice(`${driver.name} deleted.`, 'ok'); render();
+      } catch(error) { showNotice(error.message, 'error'); render(); }
+    });
 
     const vehicleForm = document.getElementById('vehicle-form');
     if (vehicleForm) vehicleForm.onsubmit = async e => {

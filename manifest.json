@@ -1,6 +1,6 @@
 {
   "id": "/",
-  "name": "KLS SameDay Office v26",
+  "name": "KLS SameDay Office v26.2",
   "short_name": "KLS Office",
   "description": "KLS SameDay courier office and mobile driver app.",
   "start_url": "/?source=app",
@@ -20,19 +20,19 @@
   ],
   "icons": [
     {
-      "src": "/icons/icon-192.png?v=22-logo",
+      "src": "/icons/icon-192.png?v=26.2",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-512.png?v=22-logo",
+      "src": "/icons/icon-512.png?v=26.2",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-maskable-512.png?v=22-logo",
+      "src": "/icons/icon-maskable-512.png?v=26.2",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
@@ -45,7 +45,7 @@
       "url": "/?page=dashboard",
       "icons": [
         {
-          "src": "/icons/icon-192.png?v=22-logo",
+          "src": "/icons/icon-192.png?v=26.2",
           "sizes": "192x192"
         }
       ]
@@ -56,7 +56,7 @@
       "url": "/?page=newquote",
       "icons": [
         {
-          "src": "/icons/icon-192.png?v=22-logo",
+          "src": "/icons/icon-192.png?v=26.2",
           "sizes": "192x192"
         }
       ]
@@ -67,7 +67,7 @@
       "url": "/?page=jobs",
       "icons": [
         {
-          "src": "/icons/icon-192.png?v=22-logo",
+          "src": "/icons/icon-192.png?v=26.2",
           "sizes": "192x192"
         }
       ]

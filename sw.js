@@ -1,9 +1,9 @@
-const CACHE = 'kls-platform-5-0';
+const CACHE = 'kls-platform-26-2';
 const APP_SHELL = [
-  '/', '/index.html', '/offline.html', '/styles.css', '/app.js', '/manifest.json',
-  '/driver.html', '/driver.css', '/driver.js',
-  '/icons/favicon-32.png', '/icons/apple-touch-icon.png', '/icons/icon-192.png',
-  '/icons/icon-512.png', '/icons/icon-maskable-512.png'
+  '/', '/index.html', '/offline.html', '/styles.css?v=26.2', '/app.js?v=26.2', '/manifest.json',
+  '/driver.html', '/driver.css?v=26.2', '/driver.js?v=26.2',
+  '/icons/favicon-32.png?v=26.2', '/icons/apple-touch-icon.png?v=26.2', '/icons/icon-192.png?v=26.2',
+  '/icons/icon-512.png?v=26.2', '/icons/icon-maskable-512.png?v=26.2'
 ];
 
 self.addEventListener('install', event => {
@@ -17,6 +17,10 @@ self.addEventListener('activate', event => {
       .then(keys => Promise.all(keys.filter(key => key !== CACHE).map(key => caches.delete(key))))
       .then(() => self.clients.claim())
   );
+});
+
+self.addEventListener('message', event => {
+  if (event.data === 'SKIP_WAITING') self.skipWaiting();
 });
 
 self.addEventListener('fetch', event => {
@@ -38,14 +42,17 @@ self.addEventListener('fetch', event => {
   }
 
   if (url.origin === self.location.origin) {
+    // Network first prevents old JavaScript/CSS from hiding newly deployed modules.
     event.respondWith(
-      caches.match(request).then(cached => cached || fetch(request).then(response => {
-        if (response.ok) {
-          const copy = response.clone();
-          caches.open(CACHE).then(cache => cache.put(request, copy));
-        }
-        return response;
-      }))
+      fetch(request)
+        .then(response => {
+          if (response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE).then(cache => cache.put(request, copy));
+          }
+          return response;
+        })
+        .catch(() => caches.match(request))
     );
   }
 });

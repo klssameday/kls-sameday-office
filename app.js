@@ -324,12 +324,12 @@
   }
 
   function jobTable(rows) {
-    return table(['Job','Customer','Route','Vehicle','Price','Status','Invoice','Actions'], rows.map(j => [
+    return table(['Job','Customer','Route','Vehicle','Price','Status','Assigned driver','Actions'], rows.map(j => [
       `<button type="button" class="job-open-link" data-open-job="${j.id}">${esc(j.job_number || 'Pending')}</button>`,
       esc(j.customer_name || j.contact_name || ''), `${esc(j.collection_address)}<br><i>→ ${esc(j.delivery_address)}</i>`, esc(j.vehicle), money(j.total_price),
       `<select data-job-status="${j.id}">${['Booked','En Route to Collection','Arrived at Collection','Collected','In Transit','Arrived at Delivery','Delivered','Cancelled'].map(s => `<option ${j.job_status === s ? 'selected' : ''}>${s}</option>`).join('')}</select>`,
-      `<button data-invoice="${j.id}" ${j.job_status !== 'Delivered' ? 'disabled' : ''}>Create Invoice</button>`,
-      `<button type="button" class="primary" data-open-job="${j.id}">Open job</button>`
+      `<select class="job-driver-select" data-job-driver="${j.id}"><option value="">Unassigned</option>${state.drivers.map(d=>`<option value="${d.id}" ${j.assigned_driver_id===d.id?'selected':''}>${esc(d.name)}</option>`).join('')}</select>`,
+      `<div class="job-row-actions"><button type="button" class="primary" data-open-job="${j.id}">Open</button><button data-invoice="${j.id}" ${j.job_status !== 'Delivered' ? 'disabled' : ''}>Invoice</button></div>`
     ]));
   }
 
@@ -1409,6 +1409,30 @@
         showNotice(`${job.job_number || 'Job'} created.`, 'ok');
         await loadAll();
       } catch (error) { showNotice(error.message, 'error'); render(); }
+    });
+
+    document.querySelectorAll('[data-job-driver]').forEach(select => select.onchange = async () => {
+      const job = state.jobs.find(j => j.id === select.dataset.jobDriver);
+      if (!job) return;
+      const assigned_driver_id = select.value || null;
+      const driver = state.drivers.find(d => d.id === assigned_driver_id);
+      select.disabled = true;
+      try {
+        const payload = { assigned_driver_id, assigned_driver_name: driver?.name || null };
+        let { data, error } = await db.from('jobs').update(payload).eq('id', job.id).select().single();
+        if (error && /assigned_driver_name/i.test(error.message || '')) {
+          ({ data, error } = await db.from('jobs').update({ assigned_driver_id }).eq('id', job.id).select().single());
+        }
+        if (error) throw error;
+        Object.assign(job, data || payload);
+        showNotice(assigned_driver_id ? `${job.job_number || 'Job'} assigned to ${driver?.name || 'driver'}.` : `${job.job_number || 'Job'} unassigned.`, 'ok');
+      } catch (error) {
+        select.value = job.assigned_driver_id || '';
+        showNotice(error.message, 'error');
+      } finally {
+        select.disabled = false;
+        render();
+      }
     });
 
     document.querySelectorAll('[data-open-job]').forEach(button => button.onclick = () => { state.jobEditorId = button.dataset.openJob; render(); });

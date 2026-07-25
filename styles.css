@@ -187,3 +187,10 @@ input,textarea,select{border-color:#dedee2!important;background:#fff;transition:
 
 /* v26.13 Jobs detail and assignment */
 .job-open-link{appearance:none;border:0;background:transparent;color:#fff;padding:0;font-weight:900;text-decoration:underline;text-underline-offset:3px;cursor:pointer}.job-open-link:hover{opacity:.75}.job-editor-modal{max-width:900px}.job-editor-modal textarea{min-height:90px}
+
+
+/* v26.14 jobs controls: always visible, no hidden action column */
+.job-open-link{appearance:none;border:0;background:transparent;color:#fff;font-weight:900;text-decoration:underline;text-underline-offset:3px;padding:4px 0;cursor:pointer}
+.job-driver-select{min-width:150px;border:1px solid #52525b!important;border-radius:10px!important;padding:8px 10px!important;background:#18181b!important;color:#fff!important}
+.job-row-actions{display:flex;gap:7px;white-space:nowrap}.job-row-actions button{margin:0!important}
+@media(max-width:900px){.job-row-actions{flex-direction:column}.job-driver-select{min-width:130px}}

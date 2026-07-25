@@ -1,6 +1,7 @@
-# KLS SameDay v26.13 — Jobs Open & Assignment
+# KLS SameDay v26.14 — Jobs Assign Fix
 
-- Job numbers and Open job buttons now open a real job details modal.
-- Jobs can be assigned to a driver from the Jobs screen.
-- Collection, delivery, vehicle, status, price and goods details can be edited.
-- No Supabase migration required.
+- Assigned driver dropdown is now visible directly on every job row.
+- Assignment saves immediately to Supabase.
+- Open and Invoice actions are grouped in a visible Actions cell.
+- Existing Driver App and all office modules preserved.
+- No SQL migration required.

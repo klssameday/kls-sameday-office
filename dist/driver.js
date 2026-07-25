@@ -1,4 +1,4 @@
-// KLS SameDay Driver v26.12 — restore missing app view
+// KLS SameDay Driver v26.15 — POD and live office updates
 (() => {
   const raw = window.KLS_CONFIG || {};
   const root = document.getElementById('driver-app');
@@ -66,7 +66,7 @@
   }
 
   function podView(job){
-    return `<div class="pod-overlay"><section class="pod-sheet"><div class="pod-head"><div><small>PROOF OF DELIVERY</small><h2>${esc(job.job_number||'Job')}</h2></div><button data-close-pod>×</button></div><p class="tracking-note">Photo, signature and recipient name are required. Live tracking will stop only after all POD details are uploaded successfully.</p><form id="driver-pod-form" class="pod-form"><label>Recipient name<input name="recipient_name" required></label><label>Delivery photo<input name="photo" type="file" accept="image/*" capture="environment" required></label><label>Signature<canvas id="driver-signature" class="signature" width="700" height="280"></canvas></label><button class="btn secondary" type="button" data-clear-signature>Clear signature</button><label>Notes<textarea name="notes" rows="3"></textarea></label><div class="pod-actions"><button class="btn primary full">Upload POD & complete job</button><button class="btn secondary full" type="button" data-close-pod>Cancel</button></div></form></section></div>`;
+    return `<div class="pod-overlay"><section class="pod-sheet"><div class="pod-head"><div><small>PROOF OF DELIVERY</small><h2>${esc(job.job_number||'Job')}</h2></div><button data-close-pod>×</button></div><p class="tracking-note">Photo, signature and recipient name are required. Live tracking will stop only after all POD details are uploaded successfully.</p>${state.notice?`<div class="driver-msg ${state.notice.type}">${esc(state.notice.text)}</div>`:''}<form id="driver-pod-form" class="pod-form"><label>Recipient name<input name="recipient_name" required></label><label>Delivery photo<input name="photo" type="file" accept="image/*" required><small>Take a new photo or choose one from your photo library.</small></label><label>Signature<canvas id="driver-signature" class="signature" width="700" height="280"></canvas></label><button class="btn secondary" type="button" data-clear-signature>Clear signature</button><label>Notes<textarea name="notes" rows="3"></textarea></label><div class="pod-actions"><button class="btn primary full">Upload POD & complete job</button><button class="btn secondary full" type="button" data-close-pod>Cancel</button></div></form></section></div>`;
   }
 
 
@@ -193,6 +193,7 @@
       state.loading=false;
       state.notice=null;
       render();
+      startDriverPolling();
 
       Promise.allSettled([
         db.from('driver_network_jobs').select('*').order('created_at',{ascending:false}),
@@ -250,16 +251,71 @@
   async function upload(job,file,type){const ext=type==='signature'?'png':((file.name||'photo.jpg').split('.').pop()||'jpg');const path=`${state.user.id}/${job.id}/${type}-${Date.now()}.${ext}`;const{error}=await db.storage.from('pod').upload(path,file,{contentType:file.type||'image/jpeg'});if(error)throw error;return db.storage.from('pod').getPublicUrl(path).data.publicUrl;}
 
   async function completePod(e){
-    e.preventDefault();const job=state.podJob;const form=e.currentTarget;const btn=form.querySelector('button[type="submit"]');
+    e.preventDefault();
+    const job=state.podJob;
+    const form=e.currentTarget;
+    const btn=form.querySelector('button[type="submit"]');
     try{
+      if(!job)throw new Error('The delivery job could not be found. Close this screen and try again.');
       if(signatureIsBlank())throw new Error('Please obtain the recipient signature.');
-      btn.disabled=true;btn.textContent='Uploading POD…';
-      const fd=new FormData(form);const photo=fd.get('photo');if(!photo?.size)throw new Error('Please take a delivery photo.');
-      const photoUrl=await upload(job,photo,'photo');const blob=await new Promise(resolve=>signatureCanvas.toBlob(resolve,'image/png'));const signatureUrl=await upload(job,blob,'signature');const pos=await nowPosition().catch(()=>null);
-      const{error}=await db.rpc('driver_complete_job',{p_job_id:job.id,p_recipient_name:fd.get('recipient_name'),p_pod_notes:fd.get('notes')||null,p_photo_url:photoUrl,p_signature_url:signatureUrl,p_latitude:pos?.coords.latitude??null,p_longitude:pos?.coords.longitude??null});if(error)throw error;
-      job.job_status='Delivered';job.delivered_at=new Date().toISOString();job.recipient_name=fd.get('recipient_name');job.pod_photo_url=photoUrl;job.pod_signature_url=signatureUrl;state.podJob=null;stopTracking(false);notice(`${job.job_number||'Job'} delivered. POD has been sent back to the office.`,'ok');
-    }catch(error){btn.disabled=false;btn.textContent='Upload POD & complete job';notice(error.message,'error');}
+      const fd=new FormData(form);
+      const photo=fd.get('photo');
+      if(!photo?.size)throw new Error('Please take a delivery photo or choose one from your photo library.');
+      btn.disabled=true;btn.textContent='Uploading photo…';
+      state.notice=null;
+      const photoUrl=await upload(job,photo,'photo');
+      btn.textContent='Uploading signature…';
+      const blob=await new Promise(resolve=>signatureCanvas.toBlob(resolve,'image/png'));
+      if(!blob)throw new Error('The signature could not be prepared. Please clear it and sign again.');
+      const signatureUrl=await upload(job,blob,'signature');
+      btn.textContent='Completing job…';
+      const pos=await nowPosition().catch(()=>null);
+      const payload={
+        p_job_id:job.id,
+        p_recipient_name:String(fd.get('recipient_name')||'').trim(),
+        p_pod_notes:String(fd.get('notes')||'').trim()||null,
+        p_photo_url:photoUrl,
+        p_signature_url:signatureUrl,
+        p_latitude:pos?.coords.latitude??null,
+        p_longitude:pos?.coords.longitude??null
+      };
+      let {error}=await db.rpc('driver_complete_job',payload);
+      if(error && ['PGRST202','42883'].includes(error.code)){
+        const direct={
+          recipient_name:payload.p_recipient_name,
+          pod_notes:payload.p_pod_notes,
+          pod_photo_url:photoUrl,
+          pod_signature_url:signatureUrl,
+          job_status:'Delivered',
+          delivered_at:new Date().toISOString(),
+          pod_latitude:payload.p_latitude,
+          pod_longitude:payload.p_longitude
+        };
+        const result=await db.from('jobs').update(direct).eq('id',job.id).eq('assigned_driver_id',state.profile.linked_driver_id).select().maybeSingle();
+        error=result.error;
+      }
+      if(error)throw error;
+      Object.assign(job,{job_status:'Delivered',delivered_at:new Date().toISOString(),recipient_name:payload.p_recipient_name,pod_notes:payload.p_pod_notes,pod_photo_url:photoUrl,pod_signature_url:signatureUrl});
+      state.podJob=null;stopTracking(false);
+      notice(`${job.job_number||'Job'} delivered. POD has been sent back to the office.`,'ok');
+    }catch(error){
+      btn.disabled=false;btn.textContent='Upload POD & complete job';
+      state.notice={text:error?.message||'The POD could not be uploaded.',type:'error'};
+      render();
+    }
   }
+
+
+  let driverPollId=null;
+  async function refreshAssignedJobs(){
+    if(!db||!state.profile?.linked_driver_id||document.hidden)return;
+    const {data,error}=await db.from('jobs').select('*').eq('assigned_driver_id',state.profile.linked_driver_id).order('collection_date',{ascending:true});
+    if(error)return;
+    const before=JSON.stringify(state.jobs.map(j=>[j.id,j.job_status,j.updated_at,j.delivered_at,j.pod_photo_url]));
+    const after=JSON.stringify((data||[]).map(j=>[j.id,j.job_status,j.updated_at,j.delivered_at,j.pod_photo_url]));
+    if(before!==after){state.jobs=data||[];render();}
+  }
+  function startDriverPolling(){if(driverPollId)clearInterval(driverPollId);driverPollId=setInterval(refreshAssignedJobs,5000);}
 
   let authLoadToken = 0;
   function queueDriverLoad(){

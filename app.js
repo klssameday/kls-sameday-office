@@ -1077,7 +1077,7 @@
       state.settings = { ...defaults, ...(settings.data || {}) };
     } catch (error) {
       showNotice(`Database setup needed: ${error.message}`, 'error');
-    } finally { state.loading = false; render(); }
+    } finally { state.loading = false; render(); if(state.user&&!state.portalUser){startOfficeRealtime();startOfficePolling();} }
   }
 
   async function findOrCreateCustomer(data) {
@@ -1681,6 +1681,20 @@
     if(node && window.L){ const lat=Number(node.dataset.lat),lng=Number(node.dataset.lng); if(Number.isFinite(lat)&&Number.isFinite(lng)){ const map=L.map(node,{zoomControl:false,attributionControl:true}).setView([lat,lng],13); L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap'}).addTo(map); L.marker([lat,lng]).addTo(map).bindPopup('Latest driver location').openPopup(); setTimeout(()=>map.invalidateSize(),50); } }
     const countdown=document.querySelector('[data-eta]');
     if(countdown){ const update=()=>{ const ms=new Date(countdown.dataset.eta).getTime()-Date.now(); if(ms<=0){countdown.textContent='Estimated arrival time has passed — check the latest status above.';return;} const mins=Math.ceil(ms/60000); const h=Math.floor(mins/60),m=mins%60; countdown.textContent=`Estimated arrival in ${h?`${h} hr `:''}${m} min`; }; update(); setTimeout(update,60000); }
+  }
+
+  let officePollId=null;
+  function startOfficePolling(){
+    if(officePollId)clearInterval(officePollId);
+    officePollId=setInterval(async()=>{
+      if(!db||!state.user||state.portalUser||document.hidden)return;
+      const {data,error}=await db.from('jobs').select('*').order('created_at',{ascending:false});
+      if(error)return;
+      const next=(data||[]).map(j=>({...j,customer_name:j.customer_name||j.contact_name||''}));
+      const before=JSON.stringify(state.jobs.map(j=>[j.id,j.job_status,j.assigned_driver_id,j.updated_at,j.delivered_at,j.pod_photo_url]));
+      const after=JSON.stringify(next.map(j=>[j.id,j.job_status,j.assigned_driver_id,j.updated_at,j.delivered_at,j.pod_photo_url]));
+      if(before!==after){state.jobs=next;render();}
+    },5000);
   }
 
   function startOfficeRealtime() {

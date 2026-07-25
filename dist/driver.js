@@ -1,4 +1,4 @@
-// KLS SameDay Driver v26.10 — cache and missing RPC fallback
+// KLS SameDay Driver v26.12 — restore missing app view
 (() => {
   const raw = window.KLS_CONFIG || {};
   const root = document.getElementById('driver-app');
@@ -69,6 +69,36 @@
     return `<div class="pod-overlay"><section class="pod-sheet"><div class="pod-head"><div><small>PROOF OF DELIVERY</small><h2>${esc(job.job_number||'Job')}</h2></div><button data-close-pod>×</button></div><p class="tracking-note">Photo, signature and recipient name are required. Live tracking will stop only after all POD details are uploaded successfully.</p><form id="driver-pod-form" class="pod-form"><label>Recipient name<input name="recipient_name" required></label><label>Delivery photo<input name="photo" type="file" accept="image/*" capture="environment" required></label><label>Signature<canvas id="driver-signature" class="signature" width="700" height="280"></canvas></label><button class="btn secondary" type="button" data-clear-signature>Clear signature</button><label>Notes<textarea name="notes" rows="3"></textarea></label><div class="pod-actions"><button class="btn primary full">Upload POD & complete job</button><button class="btn secondary full" type="button" data-close-pod>Cancel</button></div></form></section></div>`;
   }
 
+
+  function appView(){
+    const driverName=state.profile?.driver_name || 'Driver';
+    const vehicle=state.profile?.driver_vehicle || 'Vehicle not set';
+    const jobsHtml=state.jobs.length
+      ? `<div class="job-list">${state.jobs.map(jobCard).join('')}</div>`
+      : `<div class="empty"><strong>No assigned jobs</strong><p>Jobs assigned by KLS will appear here.</p></div>`;
+    const mainContent=state.tab==='exchange' ? exchangeView() : jobsHtml;
+    return `<div class="driver-shell">
+      <header class="driver-top">
+        <div><strong>KLS Driver</strong><small>${esc(driverName)} · ${esc(vehicle)}</small></div>
+        <button class="btn secondary" data-signout>Sign out</button>
+      </header>
+      <main class="driver-main">
+        ${state.notice?`<div class="driver-msg ${state.notice.type}">${esc(state.notice.text)}</div>`:''}
+        <section class="driver-welcome">
+          <small>KLS SAMEDAY</small>
+          <h1>Hello, ${esc(driverName)}</h1>
+          <p>${state.jobs.length ? `${state.jobs.length} assigned job${state.jobs.length===1?'':'s'}` : 'You have no assigned jobs right now.'}</p>
+        </section>
+        <nav class="driver-tabs">
+          <button class="btn ${state.tab==='jobs'?'primary':'secondary'}" data-driver-tab="jobs">My jobs</button>
+          <button class="btn ${state.tab==='exchange'?'primary':'secondary'}" data-driver-tab="exchange">Driver Exchange</button>
+        </nav>
+        ${mainContent}
+        ${state.podJob?podView(state.podJob):''}
+      </main>
+    </div>`;
+  }
+
   function render(){
     if(state.loading){root.innerHTML='<div class="driver-loading">Loading KLS Driver…</div>';return;}
     if(!state.user){root.innerHTML=authView();bindAuth();return;}
@@ -119,7 +149,7 @@
       // authenticated Supabase user to the driver record. No RPC is required.
       const driverResult = await withTimeout(
         db.from('drivers')
-          .select('id,user_id,name,phone,vehicle,active')
+          .select('id,user_id,name,phone,vehicle')
           .eq('user_id',state.user.id)
           .maybeSingle(),
         10000,
@@ -132,14 +162,6 @@
         state.loading=false;
         state.profile=null;
         state.notice={text:`No driver record is linked to ${state.user.email}. In Driver Control, make sure this login is linked to the driver.`,type:'error'};
-        render();
-        return;
-      }
-
-      if(driver.active===false){
-        state.loading=false;
-        state.profile=null;
-        state.notice={text:'This driver account is inactive. Ask the office to activate it.',type:'error'};
         render();
         return;
       }

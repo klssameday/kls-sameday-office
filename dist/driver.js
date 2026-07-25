@@ -96,7 +96,7 @@
     try{
       const {data:claimed,error:claimError}=await db.rpc('claim_my_driver_account');
       if(claimError)throw claimError;
-      state.profile=Array.isArray(claimed)?claimed[0]:claimed;
+      state.profile=Array.isArray(claimed)?claimed[0]:claimed;if(state.profile&&!state.profile.linked_driver_id)state.profile.linked_driver_id=state.profile.driver_id;
       if(state.profile){const[{data,error},{data:network,error:networkError},{data:bids,error:bidsError}]=await Promise.all([db.rpc('get_my_driver_jobs'),db.from('driver_network_jobs').select('*').order('created_at',{ascending:false}),db.from('driver_network_offers').select('*').eq('driver_id',state.profile.linked_driver_id).order('submitted_at',{ascending:false})]);if(error)throw error;if(networkError)throw networkError;if(bidsError)throw bidsError;state.jobs=data||[];state.networkJobs=network||[];state.myBids=bids||[];const active=state.jobs.find(j=>['En Route to Collection','Arrived at Collection','Collected','In Transit','Arrived at Delivery'].includes(j.job_status));if(active)startTracking(active.id,false);}
     }catch(error){state.notice={text:error.message,type:'error'};}
     state.loading=false;render();

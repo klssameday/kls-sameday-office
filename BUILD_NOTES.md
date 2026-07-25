@@ -1,11 +1,8 @@
-# KLS SameDay Platform v26.5
+# KLS SameDay Platform v26.6
 
-## Fixes
-- Repairs a Driver App login when the office and driver use the same authenticated email.
-- New driver links now attach the current authenticated user automatically when emails match.
-- Added an Activate my login recovery action.
-- Restored clear, visible Driver Control action buttons.
-- Added an Open app button to every driver card.
-
-## Database
-No migration required.
+- Repairs stale Driver App account links by authenticated email.
+- Adds a clearly visible Add Driver button at the top of Driver Control.
+- Keeps the Add Driver submit button visible at all screen sizes.
+- Adds a manual Relink this login control.
+- Normalises driver profile IDs in the separate Driver App.
+- Includes one Supabase SQL migration that must be run once.

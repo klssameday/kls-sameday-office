@@ -178,3 +178,6 @@ input,textarea,select{border-color:#dedee2!important;background:#fff;transition:
 .driver-control-card footer .danger{display:inline-flex!important;align-items:center;justify-content:center;background:#dc2626!important;color:#fff!important;opacity:1!important;visibility:visible!important}
 .driver-control-card footer button,.driver-control-card footer a{min-height:38px;padding:9px 13px;font-size:12px;font-weight:900;border-radius:10px}
 @media(max-width:700px){.driver-control-card footer{display:grid;grid-template-columns:1fr 1fr}.driver-control-card footer>*{width:100%;min-width:0}}
+
+/* v26.6 driver linking and visible add controls */
+.driver-hero-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.driver-hero-actions .secondary{background:#27272a!important;color:#fff!important;border:1px solid #52525b!important}.driver-add-submit{display:flex!important;width:100%;min-height:46px;align-items:center;justify-content:center;background:#fff!important;color:#111!important;border:1px solid #d4d4d8!important;font-size:14px!important;margin-top:4px;visibility:visible!important;opacity:1!important}.driver-admin-form{overflow:visible}.driver-control-grid .panel{overflow:visible}@media(max-width:700px){.driver-hero-actions{width:100%;display:grid;grid-template-columns:1fr}.driver-hero-actions>*{width:100%}}

@@ -6,7 +6,7 @@ const out = path.join(root, 'dist');
 fs.rmSync(out, { recursive: true, force: true });
 fs.mkdirSync(out, { recursive: true });
 
-for (const file of ['index.html', 'offline.html', 'app.js', 'styles.css', 'manifest.json', 'sw.js']) {
+for (const file of ['index.html', 'offline.html', 'app.js', 'styles.css', 'manifest.json', 'sw.js', 'driver.html', 'driver.css', 'driver.js']) {
   fs.copyFileSync(path.join(root, file), path.join(out, file));
 }
 
@@ -22,4 +22,4 @@ fs.writeFileSync(
   'utf8'
 );
 
-console.log('Built KLS SameDay Office v23 Driver Mode to dist/');
+console.log('Built KLS SameDay Platform 3.1 Driver Exchange to dist/');

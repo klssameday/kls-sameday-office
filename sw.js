@@ -1,4 +1,4 @@
-const CACHE = 'kls-office-v24-driver-only';
+const CACHE = 'kls-office-v31-driver-exchange';
 const APP_SHELL = [
   '/', '/index.html', '/offline.html', '/styles.css', '/app.js', '/manifest.json',
   '/driver.html', '/driver.css', '/driver.js',

@@ -655,16 +655,104 @@
   }
 
   function driverExchangeView() {
-    const openJobs = state.exchangeJobs.filter(j => j.status === 'Open');
-    const awardedJobs = state.exchangeJobs.filter(j => j.status === 'Awarded');
-    const withdrawnJobs = state.exchangeJobs.filter(j => j.status === 'Withdrawn');
-    const jobOptions = state.jobs.filter(j => !['Delivered','Cancelled'].includes(j.job_status)).map(j => `<option value="${j.id}">${esc(j.job_number || 'Job')} · ${esc(j.collection_address || '')} → ${esc(j.delivery_address || '')}</option>`).join('');
+    const statusLabel = value => ({
+      open:'Open', awarded:'Awarded', accepted:'Accepted',
+      withdrawn:'Withdrawn', completed:'Completed', draft:'Draft'
+    }[String(value||'').toLowerCase()] || value || 'Unknown');
+
+    const offerLabel = value => ({
+      submitted:'Submitted', awarded:'Awarded', accepted:'Accepted',
+      not_awarded:'Not Awarded', declined:'Declined', withdrawn:'Withdrawn'
+    }[String(value||'').toLowerCase()] || value || 'Unknown');
+
+    const openJobs = state.exchangeJobs.filter(j => j.status === 'open');
+    const awardedJobs = state.exchangeJobs.filter(j => ['awarded','accepted'].includes(j.status));
+    const withdrawnJobs = state.exchangeJobs.filter(j => j.status === 'withdrawn');
+    const submittedOffers = state.exchangeBids.filter(b => b.offer_status === 'submitted');
+
+    const jobOptions = state.jobs
+      .filter(j => !['Delivered','Cancelled'].includes(j.job_status))
+      .map(j => `<option value="${j.id}">${esc(j.job_number || 'Job')} · ${esc(j.collection_address || '')} → ${esc(j.delivery_address || '')}</option>`)
+      .join('');
+
     const cards = state.exchangeJobs.length ? state.exchangeJobs.map(job => {
-      const bids = state.exchangeBids.filter(b => b.network_job_id === job.id).sort((a,b)=>Number(a.amount)-Number(b.amount));
-      const bidRows = bids.length ? bids.map(b => `<article class="exchange-bid ${b.status==='Awarded'?'winner':''}"><div><b>${esc(b.driver_name || 'Driver')}</b><small>${esc(b.vehicle || 'Vehicle not set')}${b.registration ? ` · ${esc(b.registration)}` : ''}</small>${b.message ? `<p>${esc(b.message)}</p>` : ''}</div><strong>${money(b.amount)}</strong>${job.status==='Open' ? `<button class="primary" data-award-bid="${b.id}">Award job</button>` : `<span class="status ${b.status==='Awarded'?'paid':'draft'}">${esc(b.status)}</span>`}</article>`).join('') : '<div class="fleet-empty">No offers received yet.</div>';
-      return `<article class="exchange-job"><header><div><small>${esc(job.vehicle_required || 'Any vehicle')} · ${fmtDate(job.collection_date)} ${esc(String(job.collection_time||'').slice(0,5))}</small><h3>${esc(job.collection_area || 'Collection')} → ${esc(job.delivery_area || 'Delivery')}</h3></div><span class="exchange-status ${String(job.status).toLowerCase()}">${esc(job.status)}</span></header><div class="exchange-route"><p><small>COLLECTION</small>${esc(job.collection_area || '')}</p><p><small>DELIVERY</small>${esc(job.delivery_area || '')}</p></div><div class="exchange-meta"><span>${Number(job.approx_miles||0).toFixed(0)} miles</span><span>${esc(job.load_description || 'Load details not entered')}</span>${job.weight_kg ? `<span>${esc(job.weight_kg)} kg</span>` : ''}</div>${job.notes ? `<p class="exchange-notes">${esc(job.notes)}</p>` : ''}<section class="exchange-offers"><h4>Driver offers (${bids.length})</h4>${bidRows}</section>${job.status==='Open' ? `<footer><button class="danger" data-withdraw-network="${job.id}">Withdraw job</button></footer>` : ''}</article>`;
+      const offers = state.exchangeBids
+        .filter(b => b.network_job_id === job.id)
+        .sort((a,b)=>Number(a.offer_amount)-Number(b.offer_amount));
+
+      const offerRows = offers.length ? offers.map(offer => {
+        const won = ['awarded','accepted'].includes(offer.offer_status);
+        return `<article class="exchange-bid ${won?'winner':''}">
+          <div>
+            <b>${esc(offer.driver_name || 'Driver')}</b>
+            <small>${esc(offer.driver_vehicle || 'Vehicle not set')}${offer.vehicle_registration ? ` · ${esc(offer.vehicle_registration)}` : ''}</small>
+            ${offer.message ? `<p>${esc(offer.message)}</p>` : ''}
+          </div>
+          <strong>${money(offer.offer_amount)}</strong>
+          ${job.status==='open' && offer.offer_status==='submitted'
+            ? `<button class="primary" data-award-offer="${offer.offer_id}">Award job</button>`
+            : `<span class="status ${won?'paid':'draft'}">${esc(offerLabel(offer.offer_status))}</span>`}
+        </article>`;
+      }).join('') : '<div class="fleet-empty">No offers received yet.</div>';
+
+      const collectionWhen = job.collection_at ? new Date(job.collection_at) : null;
+      const dateText = collectionWhen && !Number.isNaN(collectionWhen.valueOf())
+        ? `${collectionWhen.toLocaleDateString('en-GB')} ${collectionWhen.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}`
+        : 'Time TBC';
+
+      return `<article class="exchange-job">
+        <header>
+          <div>
+            <small>${esc(job.vehicle_required || 'Any vehicle')} · ${esc(dateText)}</small>
+            <h3>${esc(job.collection_postcode || job.collection_address || 'Collection')} → ${esc(job.delivery_postcode || job.delivery_address || 'Delivery')}</h3>
+          </div>
+          <span class="exchange-status ${String(job.status).toLowerCase()}">${esc(statusLabel(job.status))}</span>
+        </header>
+        <div class="exchange-route">
+          <p><small>COLLECTION</small>${esc(job.collection_address || '')}</p>
+          <p><small>DELIVERY</small>${esc(job.delivery_address || '')}</p>
+        </div>
+        <div class="exchange-meta">
+          <span>${Number(job.mileage||0).toFixed(0)} miles</span>
+          <span>${esc(job.goods_description || 'Load details not entered')}</span>
+          ${job.weight_kg ? `<span>${esc(job.weight_kg)} kg</span>` : ''}
+        </div>
+        ${job.notes ? `<p class="exchange-notes">${esc(job.notes)}</p>` : ''}
+        <section class="exchange-offers"><h4>Driver offers (${offers.length})</h4>${offerRows}</section>
+        ${job.status==='open' ? `<footer><button class="danger" data-withdraw-network="${job.id}">Withdraw job</button></footer>` : ''}
+      </article>`;
     }).join('') : '<div class="fleet-empty">No jobs have been posted to your driver network.</div>';
-    return `<section class="fleet-hero exchange-hero"><div><small>PRIVATE KLS DRIVER NETWORK</small><h2>Driver Exchange</h2><p>Post work to approved drivers, receive offers and choose who gets the job. Customer prices remain private.</p></div><strong>${openJobs.length} open</strong></section><section class="exchange-layout"><div>${panel('Post a job to the network',`<form id="network-job-form"><label>Link an existing KLS job (optional)<select name="source_job_id"><option value="">Standalone network job</option>${jobOptions}</select></label><div class="grid two"><label>Collection area or outward postcode<input name="collection_area" required></label><label>Delivery area or outward postcode<input name="delivery_area" required></label><label>Collection date<input name="collection_date" type="date" value="${todayISO()}" required></label><label>Collection time<input name="collection_time" type="time"></label><label>Vehicle required<select name="vehicle_required"><option>Small Van</option><option>Medium Van</option><option>LWB</option><option>XLWB</option><option>Luton</option><option selected>Luton Tail Lift</option><option>Any suitable vehicle</option></select></label><label>Approx. mileage<input name="approx_miles" type="number" min="0" step="1"></label><label>Weight (kg)<input name="weight_kg" type="number" min="0" step="1"></label><label>Load description<input name="load_description"></label></div><label>Driver notes<textarea name="notes" rows="3"></textarea></label><div class="actions"><button class="primary">Send to Driver Network</button></div></form>`,'Drivers do not see the customer charge, your costs or your margin.')}</div><aside class="exchange-summary">${card('Open jobs',openJobs.length,'Waiting for offers')}${card('Offers',state.exchangeBids.filter(b=>b.status==='Submitted').length,'Awaiting your choice')}${card('Awarded',awardedJobs.length,'Given to drivers')}${card('Withdrawn',withdrawnJobs.length,'No longer available')}</aside></section>${panel('Network jobs',`<div class="exchange-job-list">${cards}</div>`,'Jobs stay open until you award or withdraw them. There is no bid-closing time.')}`;
+
+    return `<section class="fleet-hero exchange-hero">
+      <div><small>PRIVATE KLS DRIVER NETWORK</small><h2>Driver Exchange</h2><p>Post work to approved drivers, receive offers and choose who gets the job. Customer prices remain private.</p></div>
+      <strong>${openJobs.length} open</strong>
+    </section>
+    <section class="exchange-layout">
+      <div>${panel('Post a job to the network',`<form id="network-job-form">
+        <label>Link an existing KLS job (optional)<select name="linked_job_id"><option value="">Standalone network job</option>${jobOptions}</select></label>
+        <div class="grid two">
+          <label>Collection address or area<input name="collection_address" required></label>
+          <label>Collection postcode<input name="collection_postcode"></label>
+          <label>Delivery address or area<input name="delivery_address" required></label>
+          <label>Delivery postcode<input name="delivery_postcode"></label>
+          <label>Collection date<input name="collection_date" type="date" value="${todayISO()}" required></label>
+          <label>Collection time<input name="collection_time" type="time"></label>
+          <label>Vehicle required<select name="vehicle_required"><option>Small Van</option><option>Medium Van</option><option>LWB</option><option>XLWB</option><option>Luton</option><option selected>Luton Tail Lift</option><option>Any suitable vehicle</option></select></label>
+          <label>Approx. mileage<input name="mileage" type="number" min="0" step="1"></label>
+          <label>Weight (kg)<input name="weight_kg" type="number" min="0" step="1"></label>
+          <label>Load description<input name="goods_description"></label>
+        </div>
+        <label>Driver notes<textarea name="notes" rows="3"></textarea></label>
+        <div class="actions"><button class="primary">Send to Driver Network</button></div>
+      </form>`,'Drivers do not see the customer charge, your costs or your margin.')}</div>
+      <aside class="exchange-summary">
+        ${card('Open jobs',openJobs.length,'Waiting for offers')}
+        ${card('Offers',submittedOffers.length,'Awaiting your choice')}
+        ${card('Awarded',awardedJobs.length,'Given to drivers')}
+        ${card('Withdrawn',withdrawnJobs.length,'No longer available')}
+      </aside>
+    </section>
+    ${panel('Network jobs',`<div class="exchange-job-list">${cards}</div>`,'Jobs stay open until you award or withdraw them. There is no bid-closing time.')}`;
   }
 
   function settingsView() {
@@ -799,7 +887,7 @@
         quoteRequests: db.from('public_quote_requests').select('*').order('created_at', { ascending: false }),
         driverAccounts: db.from('driver_accounts').select('*').order('created_at', { ascending: false }),
         exchangeJobs: db.from('driver_network_jobs').select('*').order('created_at', { ascending: false }),
-        exchangeBids: db.from('driver_bid_details').select('*').order('created_at', { ascending: false }),
+        exchangeBids: db.from('driver_network_offer_summary').select('*').order('submitted_at', { ascending: false }),
         settings: db.from('business_settings').select('*').maybeSingle()
       };
       const queryNames = Object.keys(queries);
@@ -877,6 +965,61 @@
   }
 
   function bindApp() {
+    const networkForm = document.getElementById('network-job-form');
+    if (networkForm) networkForm.onsubmit = async event => {
+      event.preventDefault();
+      const button = networkForm.querySelector('button.primary');
+      const values = Object.fromEntries(new FormData(networkForm));
+      try {
+        button.disabled = true; button.textContent = 'Posting…';
+        const collectionAt = values.collection_date
+          ? new Date(`${values.collection_date}T${values.collection_time || '09:00'}:00`).toISOString()
+          : null;
+        const { error } = await db.rpc('office_create_network_job', {
+          p_linked_job_id: values.linked_job_id || null,
+          p_reference: null,
+          p_collection_company: null,
+          p_collection_address: values.collection_address,
+          p_collection_postcode: values.collection_postcode || null,
+          p_collection_contact_name: null,
+          p_collection_contact_phone: null,
+          p_delivery_company: null,
+          p_delivery_address: values.delivery_address,
+          p_delivery_postcode: values.delivery_postcode || null,
+          p_delivery_contact_name: null,
+          p_delivery_contact_phone: null,
+          p_collection_at: collectionAt,
+          p_vehicle_required: values.vehicle_required,
+          p_goods_description: values.goods_description || null,
+          p_quantity: null,
+          p_weight_kg: values.weight_kg ? Number(values.weight_kg) : null,
+          p_mileage: values.mileage ? Number(values.mileage) : null,
+          p_notes: values.notes || null,
+          p_customer_price: null,
+          p_status: 'open'
+        });
+        if (error) throw error;
+        await loadAll(); state.page='exchange';
+        showNotice('Job sent to your driver network.','ok'); render();
+      } catch (error) {
+        button.disabled = false; button.textContent = 'Send to Driver Network';
+        showNotice(error.message,'error'); render();
+      }
+    };
+
+    document.querySelectorAll('[data-award-offer]').forEach(button => button.onclick = async () => {
+      if (!confirm('Award this job to the selected driver?')) return;
+      const { error } = await db.rpc('office_award_network_offer',{p_offer_id:button.dataset.awardOffer});
+      if (error) { showNotice(error.message,'error'); render(); return; }
+      await loadAll(); state.page='exchange'; showNotice('Job awarded to the driver.','ok'); render();
+    });
+
+    document.querySelectorAll('[data-withdraw-network]').forEach(button => button.onclick = async () => {
+      const reason = prompt('Reason for withdrawing the job (optional):') || null;
+      const { error } = await db.rpc('office_withdraw_network_job',{p_network_job_id:button.dataset.withdrawNetwork,p_reason:reason});
+      if (error) { showNotice(error.message,'error'); render(); return; }
+      await loadAll(); state.page='exchange'; showNotice('Network job withdrawn.','ok'); render();
+    });
     document.querySelectorAll('[data-page]').forEach(button => button.onclick = () => { state.page = button.dataset.page; render(); });
     document.getElementById('route-date')?.addEventListener('change', event => { state.routeDate = event.target.value || todayISO(); render(); });
     document.querySelectorAll('[data-route-job]').forEach(card => {

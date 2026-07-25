@@ -1,9 +1,8 @@
-# KLS SameDay Platform v26.8
+# KLS SameDay v26.9
 
-## Driver sign-in URL fix
-- Normalises the Supabase project URL during the Vercel build.
-- Removes accidental `/rest/v1`, `/auth/v1` or other paths from a valid project API URL.
-- Converts a pasted Supabase dashboard project URL into the correct `https://PROJECT-REF.supabase.co` API URL.
-- Rejects unrelated or malformed URLs instead of sending broken authentication requests.
-- Adds a clearer Driver App configuration error.
+## Driver sign-in loading fix
+- Prevents a Supabase authentication callback deadlock after sign-in.
+- Loads driver profile and jobs only after the auth callback has completed.
+- Adds a 15-second timeout with a visible error instead of an endless loading screen.
+- Keeps the v26.8 URL validation and drivers.user_id linking fallback.
 - No Supabase SQL migration required.

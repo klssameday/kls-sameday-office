@@ -195,11 +195,48 @@
     }catch(error){btn.disabled=false;btn.textContent='Upload POD & complete job';notice(error.message,'error');}
   }
 
+  let authLoadToken = 0;
+  function queueDriverLoad(){
+    const token=++authLoadToken;
+    state.loading=true;render();
+    // Supabase warns against awaiting further Supabase calls inside
+    // onAuthStateChange. Run the profile/job loading after the callback exits.
+    setTimeout(async()=>{
+      if(token!==authLoadToken||!state.user)return;
+      try{
+        await Promise.race([
+          loadDriver(),
+          new Promise((_,reject)=>setTimeout(()=>reject(new Error('Driver account loading timed out. Refresh and try again.')),15000))
+        ]);
+      }catch(error){
+        if(token!==authLoadToken)return;
+        state.loading=false;
+        state.notice={text:error.message||'Unable to load the Driver App.',type:'error'};
+        render();
+      }
+    },0);
+  }
+
   async function init(){
     if(!db){state.loading=false;state.notice={text:'Supabase URL or anon key is invalid. Check the Vercel environment variables and redeploy.',type:'error'};render();return;}
-    const{data:{session}}=await db.auth.getSession();state.user=session?.user||null;
-    db.auth.onAuthStateChange(async(_event,sessionNow)=>{state.user=sessionNow?.user||null;if(state.user)await loadDriver();else{stopTracking(false);state.profile=null;state.jobs=[];state.loading=false;render();}});
-    if(state.user)await loadDriver();else{state.loading=false;render();}
+    try{
+      const{data:{session},error}=await db.auth.getSession();
+      if(error)throw error;
+      state.user=session?.user||null;
+    }catch(error){
+      state.loading=false;state.notice={text:error.message||'Unable to read the saved login.',type:'error'};render();return;
+    }
+
+    db.auth.onAuthStateChange((_event,sessionNow)=>{
+      state.user=sessionNow?.user||null;
+      if(state.user){queueDriverLoad();}
+      else{
+        authLoadToken++;
+        stopTracking(false);state.profile=null;state.jobs=[];state.loading=false;render();
+      }
+    });
+
+    if(state.user)queueDriverLoad();else{state.loading=false;render();}
   }
   init();
 })();

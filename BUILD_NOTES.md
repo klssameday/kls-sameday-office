@@ -1,8 +1,6 @@
-# KLS SameDay v26.9
+# KLS SameDay v26.10 — Driver App Loading Fix
 
-## Driver sign-in loading fix
-- Prevents a Supabase authentication callback deadlock after sign-in.
-- Loads driver profile and jobs only after the auth callback has completed.
-- Adds a 15-second timeout with a visible error instead of an endless loading screen.
-- Keeps the v26.8 URL validation and drivers.user_id linking fallback.
-- No Supabase SQL migration required.
+- Bumped Driver App asset versions and service-worker cache so Safari cannot keep serving v26.7.
+- Added direct jobs-table fallback when `get_my_driver_jobs` is not installed.
+- Made Driver Exchange tables optional so they cannot prevent the core Driver App loading.
+- No Supabase SQL migration required for the current linked Mark King driver account.

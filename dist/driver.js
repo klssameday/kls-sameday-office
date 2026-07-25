@@ -1,3 +1,4 @@
+// KLS SameDay Driver v26.10 — cache and missing RPC fallback
 (() => {
   const raw = window.KLS_CONFIG || {};
   const root = document.getElementById('driver-app');
@@ -131,15 +132,34 @@
 
       if(state.profile&&!state.profile.linked_driver_id)state.profile.linked_driver_id=state.profile.driver_id;
       if(state.profile){
-        const [{data,error},{data:network,error:networkError},{data:bids,error:bidsError}]=await Promise.all([
-          db.rpc('get_my_driver_jobs'),
-          db.from('driver_network_jobs').select('*').order('created_at',{ascending:false}),
-          db.from('driver_network_offers').select('*').eq('driver_id',state.profile.linked_driver_id).order('submitted_at',{ascending:false})
-        ]);
-        if(error)throw error;
-        if(networkError)throw networkError;
-        if(bidsError)throw bidsError;
-        state.jobs=data||[];state.networkJobs=network||[];state.myBids=bids||[];
+        // Load assigned jobs. Older databases may not have the
+        // get_my_driver_jobs RPC, so fall back to the jobs table.
+        let jobs=[];
+        const rpcJobs=await db.rpc('get_my_driver_jobs');
+        if(!rpcJobs.error){
+          jobs=rpcJobs.data||[];
+        }else{
+          const message=String(rpcJobs.error.message||'');
+          const missingRpc=message.includes('get_my_driver_jobs')||message.includes('schema cache')||message.includes('Could not find the function');
+          if(!missingRpc)throw rpcJobs.error;
+          const directJobs=await db
+            .from('jobs')
+            .select('*')
+            .eq('assigned_driver_id',state.profile.linked_driver_id)
+            .order('collection_date',{ascending:true});
+          if(directJobs.error)throw directJobs.error;
+          jobs=directJobs.data||[];
+        }
+
+        // Driver Exchange is optional. A missing table or policy must not stop
+        // the core Driver App from opening and showing assigned jobs.
+        let network=[]; let bids=[];
+        const networkResult=await db.from('driver_network_jobs').select('*').order('created_at',{ascending:false});
+        if(!networkResult.error)network=networkResult.data||[];
+        const bidsResult=await db.from('driver_network_offers').select('*').eq('driver_id',state.profile.linked_driver_id).order('submitted_at',{ascending:false});
+        if(!bidsResult.error)bids=bidsResult.data||[];
+
+        state.jobs=jobs;state.networkJobs=network;state.myBids=bids;
         const active=state.jobs.find(j=>['En Route to Collection','Arrived at Collection','Collected','In Transit','Arrived at Delivery'].includes(j.job_status));
         if(active)startTracking(active.id,false);
       }

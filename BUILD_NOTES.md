@@ -1,8 +1,8 @@
-# KLS SameDay Platform v26.6
+# KLS SameDay Platform v26.7
 
-- Repairs stale Driver App account links by authenticated email.
-- Adds a clearly visible Add Driver button at the top of Driver Control.
-- Keeps the Add Driver submit button visible at all screen sizes.
-- Adds a manual Relink this login control.
-- Normalises driver profile IDs in the separate Driver App.
-- Includes one Supabase SQL migration that must be run once.
+## Driver link repair
+- Driver App now falls back to the existing `drivers.user_id` link when the driver account claim record is unavailable or stale.
+- This matches the live Supabase drivers table and removes the false “Account not linked” screen for a valid user.
+- Added a permanently visible Add driver button in the Driver Control panel header.
+- Preserved the existing bottom Add Driver & Link Login button.
+- No SQL migration is required for this release.

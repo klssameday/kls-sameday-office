@@ -94,10 +94,52 @@
   async function loadDriver(){
     state.loading=true;render();
     try{
+      state.profile=null;
+
+      // Preferred link: the secure driver_accounts claim function.
       const {data:claimed,error:claimError}=await db.rpc('claim_my_driver_account');
-      if(claimError)throw claimError;
-      state.profile=Array.isArray(claimed)?claimed[0]:claimed;if(state.profile&&!state.profile.linked_driver_id)state.profile.linked_driver_id=state.profile.driver_id;
-      if(state.profile){const[{data,error},{data:network,error:networkError},{data:bids,error:bidsError}]=await Promise.all([db.rpc('get_my_driver_jobs'),db.from('driver_network_jobs').select('*').order('created_at',{ascending:false}),db.from('driver_network_offers').select('*').eq('driver_id',state.profile.linked_driver_id).order('submitted_at',{ascending:false})]);if(error)throw error;if(networkError)throw networkError;if(bidsError)throw bidsError;state.jobs=data||[];state.networkJobs=network||[];state.myBids=bids||[];const active=state.jobs.find(j=>['En Route to Collection','Arrived at Collection','Collected','In Transit','Arrived at Delivery'].includes(j.job_status));if(active)startTracking(active.id,false);}
+      if(!claimError){
+        state.profile=Array.isArray(claimed)?claimed[0]:claimed;
+      }
+
+      // Reliable fallback for the existing KLS schema: drivers.user_id stores
+      // the authenticated Supabase user ID. This prevents a valid linked driver
+      // being rejected just because driver_accounts or the claim RPC is stale.
+      if(!state.profile && state.user?.id){
+        const {data:driver,error:driverError}=await db
+          .from('drivers')
+          .select('id,user_id,name,phone,vehicle,active')
+          .eq('user_id',state.user.id)
+          .neq('active',false)
+          .maybeSingle();
+        if(driverError)throw driverError;
+        if(driver){
+          state.profile={
+            account_id:null,
+            owner_id:driver.user_id,
+            driver_id:driver.id,
+            linked_driver_id:driver.id,
+            driver_name:driver.name,
+            driver_phone:driver.phone,
+            driver_vehicle:driver.vehicle
+          };
+        }
+      }
+
+      if(state.profile&&!state.profile.linked_driver_id)state.profile.linked_driver_id=state.profile.driver_id;
+      if(state.profile){
+        const [{data,error},{data:network,error:networkError},{data:bids,error:bidsError}]=await Promise.all([
+          db.rpc('get_my_driver_jobs'),
+          db.from('driver_network_jobs').select('*').order('created_at',{ascending:false}),
+          db.from('driver_network_offers').select('*').eq('driver_id',state.profile.linked_driver_id).order('submitted_at',{ascending:false})
+        ]);
+        if(error)throw error;
+        if(networkError)throw networkError;
+        if(bidsError)throw bidsError;
+        state.jobs=data||[];state.networkJobs=network||[];state.myBids=bids||[];
+        const active=state.jobs.find(j=>['En Route to Collection','Arrived at Collection','Collected','In Transit','Arrived at Delivery'].includes(j.job_status));
+        if(active)startTracking(active.id,false);
+      }
     }catch(error){state.notice={text:error.message,type:'error'};}
     state.loading=false;render();
   }

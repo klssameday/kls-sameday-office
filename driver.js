@@ -72,7 +72,7 @@
   function render(){
     if(state.loading){root.innerHTML='<div class="driver-loading">Loading KLS Driver…</div>';return;}
     if(!state.user){root.innerHTML=authView();bindAuth();return;}
-    if(!state.profile){root.innerHTML=`<div class="driver-auth"><section class="driver-auth-card"><div class="driver-brand"><b>KLS</b><span>Driver</span></div><h1>Account not linked</h1><p>Ask the KLS office to add this exact login email to your driver record:</p><div class="driver-msg error">${esc(state.user.email)}</div><button class="btn secondary full" data-signout>Sign out</button></section></div>`;bindCommon();return;}
+    if(!state.profile){root.innerHTML=`<div class="driver-auth"><section class="driver-auth-card"><div class="driver-brand"><b>KLS</b><span>Driver</span></div><h1>Account not linked</h1>${state.notice?`<div class="driver-msg ${state.notice.type}">${esc(state.notice.text)}</div>`:`<p>Ask the KLS office to link this exact login email to your driver record:</p><div class="driver-msg error">${esc(state.user.email)}</div>`}<button class="btn secondary full" data-signout>Sign out</button></section></div>`;bindCommon();return;}
     root.innerHTML=appView();bindApp();
   }
 
@@ -95,76 +95,100 @@
     document.getElementById('driver-pod-form')?.addEventListener('submit',completePod);
   }
 
+  const withTimeout = (promise, ms, label) => Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(`${label} timed out. Please refresh and try again.`)), ms))
+  ]);
+
+  function loadingStage(text){
+    state.loading=true;
+    root.innerHTML=`<div class="driver-loading">${esc(text)}</div>`;
+  }
+
   async function loadDriver(){
-    state.loading=true;render();
     try{
+      loadingStage('Checking driver account…');
       state.profile=null;
+      state.jobs=[];
+      state.networkJobs=[];
+      state.myBids=[];
 
-      // Preferred link: the secure driver_accounts claim function.
-      const {data:claimed,error:claimError}=await db.rpc('claim_my_driver_account');
-      if(!claimError){
-        state.profile=Array.isArray(claimed)?claimed[0]:claimed;
-      }
+      if(!state.user?.id) throw new Error('No signed-in user was found. Please sign out and sign in again.');
 
-      // Reliable fallback for the existing KLS schema: drivers.user_id stores
-      // the authenticated Supabase user ID. This prevents a valid linked driver
-      // being rejected just because driver_accounts or the claim RPC is stale.
-      if(!state.profile && state.user?.id){
-        const {data:driver,error:driverError}=await db
-          .from('drivers')
+      // Use the real KLS schema directly: public.drivers.user_id links the
+      // authenticated Supabase user to the driver record. No RPC is required.
+      const driverResult = await withTimeout(
+        db.from('drivers')
           .select('id,user_id,name,phone,vehicle,active')
           .eq('user_id',state.user.id)
-          .neq('active',false)
-          .maybeSingle();
-        if(driverError)throw driverError;
-        if(driver){
-          state.profile={
-            account_id:null,
-            owner_id:driver.user_id,
-            driver_id:driver.id,
-            linked_driver_id:driver.id,
-            driver_name:driver.name,
-            driver_phone:driver.phone,
-            driver_vehicle:driver.vehicle
-          };
-        }
+          .maybeSingle(),
+        10000,
+        'Driver account check'
+      );
+      if(driverResult.error) throw driverResult.error;
+      const driver=driverResult.data;
+
+      if(!driver){
+        state.loading=false;
+        state.profile=null;
+        state.notice={text:`No driver record is linked to ${state.user.email}. In Driver Control, make sure this login is linked to the driver.`,type:'error'};
+        render();
+        return;
       }
 
-      if(state.profile&&!state.profile.linked_driver_id)state.profile.linked_driver_id=state.profile.driver_id;
-      if(state.profile){
-        // Load assigned jobs. Older databases may not have the
-        // get_my_driver_jobs RPC, so fall back to the jobs table.
-        let jobs=[];
-        const rpcJobs=await db.rpc('get_my_driver_jobs');
-        if(!rpcJobs.error){
-          jobs=rpcJobs.data||[];
-        }else{
-          const message=String(rpcJobs.error.message||'');
-          const missingRpc=message.includes('get_my_driver_jobs')||message.includes('schema cache')||message.includes('Could not find the function');
-          if(!missingRpc)throw rpcJobs.error;
-          const directJobs=await db
-            .from('jobs')
-            .select('*')
-            .eq('assigned_driver_id',state.profile.linked_driver_id)
-            .order('collection_date',{ascending:true});
-          if(directJobs.error)throw directJobs.error;
-          jobs=directJobs.data||[];
-        }
-
-        // Driver Exchange is optional. A missing table or policy must not stop
-        // the core Driver App from opening and showing assigned jobs.
-        let network=[]; let bids=[];
-        const networkResult=await db.from('driver_network_jobs').select('*').order('created_at',{ascending:false});
-        if(!networkResult.error)network=networkResult.data||[];
-        const bidsResult=await db.from('driver_network_offers').select('*').eq('driver_id',state.profile.linked_driver_id).order('submitted_at',{ascending:false});
-        if(!bidsResult.error)bids=bidsResult.data||[];
-
-        state.jobs=jobs;state.networkJobs=network;state.myBids=bids;
-        const active=state.jobs.find(j=>['En Route to Collection','Arrived at Collection','Collected','In Transit','Arrived at Delivery'].includes(j.job_status));
-        if(active)startTracking(active.id,false);
+      if(driver.active===false){
+        state.loading=false;
+        state.profile=null;
+        state.notice={text:'This driver account is inactive. Ask the office to activate it.',type:'error'};
+        render();
+        return;
       }
-    }catch(error){state.notice={text:error.message,type:'error'};}
-    state.loading=false;render();
+
+      state.profile={
+        account_id:null,
+        owner_id:driver.user_id,
+        driver_id:driver.id,
+        linked_driver_id:driver.id,
+        driver_name:driver.name,
+        driver_phone:driver.phone,
+        driver_vehicle:driver.vehicle
+      };
+
+      loadingStage('Loading assigned jobs…');
+      const jobsResult = await withTimeout(
+        db.from('jobs')
+          .select('*')
+          .eq('assigned_driver_id',driver.id)
+          .order('collection_date',{ascending:true}),
+        10000,
+        'Assigned jobs'
+      );
+      if(jobsResult.error) throw jobsResult.error;
+      state.jobs=jobsResult.data||[];
+
+      // Driver Exchange is deliberately loaded after the core app is visible.
+      // Missing optional tables must never block the Driver App.
+      state.loading=false;
+      state.notice=null;
+      render();
+
+      Promise.allSettled([
+        db.from('driver_network_jobs').select('*').order('created_at',{ascending:false}),
+        db.from('driver_network_offers').select('*').eq('driver_id',driver.id).order('submitted_at',{ascending:false})
+      ]).then(results=>{
+        const [network,bids]=results;
+        if(network.status==='fulfilled'&&!network.value.error)state.networkJobs=network.value.data||[];
+        if(bids.status==='fulfilled'&&!bids.value.error)state.myBids=bids.value.data||[];
+        if(state.tab==='exchange')render();
+      });
+
+      const active=state.jobs.find(j=>['En Route to Collection','Arrived at Collection','Collected','In Transit','Arrived at Delivery'].includes(j.job_status));
+      if(active)startTracking(active.id,false);
+    }catch(error){
+      state.loading=false;
+      state.notice={text:error?.message||'Unable to load the Driver App.',type:'error'};
+      render();
+    }
   }
 
   async function advanceStatus(jobId,status){
@@ -218,45 +242,47 @@
   let authLoadToken = 0;
   function queueDriverLoad(){
     const token=++authLoadToken;
-    state.loading=true;render();
-    // Supabase warns against awaiting further Supabase calls inside
-    // onAuthStateChange. Run the profile/job loading after the callback exits.
     setTimeout(async()=>{
       if(token!==authLoadToken||!state.user)return;
-      try{
-        await Promise.race([
-          loadDriver(),
-          new Promise((_,reject)=>setTimeout(()=>reject(new Error('Driver account loading timed out. Refresh and try again.')),15000))
-        ]);
-      }catch(error){
-        if(token!==authLoadToken)return;
-        state.loading=false;
-        state.notice={text:error.message||'Unable to load the Driver App.',type:'error'};
-        render();
-      }
+      await loadDriver();
     },0);
   }
 
   async function init(){
-    if(!db){state.loading=false;state.notice={text:'Supabase URL or anon key is invalid. Check the Vercel environment variables and redeploy.',type:'error'};render();return;}
+    if(!db){
+      state.loading=false;
+      state.notice={text:'Supabase URL or anon key is invalid. Check the Vercel environment variables and redeploy.',type:'error'};
+      render();
+      return;
+    }
+
+    loadingStage('Checking saved login…');
     try{
-      const{data:{session},error}=await db.auth.getSession();
-      if(error)throw error;
-      state.user=session?.user||null;
+      const sessionResult=await withTimeout(db.auth.getSession(),10000,'Saved login check');
+      if(sessionResult.error)throw sessionResult.error;
+      state.user=sessionResult.data.session?.user||null;
     }catch(error){
-      state.loading=false;state.notice={text:error.message||'Unable to read the saved login.',type:'error'};render();return;
+      state.loading=false;
+      state.notice={text:error?.message||'Unable to read the saved login.',type:'error'};
+      render();
+      return;
     }
 
     db.auth.onAuthStateChange((_event,sessionNow)=>{
-      state.user=sessionNow?.user||null;
-      if(state.user){queueDriverLoad();}
-      else{
+      const nextUser=sessionNow?.user||null;
+      const changed=nextUser?.id!==state.user?.id;
+      state.user=nextUser;
+      if(!state.user){
         authLoadToken++;
-        stopTracking(false);state.profile=null;state.jobs=[];state.loading=false;render();
+        stopTracking(false);
+        state.profile=null;state.jobs=[];state.loading=false;render();
+      }else if(changed){
+        queueDriverLoad();
       }
     });
 
-    if(state.user)queueDriverLoad();else{state.loading=false;render();}
+    if(state.user)await loadDriver();
+    else{state.loading=false;render();}
   }
   init();
 })();

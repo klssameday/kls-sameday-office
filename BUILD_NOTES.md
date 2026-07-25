@@ -1,4 +1,4 @@
-# KLS SameDay v26.10 — Driver App Loading Fix
+# KLS SameDay v26.11 — Driver App Loading Fix
 
 - Bumped Driver App asset versions and service-worker cache so Safari cannot keep serving v26.7.
 - Added direct jobs-table fallback when `get_my_driver_jobs` is not installed.

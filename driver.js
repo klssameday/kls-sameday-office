@@ -3,7 +3,10 @@
   const root = document.getElementById('driver-app');
   const url = String(raw.supabaseUrl || '').trim();
   const key = String(raw.supabaseAnonKey || '').trim();
-  const db = url && key && window.supabase ? window.supabase.createClient(url, key) : null;
+  const validUrl = (() => {
+    try { return new URL(url).hostname.endsWith('.supabase.co'); } catch { return false; }
+  })();
+  const db = validUrl && key && window.supabase ? window.supabase.createClient(url, key) : null;
   const steps = ['Booked','En Route to Collection','Arrived at Collection','Collected','In Transit','Arrived at Delivery','Delivered'];
   let state = { user:null, profile:null, jobs:[], loading:true, mode:'signin', notice:null, podJob:null,tab:'jobs',networkJobs:[],myBids:[] };
   let watchId = null;
@@ -193,7 +196,7 @@
   }
 
   async function init(){
-    if(!db){state.loading=false;state.notice={text:'Supabase settings are missing.',type:'error'};render();return;}
+    if(!db){state.loading=false;state.notice={text:'Supabase URL or anon key is invalid. Check the Vercel environment variables and redeploy.',type:'error'};render();return;}
     const{data:{session}}=await db.auth.getSession();state.user=session?.user||null;
     db.auth.onAuthStateChange(async(_event,sessionNow)=>{state.user=sessionNow?.user||null;if(state.user)await loadDriver();else{stopTracking(false);state.profile=null;state.jobs=[];state.loading=false;render();}});
     if(state.user)await loadDriver();else{state.loading=false;render();}

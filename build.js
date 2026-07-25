@@ -26,13 +26,34 @@ function readExistingConfig() {
   try { return JSON.parse(match[1]); } catch { return { supabaseUrl: '', supabaseAnonKey: '' }; }
 }
 
+function normaliseSupabaseUrl(value) {
+  const raw = String(value || '').trim().replace(/^['"]|['"]$/g, '');
+  if (!raw) return '';
+  try {
+    const parsed = new URL(raw);
+
+    // Accept the normal project API URL, even when a REST/Auth path was pasted.
+    if (parsed.hostname.endsWith('.supabase.co')) {
+      return `${parsed.protocol}//${parsed.hostname}`;
+    }
+
+    // Recover when the Supabase dashboard project URL was pasted by mistake.
+    const dashboardMatch = parsed.pathname.match(/\/project\/([a-z0-9]+)(?:\/|$)/i);
+    if (parsed.hostname === 'supabase.com' && dashboardMatch) {
+      return `https://${dashboardMatch[1]}.supabase.co`;
+    }
+  } catch {}
+  return '';
+}
+
 const existing = readExistingConfig();
-const supabaseUrl = firstEnvironmentValue([
+const rawSupabaseUrl = firstEnvironmentValue([
   'VITE_SUPABASE_URL',
   'SUPABASE_URL',
   'NEXT_PUBLIC_SUPABASE_URL',
   'KLS_SUPABASE_URL'
 ]) || String(existing.supabaseUrl || '').trim();
+const supabaseUrl = normaliseSupabaseUrl(rawSupabaseUrl);
 const supabaseAnonKey = firstEnvironmentValue([
   'VITE_SUPABASE_ANON_KEY',
   'SUPABASE_ANON_KEY',
@@ -49,8 +70,8 @@ const generatedConfig = `window.KLS_CONFIG = ${JSON.stringify({ supabaseUrl, sup
 fs.writeFileSync(path.join(out, 'config.js'), generatedConfig, 'utf8');
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn('WARNING: Supabase configuration was not found during the build.');
-  console.warn('Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Vercel Project Settings → Environment Variables, then redeploy.');
+  console.warn('WARNING: A valid Supabase configuration was not found during the build.');
+  console.warn('VITE_SUPABASE_URL must be https://YOUR-PROJECT-REF.supabase.co and VITE_SUPABASE_ANON_KEY must be the public anon key.');
 } else {
   console.log('Supabase configuration added to dist/config.js.');
 }

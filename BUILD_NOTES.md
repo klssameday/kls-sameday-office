@@ -1,8 +1,9 @@
-# KLS SameDay Platform v26.7
+# KLS SameDay Platform v26.8
 
-## Driver link repair
-- Driver App now falls back to the existing `drivers.user_id` link when the driver account claim record is unavailable or stale.
-- This matches the live Supabase drivers table and removes the false “Account not linked” screen for a valid user.
-- Added a permanently visible Add driver button in the Driver Control panel header.
-- Preserved the existing bottom Add Driver & Link Login button.
-- No SQL migration is required for this release.
+## Driver sign-in URL fix
+- Normalises the Supabase project URL during the Vercel build.
+- Removes accidental `/rest/v1`, `/auth/v1` or other paths from a valid project API URL.
+- Converts a pasted Supabase dashboard project URL into the correct `https://PROJECT-REF.supabase.co` API URL.
+- Rejects unrelated or malformed URLs instead of sending broken authentication requests.
+- Adds a clearer Driver App configuration error.
+- No Supabase SQL migration required.

@@ -1,11 +1,13 @@
-# KLS SameDay Platform v25 — Focused Workspace
+# KLS SameDay Platform v26
 
-## Changed
-- Reduced the permanent office sidebar to Dashboard, Jobs, Quotes, Customers, Drivers, Invoices and Settings.
-- Existing advanced modules remain in the application and are still reachable from dashboard actions and workflows.
-- Removed Fleet Management from the main navigation; no database tables or working functionality were deleted.
-- Tightened spacing, sidebar width, cards, headers and mobile layout for a cleaner office workspace.
-- Added a repeatable Vercel build using package.json, build.js and vercel.json.
+Professional workspace release built on v25.1.
 
-## Supabase
-No migration is required for this release.
+## Changes
+- Preserved every existing office module and the separate Driver App.
+- Added grouped navigation icons and clearer active states.
+- Added signed-in account card, live system indicator and improved top bar.
+- Upgraded spacing, typography, cards, tables, forms and responsive behaviour.
+- Polished the Command Centre without changing Supabase data structures.
+
+## Database
+No Supabase migration required.

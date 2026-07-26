@@ -304,13 +304,14 @@
 
   function newQuote() {
     const selected = state.customers.find(c => c.id === state.quoteCustomerId) || {};
+    const repeat = state.repeatJobDraft || {};
     return panel('Smart Quote Builder', `<form id="quote-form">
       <div class="quote-builder-head"><div><small>KLS PRICING ENGINE</small><h3>Build a consistent quote in seconds</h3><p>Enter the route mileage, choose a vehicle and add any extras. The total updates instantly.</p></div><div class="rate-pill">Minimum or mileage rate — whichever is higher</div></div>
       <div class="grid"><label>Customer / company *<input name="company" required value="${esc(selected.company || '')}"></label><label>Contact name<input name="contact_name" value="${esc(selected.contact_name || '')}"></label><label>Telephone / WhatsApp<input name="phone" value="${esc(selected.phone || '')}"></label></div>
       <div class="grid"><label>Email<input name="email" type="email" value="${esc(selected.email || '')}"></label><label>Collection date<input name="collection_date" type="date" value="${todayISO()}"></label><label>Collection time<input name="collection_time" type="time"></label></div>
-      <div class="grid two"><label>Collection address / postcode *<textarea name="collection_address" required></textarea></label><label>Main delivery address / postcode *<textarea name="delivery_address" required></textarea></label></div><label>Additional delivery stops (one per line)<textarea name="route_stops" placeholder="Drop 2 address\nDrop 3 address\nDrop 4 address"></textarea><em>These are saved to the quote and job as a multi-drop route.</em></label>
+      <div class="grid two"><label>Collection address / postcode *<textarea name="collection_address" required>${esc(repeat.collection_address || '')}</textarea></label><label>Main delivery address / postcode *<textarea name="delivery_address" required>${esc(repeat.delivery_address || '')}</textarea></label></div><label>Additional delivery stops (one per line)<textarea name="route_stops" placeholder="Drop 2 address\nDrop 3 address\nDrop 4 address"></textarea><em>These are saved to the quote and job as a multi-drop route.</em></label>
       <div class="route-tools"><button type="button" class="secondary" data-action="open-route">Open route in Google Maps</button><span>Use the route mileage shown by Google Maps, then enter it below.</span></div>
-      <div class="grid"><label>Vehicle<select name="vehicle">${Object.keys(vehicles).map(v => `<option>${v}</option>`).join('')}</select></label><label>Distance (miles)<input name="miles" type="number" min="0" step="0.1" value="0"></label><label>Base delivery charge<input name="base_charge" type="number" readonly></label></div>
+      <div class="grid"><label>Vehicle<select name="vehicle">${Object.keys(vehicles).map(v => `<option ${repeat.vehicle===v?'selected':''}>${v}</option>`).join('')}</select></label><label>Distance (miles)<input name="miles" type="number" min="0" step="0.1" value="0"></label><label>Base delivery charge<input name="base_charge" type="number" readonly></label></div>
       <div class="extras-box"><div class="extras-title"><div><small>OPTIONAL EXTRAS</small><h3>Add only what applies</h3></div><button type="button" class="secondary" data-action="clear-extras">Clear extras</button></div>
         <div class="extras-grid">
           <label>Waiting after free 30 mins (hours)<input name="waiting_hours" type="number" min="0" step="0.25" value="0"><em>£60 per hour</em></label>
@@ -320,8 +321,8 @@
           <label>Surcharge<select name="surcharge"><option value="0">None</option><option value="0.25">Night +25%</option><option value="0.30">Saturday +30%</option><option value="0.50">Sunday / Bank Holiday +50%</option></select></label>
         </div>
       </div>
-      <div class="quote-total-card"><div><small>SUGGESTED TOTAL</small><strong id="suggestion">£85.00</strong><span id="price-breakdown">Small Van minimum charge</span></div><label>Your final quoted price<input name="quoted_price" type="number" min="0" step="0.01"></label></div>
-      <label>Goods description<input name="goods_description"></label><label>Notes<textarea name="notes"></textarea></label>
+      <div class="quote-total-card"><div><small>SUGGESTED TOTAL</small><strong id="suggestion">£85.00</strong><span id="price-breakdown">Small Van minimum charge</span></div><label>Your final quoted price<input name="quoted_price" type="number" min="0" step="0.01" value="${esc(repeat.quoted_price || '')}"></label></div>
+      <label>Goods description<input name="goods_description" value="${esc(repeat.goods_description || '')}"></label><label>Notes<textarea name="notes"></textarea></label>
       <div class="actions"><button type="reset" class="secondary">Clear</button><button class="primary">Save Quote</button></div>
     </form>`, 'Your agreed KLS rates, extras and surcharges are built into this calculator. Automatic postcode mileage needs a Google Maps API key; the route button provides a no-cost mileage check for now.');
   }
@@ -717,9 +718,18 @@
     const invoiced = invoices.reduce((sum, item) => sum + Number(item.total || 0), 0);
     const paid = invoices.filter(item => item.status === 'Paid').reduce((sum, item) => sum + Number(item.total || 0), 0);
     const outstanding = invoices.filter(item => !['Paid','Cancelled'].includes(item.status)).reduce((sum, item) => sum + Number(item.total || 0), 0);
-    const lastJob = [...jobs].sort((a,b) => new Date(b.collection_date || b.created_at || 0) - new Date(a.collection_date || a.created_at || 0))[0];
+    const sortedJobs = [...jobs].sort((a,b) => new Date(b.collection_date || b.created_at || 0) - new Date(a.collection_date || a.created_at || 0));
+    const lastJob = sortedJobs[0];
     const accepted = quotes.filter(item => item.status === 'Accepted').length;
-    return { quotes, jobs, invoices, invoiced, paid, outstanding, lastJob, accepted };
+    const averageJob = jobs.length ? jobs.reduce((sum,item)=>sum+Number(item.total_price || item.quoted_price || 0),0)/jobs.length : 0;
+    const lastActivityDate = [lastJob?.collection_date || lastJob?.created_at, ...quotes.map(x=>x.created_at), ...invoices.map(x=>x.issue_date||x.created_at)].filter(Boolean).sort((a,b)=>new Date(b)-new Date(a))[0];
+    const daysInactive = lastActivityDate ? Math.max(0,Math.floor((Date.now()-new Date(lastActivityDate).getTime())/86400000)) : 999;
+    let health = 'Inactive', healthClass = 'inactive';
+    if (outstanding > Math.max(500,invoiced*.35)) { health='Needs attention'; healthClass='attention'; }
+    else if (daysInactive <= 45 && jobs.length >= 3) { health='Excellent'; healthClass='excellent'; }
+    else if (daysInactive <= 120 || quotes.length) { health='Good'; healthClass='good'; }
+    const conversion = quotes.length ? Math.round(accepted/quotes.length*100) : 0;
+    return { quotes, jobs, invoices, invoiced, paid, outstanding, lastJob, accepted, averageJob, lastActivityDate, daysInactive, health, healthClass, conversion };
   }
 
   function customersView() {
@@ -727,17 +737,13 @@
       .sort((a,b) => b.metrics.invoiced - a.metrics.invoiced || String(a.customer.company).localeCompare(String(b.customer.company)));
     const totalRevenue = enriched.reduce((sum,row) => sum + row.metrics.invoiced, 0);
     const totalOutstanding = enriched.reduce((sum,row) => sum + row.metrics.outstanding, 0);
-    const activeCustomers = enriched.filter(row => row.metrics.jobs.length || row.metrics.quotes.length).length;
+    const activeCustomers = enriched.filter(row => row.metrics.daysInactive <= 120).length;
+    const attention = enriched.filter(row => row.metrics.healthClass === 'attention').length;
     const topCustomer = enriched[0];
-    const cards = enriched.map(({customer:c, metrics:m}) => `<article class="crm-card" data-customer="${c.id}" tabindex="0" role="button">
-      <div class="crm-card-head"><div class="avatar">${esc((c.company || '?')[0].toUpperCase())}</div><div><strong>${esc(c.company)}</strong><p>${esc(c.contact_name || 'No contact name')}</p></div><span class="crm-open">Open →</span></div>
-      <div class="crm-contact"><span>${esc(c.phone || 'No phone')}</span><span>${esc(c.email || 'No email')}</span></div>
-      <div class="crm-card-stats"><div><small>Revenue</small><b>${money(m.invoiced)}</b></div><div><small>Outstanding</small><b class="${m.outstanding ? 'warning-text' : ''}">${money(m.outstanding)}</b></div><div><small>Jobs</small><b>${m.jobs.length}</b></div></div>
-      <div class="crm-last"><small>LAST JOB</small><span>${m.lastJob ? `${fmtDate(m.lastJob.collection_date || m.lastJob.created_at)} · ${esc(m.lastJob.job_status || 'Booked')}` : 'No jobs yet'}</span></div>
-    </article>`).join('');
-    return `<section class="crm-hero"><div><small>SALES & CUSTOMER RELATIONSHIPS</small><h2>Customer CRM</h2><p>See customer value, outstanding money and full history in one place.</p></div><button class="primary" data-action="new-customer">＋ Add Customer</button></section>
-      <section class="crm-kpis">${card('Customers', state.customers.length, `${activeCustomers} with activity`, '')}${card('Customer revenue', money(totalRevenue), 'Total invoices raised', '')}${card('Outstanding', money(totalOutstanding), 'Across all customers', 'invoices')}${card('Top customer', topCustomer ? esc(topCustomer.customer.company) : '—', topCustomer ? money(topCustomer.metrics.invoiced) : 'No revenue yet', '')}</section>
-      ${panel('Customer accounts', `<div class="customergrid crm-grid">${cards || '<div class="empty">No customers yet.</div>'}</div>${customerModal()}`, 'Click any customer to open their profile, activity and account history.', '<div class="customer-tools"><label class="search">Search <input id="customer-search" placeholder="Company, contact, phone or email"></label><button class="primary" data-action="new-customer">＋ Add Customer</button></div>')}`;
+    const rows = enriched.map(({customer:c, metrics:m}) => `<tr data-customer-row data-customer="${c.id}" tabindex="0"><td><div class="crm-company-cell"><span class="avatar">${esc((c.company || '?')[0].toUpperCase())}</span><span><b>${esc(c.company)}</b><small>${esc(c.contact_name || 'No contact name')}</small></span></div></td><td>${esc(c.phone || '—')}<small>${esc(c.email || '')}</small></td><td><span class="crm-health ${m.healthClass}">${esc(m.health)}</span></td><td>${m.jobs.length}</td><td>${money(m.invoiced)}</td><td class="${m.outstanding?'warning-text':''}">${money(m.outstanding)}</td><td>${m.lastActivityDate?fmtDate(m.lastActivityDate):'—'}</td><td><button class="secondary crm-row-open" data-customer="${c.id}">Open</button></td></tr>`).join('');
+    return `<section class="crm-hero"><div><small>V26.24 CUSTOMER MANAGEMENT</small><h2>Customer CRM</h2><p>Manage every customer, account balance, quote, job and relationship from one place.</p></div><button class="primary" data-action="new-customer">＋ Add Customer</button></section>
+      <section class="crm-kpis">${card('Total customers', state.customers.length, `${activeCustomers} active in 120 days`, '')}${card('Lifetime revenue', money(totalRevenue), 'Total invoices raised', '')}${card('Outstanding', money(totalOutstanding), `${attention} account${attention===1?'':'s'} need attention`, 'invoices')}${card('Top customer', topCustomer ? esc(topCustomer.customer.company) : '—', topCustomer ? money(topCustomer.metrics.invoiced) : 'No revenue yet', '')}</section>
+      ${panel('Customer accounts', `<div class="crm-table-wrap"><table class="crm-table"><thead><tr><th>Customer</th><th>Contact</th><th>Health</th><th>Jobs</th><th>Revenue</th><th>Outstanding</th><th>Last activity</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="8"><div class="empty">No customers yet.</div></td></tr>'}</tbody></table></div>${customerModal()}`, 'Select a customer to open their complete 360° profile.', '<div class="customer-tools"><label class="search">Search <input id="customer-search" placeholder="Company, contact, phone or email"></label><select id="customer-health-filter"><option value="">All customer health</option><option value="excellent">Excellent</option><option value="good">Good</option><option value="attention">Needs attention</option><option value="inactive">Inactive</option></select><button class="primary" data-action="new-customer">＋ Add Customer</button></div>')}`;
   }
 
   function customerModal() {
@@ -745,17 +751,21 @@
     if (!c && !state.selectedCustomerId) return '';
     const isNew = state.selectedCustomerId === 'new';
     const customer = c || { company:'', contact_name:'', phone:'', email:'', billing_address:'', payment_terms:7, notes:'' };
-    const metrics = isNew ? {quotes:[],jobs:[],invoices:[],invoiced:0,paid:0,outstanding:0,lastJob:null,accepted:0} : customerMetrics(customer);
+    const metrics = isNew ? {quotes:[],jobs:[],invoices:[],invoiced:0,paid:0,outstanding:0,lastJob:null,accepted:0,averageJob:0,health:'New',healthClass:'good',conversion:0,lastActivityDate:null} : customerMetrics(customer);
     const activity = [
       ...metrics.quotes.map(item => ({date:item.created_at, type:'Quote', title:item.quote_number, value:item.quoted_price, status:item.status})),
       ...metrics.jobs.map(item => ({date:item.collection_date || item.created_at, type:'Job', title:item.job_number || 'Job', value:item.total_price, status:item.job_status})),
       ...metrics.invoices.map(item => ({date:item.issue_date || item.created_at, type:'Invoice', title:item.invoice_number, value:item.total, status:item.status}))
-    ].sort((a,b) => new Date(b.date || 0) - new Date(a.date || 0)).slice(0,12);
-    return `<div class="modalback" data-action="customer-close"><section class="customermodal crm-modal" onclick="event.stopPropagation()"><div class="modalhead"><div><small>${isNew ? 'NEW CUSTOMER' : 'CUSTOMER 360° PROFILE'}</small><h2>${esc(customer.company || 'Add customer')}</h2>${!isNew ? `<p>${esc(customer.contact_name || '')}${customer.phone ? ` · ${esc(customer.phone)}` : ''}</p>` : ''}</div><button data-action="customer-close">×</button></div>
-      ${isNew ? '' : `<div class="crm-profile-actions"><button class="primary" data-new-quote-customer="${customer.id}">＋ New Quote</button>${customer.phone ? `<a class="secondary button-link" href="tel:${esc(customer.phone)}">Call</a>` : ''}${customer.email ? `<a class="secondary button-link" href="mailto:${esc(customer.email)}">Email</a>` : ''}</div>`}
-      <form id="customer-form"><div class="grid two"><label>Company *<input name="company" required value="${esc(customer.company)}"></label><label>Contact name<input name="contact_name" value="${esc(customer.contact_name || '')}"></label><label>Telephone<input name="phone" value="${esc(customer.phone || '')}"></label><label>Email<input name="email" type="email" value="${esc(customer.email || '')}"></label><label>Billing address<textarea name="billing_address">${esc(customer.billing_address || '')}</textarea></label><label>Payment terms (days)<input name="payment_terms" type="number" min="0" value="${Number(customer.payment_terms || 7)}"></label></div><label>Relationship notes<textarea name="notes" placeholder="Buying preferences, usual routes, contact notes or follow-up details">${esc(customer.notes || '')}</textarea></label><div class="actions"><button type="button" class="secondary" data-action="customer-close">Cancel</button><button class="primary">${isNew ? 'Save Customer' : 'Save Changes'}</button></div></form>
-      ${isNew ? '' : `<div class="customerstats crm-profile-stats"><div><small>Total invoiced</small><b>${money(metrics.invoiced)}</b></div><div><small>Paid</small><b>${money(metrics.paid)}</b></div><div><small>Outstanding</small><b>${money(metrics.outstanding)}</b></div><div><small>Jobs</small><b>${metrics.jobs.length}</b></div><div><small>Quotes</small><b>${metrics.quotes.length}</b></div><div><small>Accepted quotes</small><b>${metrics.accepted}</b></div></div>
-      <div class="crm-profile-grid"><div class="crm-timeline"><h3>Customer timeline</h3>${activity.map(item => `<div class="crm-event"><span>${esc(item.type)}</span><div><b>${esc(item.title || item.type)}</b><small>${fmtDate(item.date)} · ${esc(item.status || '')}</small></div><strong>${money(item.value)}</strong></div>`).join('') || '<p class="muted">No customer activity yet.</p>'}</div><div class="crm-account"><h3>Account summary</h3><p><span>Payment terms</span><b>${Number(customer.payment_terms || 7)} days</b></p><p><span>Last job</span><b>${metrics.lastJob ? fmtDate(metrics.lastJob.collection_date || metrics.lastJob.created_at) : '—'}</b></p><p><span>Last job status</span><b>${metrics.lastJob ? esc(metrics.lastJob.job_status || 'Booked') : '—'}</b></p><p><span>Outstanding balance</span><b>${money(metrics.outstanding)}</b></p><h3>Notes</h3><div class="crm-notes">${esc(customer.notes || 'No relationship notes saved.')}</div></div></div>`}
+    ].sort((a,b) => new Date(b.date || 0) - new Date(a.date || 0)).slice(0,20);
+    const jobRows=metrics.jobs.slice().sort((a,b)=>new Date(b.collection_date||0)-new Date(a.collection_date||0)).slice(0,8).map(j=>[esc(j.job_number||'Job'),fmtDate(j.collection_date),esc(j.collection_address||'—'),esc(j.delivery_address||'—'),esc(j.job_status||'Booked'),money(j.total_price||j.quoted_price)]);
+    const quoteRows=metrics.quotes.slice().sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0)).slice(0,8).map(q=>[esc(q.quote_number||'Quote'),fmtDate(q.created_at),esc(q.status||'Draft'),money(q.quoted_price)]);
+    const invoiceRows=metrics.invoices.slice().sort((a,b)=>new Date(b.issue_date||b.created_at||0)-new Date(a.issue_date||a.created_at||0)).slice(0,8).map(i=>[esc(i.invoice_number||'Invoice'),fmtDate(i.issue_date||i.created_at),esc(i.status||'Draft'),money(i.total)]);
+    return `<div class="modalback" data-action="customer-close"><section class="customermodal crm-modal crm-v24-modal" onclick="event.stopPropagation()"><div class="modalhead"><div><small>${isNew ? 'NEW CUSTOMER' : 'CUSTOMER 360° PROFILE'}</small><h2>${esc(customer.company || 'Add customer')}</h2>${!isNew ? `<p>${esc(customer.contact_name || '')}${customer.phone ? ` · ${esc(customer.phone)}` : ''} <span class="crm-health ${metrics.healthClass}">${esc(metrics.health)}</span></p>` : ''}</div><button data-action="customer-close">×</button></div>
+      ${isNew ? '' : `<div class="crm-profile-actions"><button class="primary" data-new-quote-customer="${customer.id}">＋ New Quote</button>${metrics.lastJob?`<button class="secondary" data-repeat-customer-job="${metrics.lastJob.id}">Repeat Last Job</button>`:''}${customer.phone ? `<a class="secondary button-link" href="tel:${esc(customer.phone)}">Call</a><a class="secondary button-link" target="_blank" rel="noopener" href="https://wa.me/${esc(String(customer.phone).replace(/\D/g,'').replace(/^0/,'44'))}">WhatsApp</a>` : ''}${customer.email ? `<a class="secondary button-link" href="mailto:${esc(customer.email)}">Email</a>` : ''}</div>`}
+      <form id="customer-form"><div class="grid two"><label>Company *<input name="company" required value="${esc(customer.company)}"></label><label>Main contact<input name="contact_name" value="${esc(customer.contact_name || '')}"></label><label>Telephone<input name="phone" value="${esc(customer.phone || '')}"></label><label>Email<input name="email" type="email" value="${esc(customer.email || '')}"></label><label>Billing address<textarea name="billing_address">${esc(customer.billing_address || '')}</textarea></label><label>Payment terms (days)<input name="payment_terms" type="number" min="0" value="${Number(customer.payment_terms || 7)}"></label></div><label>Relationship notes<textarea name="notes" placeholder="Usual routes, buying preferences, site instructions, follow-ups or agreed rates">${esc(customer.notes || '')}</textarea></label><div class="actions"><button type="button" class="secondary" data-action="customer-close">Cancel</button><button class="primary">${isNew ? 'Save Customer' : 'Save Changes'}</button></div></form>
+      ${isNew ? '' : `<div class="customerstats crm-profile-stats"><div><small>Total invoiced</small><b>${money(metrics.invoiced)}</b></div><div><small>Paid</small><b>${money(metrics.paid)}</b></div><div><small>Outstanding</small><b>${money(metrics.outstanding)}</b></div><div><small>Jobs</small><b>${metrics.jobs.length}</b></div><div><small>Average job</small><b>${money(metrics.averageJob)}</b></div><div><small>Quote conversion</small><b>${metrics.conversion}%</b></div></div>
+      <div class="crm-record-sections"><details open><summary>Activity timeline <span>${activity.length}</span></summary><div class="crm-timeline">${activity.map(item => `<div class="crm-event"><span>${esc(item.type)}</span><div><b>${esc(item.title || item.type)}</b><small>${fmtDate(item.date)} · ${esc(item.status || '')}</small></div><strong>${money(item.value)}</strong></div>`).join('') || '<p class="muted">No customer activity yet.</p>'}</div></details><details><summary>Jobs <span>${metrics.jobs.length}</span></summary>${table(['Job','Date','Collection','Delivery','Status','Value'],jobRows)}</details><details><summary>Quotes <span>${metrics.quotes.length}</span></summary>${table(['Quote','Date','Status','Value'],quoteRows)}</details><details><summary>Invoices <span>${metrics.invoices.length}</span></summary>${table(['Invoice','Date','Status','Value'],invoiceRows)}</details></div>
+      <div class="crm-account crm-account-wide"><h3>Account summary</h3><div class="crm-account-grid"><p><span>Payment terms</span><b>${Number(customer.payment_terms || 7)} days</b></p><p><span>Last activity</span><b>${metrics.lastActivityDate ? fmtDate(metrics.lastActivityDate) : '—'}</b></p><p><span>Last job status</span><b>${metrics.lastJob ? esc(metrics.lastJob.job_status || 'Booked') : '—'}</b></p><p><span>Outstanding balance</span><b>${money(metrics.outstanding)}</b></p></div><h3>Relationship notes</h3><div class="crm-notes">${esc(customer.notes || 'No relationship notes saved.')}</div></div>`}
     </section></div>`;
   }
 
@@ -1914,6 +1924,17 @@
       render();
     });
 
+    document.querySelectorAll('[data-repeat-customer-job]').forEach(button => button.onclick = () => {
+      const job=state.jobs.find(j=>j.id===button.dataset.repeatCustomerJob);
+      if(!job)return;
+      state.selectedCustomerId=null;
+      state.page='newquote';
+      state.quoteCustomerId=job.customer_id||null;
+      state.repeatJobDraft={collection_address:job.collection_address||'',delivery_address:job.delivery_address||'',vehicle:job.vehicle||'',goods_description:job.goods_description||'',quoted_price:job.total_price||job.quoted_price||''};
+      showNotice('Last job loaded. Check the details and create the new quote.','ok');
+      render();
+    });
+
     const canvas = document.getElementById('signature-canvas');
     let drawing = false;
     if (canvas) {
@@ -1929,7 +1950,13 @@
     const jobSearch = document.getElementById('job-search');
     if (jobSearch) jobSearch.oninput = () => { const term=jobSearch.value.toLowerCase(); document.querySelectorAll('[data-job-card]').forEach(card=>card.style.display=card.textContent.toLowerCase().includes(term)?'':'none'); filterRows(jobSearch.value); };
     const customerSearch = document.getElementById('customer-search');
-    if (customerSearch) customerSearch.oninput = () => filterCards(customerSearch.value);
+    const customerHealthFilter = document.getElementById('customer-health-filter');
+    const filterCustomerRows = () => {
+      const term=(customerSearch?.value||'').toLowerCase(); const health=customerHealthFilter?.value||'';
+      document.querySelectorAll('[data-customer-row]').forEach(row=>{const matchText=row.textContent.toLowerCase().includes(term);const matchHealth=!health||row.querySelector('.crm-health')?.classList.contains(health);row.style.display=matchText&&matchHealth?'':'none';});
+    };
+    if (customerSearch) customerSearch.oninput = filterCustomerRows;
+    if (customerHealthFilter) customerHealthFilter.onchange = filterCustomerRows;
   }
 
   function filterRows(value) { const term = value.toLowerCase(); document.querySelectorAll('tbody tr').forEach(row => row.style.display = row.textContent.toLowerCase().includes(term) ? '' : 'none'); }

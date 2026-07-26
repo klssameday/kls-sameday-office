@@ -333,13 +333,60 @@
     ]));
   }
 
+  function jobStatusGroup(status) {
+    if (status === 'Delivered') return 'delivered';
+    if (status === 'Cancelled') return 'cancelled';
+    if (['En Route to Collection','Arrived at Collection','Collected','In Transit','Arrived at Delivery'].includes(status)) return 'active';
+    return 'waiting';
+  }
+
+  function jobBoardCard(job) {
+    const driver = state.drivers.find(d => d.id === job.assigned_driver_id);
+    const podReady = Boolean(job.pod_photo_url || job.pod_signature_url || job.recipient_name);
+    return `<article class="jobs-board-card status-${jobStatusGroup(job.job_status)}" data-job-card="${job.id}">
+      <button type="button" class="jobs-card-open" data-open-job="${job.id}" aria-label="Open ${esc(job.job_number || 'job')}"></button>
+      <div class="jobs-card-top"><strong>${esc(job.job_number || 'Pending')}</strong><span class="jobs-status-pill">${esc(job.job_status || 'Booked')}</span></div>
+      <h3>${esc(job.customer_name || job.contact_name || 'Customer')}</h3>
+      <div class="jobs-board-route"><p><small>COLLECT</small>${esc(job.collection_address || 'Address TBC')}</p><span>↓</span><p><small>DELIVER</small>${esc(job.delivery_address || 'Address TBC')}</p></div>
+      <div class="jobs-card-meta"><span>${esc(job.vehicle || 'Vehicle TBC')}</span><span>${fmtDate(job.collection_date)} ${esc(String(job.collection_time || '').slice(0,5))}</span></div>
+      <label class="jobs-driver-control">Assigned driver<select class="job-driver-select" data-job-driver="${job.id}"><option value="">Unassigned</option>${state.drivers.map(d=>`<option value="${d.id}" ${job.assigned_driver_id===d.id?'selected':''}>${esc(d.name)}</option>`).join('')}</select></label>
+      <footer><span>${driver ? esc(driver.name) : 'Needs driver'}</span><b>${money(job.total_price)}</b>${podReady ? '<em>POD ✓</em>' : ''}</footer>
+    </article>`;
+  }
+
   function jobEditorModal() {
     const job = state.jobs.find(j => j.id === state.jobEditorId);
     if (!job) return '';
-    return `<div class="modalback" data-action="job-close"><section class="customermodal job-editor-modal" onclick="event.stopPropagation()"><div class="modalhead"><div><small>JOB DETAILS</small><h2>${esc(job.job_number || 'Job')}</h2><p>${esc(job.customer_name || job.contact_name || '')}</p></div><button type="button" data-action="job-close">×</button></div><form id="job-editor-form"><div class="grid two"><label>Collection date<input name="collection_date" type="date" value="${esc(String(job.collection_date||'').slice(0,10))}"></label><label>Collection time<input name="collection_time" type="time" value="${esc(String(job.collection_time||'').slice(0,5))}"></label><label>Vehicle<select name="vehicle">${Object.keys(vehicles).map(v=>`<option ${job.vehicle===v?'selected':''}>${v}</option>`).join('')}</select></label><label>Status<select name="job_status">${['Booked','En Route to Collection','Arrived at Collection','Collected','In Transit','Arrived at Delivery','Delivered','Cancelled'].map(v=>`<option ${job.job_status===v?'selected':''}>${v}</option>`).join('')}</select></label><label>Assigned driver<select name="assigned_driver_id"><option value="">Unassigned</option>${state.drivers.map(d=>`<option value="${d.id}" ${job.assigned_driver_id===d.id?'selected':''}>${esc(d.name)} · ${esc(d.vehicle||'Vehicle TBC')}</option>`).join('')}</select></label><label>Job price (£)<input name="total_price" type="number" min="0" step="0.01" value="${Number(job.total_price||0)}"></label></div><label>Collection address<textarea name="collection_address" required>${esc(job.collection_address||'')}</textarea></label><label>Delivery address<textarea name="delivery_address" required>${esc(job.delivery_address||'')}</textarea></label><label>Goods / job details<textarea name="goods_description">${esc(job.goods_description||'')}</textarea></label><div class="actions"><button type="button" class="secondary" data-action="job-close">Cancel</button><button class="primary">Save job</button></div></form></section></div>`;
+    const driver = state.drivers.find(d => d.id === job.assigned_driver_id);
+    const timeline = [
+      ['Created', job.created_at],
+      ['Assigned', job.assigned_at || (job.assigned_driver_id ? job.updated_at : null)],
+      ['Collected', job.collected_at],
+      ['Delivered', job.delivered_at]
+    ].filter(([,value])=>value);
+    const pod = job.pod_photo_url || job.pod_signature_url || job.recipient_name;
+    return `<div class="modalback" data-action="job-close"><section class="customermodal job-editor-modal job-command-drawer" onclick="event.stopPropagation()">
+      <div class="modalhead"><div><small>LIVE JOB CONTROL</small><h2>${esc(job.job_number || 'Job')}</h2><p>${esc(job.customer_name || job.contact_name || '')}</p></div><button type="button" data-action="job-close">×</button></div>
+      <div class="job-command-summary"><div><small>STATUS</small><b>${esc(job.job_status || 'Booked')}</b></div><div><small>DRIVER</small><b>${esc(driver?.name || 'Unassigned')}</b></div><div><small>VEHICLE</small><b>${esc(job.vehicle || 'TBC')}</b></div><div><small>VALUE</small><b>${money(job.total_price)}</b></div></div>
+      <div class="job-command-layout"><form id="job-editor-form" class="job-command-form"><div class="grid two"><label>Collection date<input name="collection_date" type="date" value="${esc(String(job.collection_date||'').slice(0,10))}"></label><label>Collection time<input name="collection_time" type="time" value="${esc(String(job.collection_time||'').slice(0,5))}"></label><label>Vehicle<select name="vehicle">${Object.keys(vehicles).map(v=>`<option ${job.vehicle===v?'selected':''}>${v}</option>`).join('')}</select></label><label>Status<select name="job_status">${['Booked','En Route to Collection','Arrived at Collection','Collected','In Transit','Arrived at Delivery','Delivered','Cancelled'].map(v=>`<option ${job.job_status===v?'selected':''}>${v}</option>`).join('')}</select></label><label>Assigned driver<select name="assigned_driver_id"><option value="">Unassigned</option>${state.drivers.map(d=>`<option value="${d.id}" ${job.assigned_driver_id===d.id?'selected':''}>${esc(d.name)} · ${esc(d.vehicle||'Vehicle TBC')}</option>`).join('')}</select></label><label>Job price (£)<input name="total_price" type="number" min="0" step="0.01" value="${Number(job.total_price||0)}"></label></div><label>Collection address<textarea name="collection_address" required>${esc(job.collection_address||'')}</textarea></label><label>Delivery address<textarea name="delivery_address" required>${esc(job.delivery_address||'')}</textarea></label><label>Goods / job details<textarea name="goods_description">${esc(job.goods_description||'')}</textarea></label><div class="actions"><button type="button" class="secondary" data-action="job-close">Cancel</button><button class="primary">Save job</button></div></form>
+      <aside class="job-command-side"><section><h3>Live timeline</h3>${timeline.length ? `<div class="job-timeline">${timeline.map(([label,value])=>`<p><span></span><b>${label}</b><small>${new Date(value).toLocaleString('en-GB')}</small></p>`).join('')}</div>` : '<p class="muted">Timeline starts when the driver updates this job.</p>'}</section><section><h3>Proof of delivery</h3>${pod ? `<div class="job-pod-preview">${job.pod_photo_url?`<a href="${esc(job.pod_photo_url)}" target="_blank" rel="noopener">View delivery photo</a>`:''}${job.pod_signature_url?`<a href="${esc(job.pod_signature_url)}" target="_blank" rel="noopener">View signature</a>`:''}${job.recipient_name?`<p><small>RECEIVED BY</small><b>${esc(job.recipient_name)}</b></p>`:''}${job.pod_notes?`<p>${esc(job.pod_notes)}</p>`:''}</div>`:'<p class="muted">POD will appear here after delivery.</p>'}</section></aside></div>
+    </section></div>`;
   }
 
-  function jobsView() { return panel('Jobs', jobTable(state.jobs), 'Click the job number or Open job to view, edit and assign it.', '<label class="search">Search <input id="job-search"></label>') + jobEditorModal(); }
+  function jobsView() {
+    const columns = [
+      ['waiting','Waiting',state.jobs.filter(j=>jobStatusGroup(j.job_status)==='waiting')],
+      ['active','In progress',state.jobs.filter(j=>jobStatusGroup(j.job_status)==='active')],
+      ['delivered','Delivered',state.jobs.filter(j=>jobStatusGroup(j.job_status)==='delivered')],
+      ['cancelled','Cancelled',state.jobs.filter(j=>jobStatusGroup(j.job_status)==='cancelled')]
+    ];
+    const activeCount = columns[1][2].length;
+    const unassigned = state.jobs.filter(j=>!j.assigned_driver_id && !['Delivered','Cancelled'].includes(j.job_status)).length;
+    return `<section class="jobs-command-hero"><div><small>LIVE OPERATIONS</small><h2>Jobs Control Centre</h2><p>Assign drivers, follow every stage and open POD from one screen.</p></div><div class="jobs-live-mark"><span class="dot"></span> Live updates</div></section>
+      <div class="jobs-command-kpis"><div><small>ALL JOBS</small><b>${state.jobs.length}</b></div><div><small>IN PROGRESS</small><b>${activeCount}</b></div><div><small>UNASSIGNED</small><b>${unassigned}</b></div><div><small>DELIVERED</small><b>${columns[2][2].length}</b></div></div>
+      <div class="jobs-board-toolbar"><label class="search">Search jobs <input id="job-search" placeholder="Job, customer, address or driver"></label><button class="primary" data-page="newquote">+ New quote</button></div>
+      <div class="jobs-kanban">${columns.map(([key,title,jobs])=>`<section class="jobs-board-column column-${key}"><header><div><h3>${title}</h3><small>${jobs.length} job${jobs.length===1?'':'s'}</small></div><span>${jobs.length}</span></header><div class="jobs-board-list">${jobs.length?jobs.map(jobBoardCard).join(''):`<div class="jobs-board-empty">No ${title.toLowerCase()} jobs</div>`}</div></section>`).join('')}</div>${jobEditorModal()}`;
+  }
 
   const driverStatuses = ['Booked','En Route to Collection','Arrived at Collection','Collected','In Transit','Arrived at Delivery','Delivered'];
 
@@ -1645,7 +1692,7 @@
     if(podForm) podForm.onsubmit=async e=>{e.preventDefault();const job=state.jobs.find(j=>j.id===state.selectedDriverJobId);const btn=podForm.querySelector('button.primary');btn.disabled=true;btn.textContent='Saving POD…';try{const fd=new FormData(podForm);let photoUrl=job.pod_photo_url||null;let signatureUrl=job.pod_signature_url||null;const photo=fd.get('pod_photo');if(photo&&photo.size){photoUrl=await uploadPodFile(job,photo,'photo');}if(canvas){const blank=document.createElement('canvas');blank.width=canvas.width;blank.height=canvas.height;if(canvas.toDataURL()!==blank.toDataURL()){const blob=await new Promise(r=>canvas.toBlob(r,'image/png'));signatureUrl=await uploadPodFile(job,blob,'signature');}}const position=await getOnePosition().catch(()=>null);const payload={recipient_name:fd.get('recipient_name'),pod_notes:fd.get('pod_notes')||null,pod_photo_url:photoUrl,pod_signature_url:signatureUrl,job_status:'Delivered',delivered_at:new Date().toISOString(),pod_latitude:position?.coords.latitude||job.last_latitude||null,pod_longitude:position?.coords.longitude||job.last_longitude||null};const{data,error}=await db.from('jobs').update(payload).eq('id',job.id).select().single();if(error)throw error;Object.assign(job,data);state.selectedDriverJobId=null;showNotice(`${job.job_number} POD saved and job delivered.`,'ok');render();}catch(error){showNotice(error.message,'error');render();}};
 
     const jobSearch = document.getElementById('job-search');
-    if (jobSearch) jobSearch.oninput = () => filterRows(jobSearch.value);
+    if (jobSearch) jobSearch.oninput = () => { const term=jobSearch.value.toLowerCase(); document.querySelectorAll('[data-job-card]').forEach(card=>card.style.display=card.textContent.toLowerCase().includes(term)?'':'none'); filterRows(jobSearch.value); };
     const customerSearch = document.getElementById('customer-search');
     if (customerSearch) customerSearch.oninput = () => filterCards(customerSearch.value);
   }

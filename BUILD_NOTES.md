@@ -1,12 +1,13 @@
-# KLS SameDay v26.25 — Sales Pipeline & Lead Management
+# KLS SameDay v26.27 — Driver & Fleet Management Centre
 
-## Added
-- Six-stage lead pipeline: New Lead, Contacted, Quote Requested, Quote Sent, Won and Lost.
-- Pipeline KPIs for open opportunities, estimated value, won value and follow-ups due.
-- Add, edit, search, filter, move and delete leads.
-- Store company, contact, phone, email, estimated value, follow-up date, source and notes.
-- One-click call, email and new quote actions.
-- Mobile-responsive sales board matching the existing KLS dark interface.
+Added a dedicated transport management module covering driver status, vehicle records, compliance expiries, maintenance alerts, vehicle defect reporting, fuel summaries and fleet operating costs.
 
-## Database
-No SQL migration is required. Leads are stored securely in the browser for this version, so the module works immediately after deployment.
+## Included
+- Driver overview and availability
+- Vehicle records and mileage
+- MOT, insurance, tax, LOLER and service alerts
+- Defect reporting and resolution
+- Fuel and expense summaries
+- Responsive fleet dashboard
+
+No database migration is required. Defect records use secure browser storage until a future Supabase schema upgrade is added.

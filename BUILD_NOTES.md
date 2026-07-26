@@ -1,13 +1,17 @@
-# KLS SameDay v26.27 — Driver & Fleet Management Centre
+# KLS SameDay v26.28 — Customer Portal & Online Booking
 
-Added a dedicated transport management module covering driver status, vehicle records, compliance expiries, maintenance alerts, vehicle defect reporting, fuel summaries and fleet operating costs.
+Added and expanded the customer self-service portal.
 
 ## Included
-- Driver overview and availability
-- Vehicle records and mileage
-- MOT, insurance, tax, LOLER and service alerts
-- Defect reporting and resolution
-- Fuel and expense summaries
-- Responsive fleet dashboard
+- Secure linked customer portal accounts
+- Online collection booking requests
+- Live and completed job visibility
+- Tracking links and POD access
+- Invoice and outstanding balance summaries
+- Saved addresses
+- Favourite routes with one-click form filling
+- Account summary with payment terms, lifetime spend and payments
+- Office approval and conversion of portal requests into jobs
+- Responsive desktop and mobile portal layout
 
-No database migration is required. Defect records use secure browser storage until a future Supabase schema upgrade is added.
+No additional SQL migration is required for this build. Favourite routes are stored locally in the customer browser.

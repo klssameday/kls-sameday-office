@@ -1,6 +1,6 @@
 {
   "name": "kls-sameday-office",
-  "version": "26.24.0",
+  "version": "26.28.0",
   "private": true,
   "scripts": {
     "build": "node build.js"

@@ -85,7 +85,9 @@
     exchangeJobs: [],
     exchangeBids: [],
     dispatchSearch: '',
-    dispatchDriverFilter: 'all'
+    dispatchDriverFilter: 'all',
+    invoiceSearch: '',
+    invoiceFilter: 'all'
   };
 
   let locationWatchId = null;
@@ -585,18 +587,27 @@
     const outstandingInvoices = state.invoices.filter(inv => invoiceBalance(inv) > 0 && inv.status !== 'Cancelled');
     const overdueInvoices = outstandingInvoices.filter(inv => inv.due_date && inv.due_date < todayISO());
     const outstandingTotal = outstandingInvoices.reduce((sum, inv) => sum + invoiceBalance(inv), 0);
+    const search = String(state.invoiceSearch || '').trim().toLowerCase();
+    const filter = state.invoiceFilter || 'all';
+    const visibleInvoices = state.invoices.filter(inv => {
+      const status = invoiceDisplayStatus(inv);
+      const overdue = invoiceBalance(inv) > 0 && inv.due_date && inv.due_date < todayISO();
+      const matchesFilter = filter === 'all' || (filter === 'outstanding' && invoiceBalance(inv) > 0) || (filter === 'overdue' && overdue) || (filter === 'paid' && status === 'Paid');
+      const haystack = [inv.invoice_number, inv.customer_name, inv.issue_date, inv.due_date, status].join(' ').toLowerCase();
+      return matchesFilter && (!search || haystack.includes(search));
+    });
     const queueHtml = deliveredQueue.length ? deliveredQueue.map(job => `<article class="billing-queue-card"><div><small>READY TO INVOICE</small><b>${esc(job.job_number || 'Job')}</b><span>${esc(job.customer_name || job.contact_name || 'Customer')}</span><p>${esc(job.collection_address || '')} → ${esc(job.delivery_address || '')}</p></div><strong>${money(job.total_price)}</strong><button class="primary" data-invoice="${job.id}">Create invoice</button></article>`).join('') : '<div class="billing-clear"><span>✓</span><div><b>Billing queue clear</b><small>Every delivered job has an invoice.</small></div></div>';
-    const rows = state.invoices.map(inv => {
-      const customer = state.customers.find(c => c.id === inv.customer_id) || {};
+    const rows = visibleInvoices.map(inv => {
+      const overdue = invoiceBalance(inv) > 0 && inv.due_date && inv.due_date < todayISO();
       return [
-        esc(inv.invoice_number), esc(inv.customer_name), fmtDate(inv.issue_date), fmtDate(inv.due_date), money(inv.total), money(invoicePaid(inv)), money(invoiceBalance(inv)),
+        `<b>${esc(inv.invoice_number)}</b>${overdue ? '<small class="invoice-overdue-note">OVERDUE</small>' : ''}`, esc(inv.customer_name), fmtDate(inv.issue_date), fmtDate(inv.due_date), money(inv.total), money(invoicePaid(inv)), money(invoiceBalance(inv)),
         `<span class="account-status ${invoiceDisplayStatus(inv).toLowerCase().replace(/[^a-z]/g,'')}">${esc(invoiceDisplayStatus(inv))}</span>`,
-        `<div class="invoice-actions"><button data-record-payment="${inv.id}">Payment</button><button data-print-invoice="${inv.id}">Print</button>${invoiceBalance(inv)>0 ? `<button data-remind-invoice="${inv.id}">Reminder</button>` : ''}</div>`
+        `<div class="invoice-actions"><button class="primary" data-print-invoice="${inv.id}">Open invoice</button><button data-email-invoice="${inv.id}">Email</button><button data-whatsapp-invoice="${inv.id}">WhatsApp</button><button data-record-payment="${inv.id}">Payment</button>${invoiceBalance(inv)>0 ? `<button data-remind-invoice="${inv.id}">Reminder</button>` : ''}</div>`
       ];
     });
-    return `<section class="billing-hero"><div><small>KLS BILLING CONTROL</small><h2>Invoices & payment chasing</h2><p>Create invoices from completed work and follow up outstanding balances.</p></div><button class="primary" data-create-all-invoices ${deliveredQueue.length ? '' : 'disabled'}>Create all ${deliveredQueue.length || ''}</button></section>
+    return `<section class="billing-hero"><div><small>KLS BILLING CONTROL</small><h2>Invoices & payment chasing</h2><p>Create professional invoices from completed work, share them with customers and record payments.</p></div><button class="primary" data-create-all-invoices ${deliveredQueue.length ? '' : 'disabled'}>Create all ${deliveredQueue.length || ''}</button></section>
       <section class="billing-kpis">${card('Ready to invoice',deliveredQueue.length,'Completed jobs waiting','invoices')}${card('Outstanding',money(outstandingTotal),`${outstandingInvoices.length} unpaid invoice${outstandingInvoices.length===1?'':'s'}`,'accounts')}${card('Overdue',overdueInvoices.length,overdueInvoices.length?`${money(overdueInvoices.reduce((s,i)=>s+invoiceBalance(i),0))} needs chasing`:'Nothing overdue','invoices')}${card('Paid',state.invoices.filter(i=>invoiceBalance(i)<=0 && i.status!=='Cancelled').length,'Invoices settled','accounts')}</section>
-      <section class="billing-layout"><div>${panel('Billing queue',`<div class="billing-queue">${queueHtml}</div>`,'Delivered jobs appear here automatically.')}</div><div>${panel('All invoices',table(['Invoice','Customer','Issue','Due','Total','Paid','Balance','Status','Actions'],rows),'Use Reminder to open a ready-written email or WhatsApp payment chase.')}</div></section>`;
+      <section class="billing-layout"><div>${panel('Billing queue',`<div class="billing-queue">${queueHtml}</div>`,'Delivered jobs appear here automatically.')}</div><div>${panel('Invoice register',`<div class="invoice-register-tools"><label>Search invoices<input id="invoice-search" value="${esc(state.invoiceSearch || '')}" placeholder="Invoice number or customer"></label><label>Status<select id="invoice-filter"><option value="all" ${filter==='all'?'selected':''}>All invoices</option><option value="outstanding" ${filter==='outstanding'?'selected':''}>Outstanding</option><option value="overdue" ${filter==='overdue'?'selected':''}>Overdue</option><option value="paid" ${filter==='paid'?'selected':''}>Paid</option></select></label><span>${visibleInvoices.length} shown</span></div>${table(['Invoice','Customer','Issue','Due','Total','Paid','Balance','Status','Actions'],rows)}`,'Open Invoice provides a print-ready document that can be saved as PDF.')}</div></section>`;
   }
 
 
@@ -1723,6 +1734,22 @@
       const url = digits ? `https://wa.me/${digits}?text=${encodeURIComponent(quoteMessage(quote))}` : `https://wa.me/?text=${encodeURIComponent(quoteMessage(quote))}`;
       window.open(url, '_blank', 'noopener');
     });
+    document.getElementById('invoice-search')?.addEventListener('input', event => { state.invoiceSearch = event.target.value; render(); requestAnimationFrame(()=>{const input=document.getElementById('invoice-search'); if(input){input.focus(); input.setSelectionRange(input.value.length,input.value.length);}}); });
+    document.getElementById('invoice-filter')?.addEventListener('change', event => { state.invoiceFilter = event.target.value; render(); });
+    document.querySelectorAll('[data-email-invoice]').forEach(button => button.onclick = () => {
+      const inv=state.invoices.find(i=>i.id===button.dataset.emailInvoice); if(!inv)return;
+      const customer=state.customers.find(c=>c.id===inv.customer_id)||{};
+      const subject=`Invoice ${inv.invoice_number} from ${state.settings.trading_name}`;
+      const body=`Hello ${customer.contact_name || inv.customer_name || ''},\n\nPlease find invoice ${inv.invoice_number} for ${money(inv.total)}. The balance due is ${money(invoiceBalance(inv))}, payable by ${fmtDate(inv.due_date)}.\n\nBank: ${state.settings.bank_name || ''}\nSort code: ${state.settings.sort_code || ''}\nAccount number: ${state.settings.account_number || ''}\n\nKind regards,\n${state.settings.trading_name}`;
+      if(customer.email) location.href=`mailto:${encodeURIComponent(customer.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`; else { navigator.clipboard?.writeText(`${subject}\n\n${body}`); showNotice('Customer email is not saved. Invoice message copied.','ok'); render(); }
+    });
+    document.querySelectorAll('[data-whatsapp-invoice]').forEach(button => button.onclick = () => {
+      const inv=state.invoices.find(i=>i.id===button.dataset.whatsappInvoice); if(!inv)return;
+      const customer=state.customers.find(c=>c.id===inv.customer_id)||{};
+      const message=`Hello ${customer.contact_name || inv.customer_name || ''}, invoice ${inv.invoice_number} from ${state.settings.trading_name} is for ${money(inv.total)}. Balance due: ${money(invoiceBalance(inv))} by ${fmtDate(inv.due_date)}. Please let us know when payment has been made. Thank you.`;
+      const phone=String(customer.phone||'').replace(/\D/g,'').replace(/^0/,'44');
+      if(phone) window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`,'_blank','noopener'); else { navigator.clipboard?.writeText(message); showNotice('Customer phone is not saved. WhatsApp message copied.','ok'); render(); }
+    });
     document.querySelectorAll('[data-print-invoice]').forEach(button => button.onclick = () => printDocument('invoice', state.invoices.find(i => i.id === button.dataset.printInvoice)));
 
     const settingsForm = document.getElementById('settings-form');
@@ -1839,14 +1866,22 @@
 
   function printDocument(type, row) {
     if (!row) { showNotice('Document could not be opened.', 'error'); return; }
-    const quote = type === 'quote'; const job = !quote ? state.jobs.find(j => j.id === row.job_id) : null;
-    const number = quote ? row.quote_number : row.invoice_number; const total = quote ? row.quoted_price : row.total;
+    const quote = type === 'quote';
+    const job = !quote ? state.jobs.find(j => j.id === row.job_id) : null;
+    const customer = state.customers.find(c => c.id === row.customer_id) || {};
+    const number = quote ? row.quote_number : row.invoice_number;
+    const total = Number(quote ? row.quoted_price : row.total || 0);
+    const paid = quote ? 0 : invoicePaid(row);
+    const balance = quote ? total : invoiceBalance(row);
     const win = window.open('', '_blank');
-    if (!win) { showNotice('Your browser blocked the print window. Please allow pop-ups for KLS SameDay Office.', 'error'); return; }
-    win.document.write(`<html><head><title>${esc(number)}</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font-family:Arial;padding:40px;color:#111;margin:0}.toolbar{position:sticky;top:0;display:flex;gap:10px;justify-content:flex-end;padding:12px 0 18px;background:#fff;border-bottom:1px solid #ddd;margin-bottom:24px}.toolbar button{border:0;border-radius:8px;padding:12px 18px;font-size:15px;font-weight:700;cursor:pointer}.print{background:#111;color:#fff}.close{background:#e5e7eb;color:#111}header{border-bottom:3px solid #111;margin-bottom:25px}h1{margin-bottom:5px}.total{text-align:right;font-size:26px;font-weight:bold;margin-top:35px}.route{padding:14px;background:#f4f4f5;border-radius:8px}@media print{.toolbar{display:none}body{padding:20px}}</style></head><body><div class="toolbar"><button class="close" onclick="window.close()">Close &amp; Return to KLS</button><button class="print" onclick="window.print()">Print ${quote ? 'Quotation' : 'Invoice'}</button></div><header><h1>${esc(state.settings.trading_name)}</h1><p>${esc(state.settings.legal_name)}<br>${esc(state.settings.email)} · ${esc(state.settings.phone)}<br>${esc(state.settings.address_line)}</p></header><h2>${quote ? 'QUOTATION' : 'INVOICE'} ${esc(number)}</h2><p><b>Customer:</b> ${esc(row.customer_name)}</p>${quote ? `<div class="route"><p><b>Collection:</b> ${esc(row.collection_address)}</p><p><b>Delivery:</b> ${esc(row.delivery_address)}</p><p><b>Vehicle:</b> ${esc(row.vehicle)}</p></div>` : `<p><b>Job:</b> ${esc(job?.job_number || '')}</p><p><b>Issue:</b> ${fmtDate(row.issue_date)}</p><p><b>Due:</b> ${fmtDate(row.due_date)}</p>`}<div class="total">Total: ${money(total)}</div><p>Payment terms: ${esc(state.settings.default_terms)} days</p><p>${esc(state.settings.bank_name)} ${esc(state.settings.sort_code)} ${esc(state.settings.account_number)}</p></body></html>`);
-    win.document.close();
-    win.focus();
+    if (!win) { showNotice('Your browser blocked the document window. Please allow pop-ups for KLS SameDay Office.', 'error'); return; }
+    const bank = [state.settings.bank_name && `<b>Bank:</b> ${esc(state.settings.bank_name)}`, state.settings.sort_code && `<b>Sort code:</b> ${esc(state.settings.sort_code)}`, state.settings.account_number && `<b>Account:</b> ${esc(state.settings.account_number)}`].filter(Boolean).join('<br>') || 'Add your bank details in Settings.';
+    const customerAddress = customer.address || customer.address_line || customer.billing_address || '';
+    const docBody = quote ? `<section class="route"><div><small>COLLECTION</small><p>${esc(row.collection_address || '—')}</p></div><div><small>DELIVERY</small><p>${esc(row.delivery_address || '—')}</p></div></section><table><tr><th>Vehicle</th><td>${esc(row.vehicle || '—')}</td></tr><tr><th>Goods</th><td>${esc(row.goods_description || 'Courier service')}</td></tr></table>` : `<section class="summary"><div><small>ISSUE DATE</small><b>${fmtDate(row.issue_date)}</b></div><div><small>DUE DATE</small><b>${fmtDate(row.due_date)}</b></div><div><small>STATUS</small><b>${esc(invoiceDisplayStatus(row))}</b></div></section><table><thead><tr><th>Description</th><th class="right">Amount</th></tr></thead><tbody><tr><td><b>Dedicated same-day courier service</b><br><small>${esc(job?.job_number || '')}${job?.vehicle ? ` · ${esc(job.vehicle)}` : ''}</small>${job ? `<div class="route-line">${esc(job.collection_address || '')}<br>→ ${esc(job.delivery_address || '')}</div>` : ''}${job?.goods_description ? `<small>Goods: ${esc(job.goods_description)}</small>` : ''}</td><td class="right">${money(total)}</td></tr></tbody></table><section class="totals"><div><span>Invoice total</span><b>${money(total)}</b></div>${paid>0?`<div><span>Paid</span><b>− ${money(paid)}</b></div>`:''}<div class="balance"><span>Balance due</span><strong>${money(balance)}</strong></div></section><section class="payment"><h3>Payment details</h3><p>${bank}</p><p>Payment reference: <b>${esc(row.invoice_number)}</b></p></section>`;
+    win.document.write(`<!doctype html><html><head><title>${esc(number)}</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#111;margin:0;background:#eef0f3}.page{max-width:850px;margin:24px auto;background:#fff;padding:46px;box-shadow:0 12px 40px #0002}.toolbar{max-width:850px;margin:18px auto 0;display:flex;gap:10px;justify-content:flex-end}.toolbar button{border:0;border-radius:9px;padding:12px 18px;font-weight:800;cursor:pointer}.print{background:#111;color:#fff}.close{background:#fff}.brand{display:flex;justify-content:space-between;border-bottom:4px solid #111;padding-bottom:22px}.logo b{font-size:42px;letter-spacing:-3px}.logo span{display:block;font-weight:800;letter-spacing:3px}.company{text-align:right;font-size:13px;line-height:1.6}.document-head{display:flex;justify-content:space-between;align-items:flex-end;margin:34px 0}.document-head h1{font-size:34px;margin:0}.document-head strong{font-size:20px}.billto{background:#f4f4f5;padding:18px;border-radius:10px;margin-bottom:24px}.billto small,.summary small,.route small{font-weight:800;letter-spacing:1px;color:#666}.billto p{line-height:1.55;margin:8px 0 0}.summary{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:26px}.summary div{background:#f4f4f5;padding:14px;border-radius:8px}.summary b{display:block;margin-top:6px}table{width:100%;border-collapse:collapse;margin:24px 0}th,td{padding:16px 12px;border-bottom:1px solid #ddd;text-align:left;vertical-align:top}.right{text-align:right}.route-line{margin:10px 0;line-height:1.45}.totals{margin-left:auto;width:min(360px,100%)}.totals div{display:flex;justify-content:space-between;padding:9px 0}.totals .balance{border-top:3px solid #111;margin-top:6px;padding-top:14px;font-size:20px}.payment{margin-top:36px;padding:20px;background:#f4f4f5;border-radius:10px}.route{display:grid;grid-template-columns:1fr 1fr;gap:15px}.route div{background:#f4f4f5;padding:18px;border-radius:10px}.footer{margin-top:38px;padding-top:18px;border-top:1px solid #ddd;color:#555;font-size:12px;text-align:center}@media(max-width:650px){.page{margin:0;padding:24px}.toolbar{margin:8px}.brand,.document-head{display:block}.company{text-align:left;margin-top:15px}.summary,.route{grid-template-columns:1fr}}@media print{body{background:#fff}.toolbar{display:none}.page{box-shadow:none;margin:0;max-width:none;padding:20px}}</style></head><body><div class="toolbar"><button class="close" onclick="window.close()">Close</button><button class="print" onclick="window.print()">Print / Save PDF</button></div><main class="page"><header class="brand"><div class="logo"><b>KLS</b><span>SAMEDAY</span></div><div class="company"><b>${esc(state.settings.legal_name)}</b><br>${esc(state.settings.address_line)}<br>${esc(state.settings.email)} · ${esc(state.settings.phone)}<br>${esc(state.settings.website)}</div></header><section class="document-head"><div><small>${quote?'QUOTATION':'TAX-FREE INVOICE'}</small><h1>${quote?'Quotation':'Invoice'}</h1></div><strong>${esc(number)}</strong></section><section class="billto"><small>${quote?'PREPARED FOR':'BILL TO'}</small><p><b>${esc(row.customer_name || customer.company || 'Customer')}</b>${customer.contact_name?`<br>${esc(customer.contact_name)}`:''}${customerAddress?`<br>${esc(customerAddress)}`:''}${customer.email?`<br>${esc(customer.email)}`:''}</p></section>${docBody}<footer class="footer">${esc(state.settings.trading_name)} · Dedicated same-day logistics · Based in Essex, nationwide coverage</footer></main></body></html>`);
+    win.document.close(); win.focus();
   }
+
 
   function getOnePosition() { return new Promise((resolve,reject)=>navigator.geolocation.getCurrentPosition(resolve,reject,{enableHighAccuracy:true,timeout:15000,maximumAge:5000})); }
   async function startLocationTracking(jobId) {

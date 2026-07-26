@@ -1,13 +1,12 @@
-# KLS SameDay v26.21 — Delivery Documents Centre
+# KLS SameDay v26.22 — Professional Invoice Centre
 
 ## Added
-- New Delivery Documents section in the Finance menu.
-- Delivered jobs automatically appear in a searchable POD library.
-- Professional proof-of-delivery certificate with collection, delivery, recipient, driver, vehicle, goods, notes, POD photo and signature.
-- Print or save each certificate as a PDF using the browser print screen.
-- Share POD details from supported phones or copy them to the clipboard on desktop.
-- Direct links to the original POD photograph and signature.
-- Live totals for delivered jobs, POD-ready documents, missing POD records and monthly completions.
+- Search and status filters for the invoice register.
+- Professional invoice document with customer details, job route, goods, dates, payment status and bank details.
+- Print or Save PDF directly from the invoice window.
+- Email and WhatsApp invoice messages generated from the saved customer record.
+- Clear overdue markers and live paid/balance figures.
+- Existing billing queue, payment recording and reminders remain in place.
 
 ## Database
 No SQL migration is required.

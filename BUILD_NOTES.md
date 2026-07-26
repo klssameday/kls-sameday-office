@@ -1,18 +1,11 @@
-# KLS SameDay Office v26.30
+# KLS SameDay Office v26.31
 
-## AI Dispatch Assistant
+## Fleet Maintenance & Service Scheduler
 
-Added a new AI Dispatch Assistant page with:
-
-- Live dispatch KPIs
-- Recommended driver assignments
-- One-click assignment
-- Driver workload balancing
-- Vehicle suitability scoring
-- Unassigned-job warnings
-- Potential late-collection warnings
-- Missing POD warnings
-- Estimated job profit and margin
-- Live operational guidance
-
-The assistant is rule-based and uses the records already stored in KLS SameDay Office. It does not send business data to an external AI service.
+- Rebuilt the Driver & Fleet Centre around vehicle compliance and road readiness.
+- Added 60-day MOT, insurance, tax, LOLER and service alerts.
+- Added vehicle compliance badges and per-vehicle running-cost summaries.
+- Added maintenance history and service-planner views.
+- Added clearer critical-defect and vehicle-grounding warnings.
+- Added fuel, maintenance and combined fleet-spend reporting.
+- Kept existing vehicle, fuel and maintenance database workflows intact.

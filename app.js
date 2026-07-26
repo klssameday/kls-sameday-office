@@ -186,8 +186,13 @@
   function dashboard() {
     const today = todayISO();
     const now = Date.now();
+    const startOfWeek = new Date();
+    startOfWeek.setHours(0,0,0,0);
+    startOfWeek.setDate(startOfWeek.getDate() - ((startOfWeek.getDay() + 6) % 7));
+    const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
     const activeJobs = state.jobs.filter(j => !['Delivered','Cancelled'].includes(j.job_status));
     const todayJobs = state.jobs.filter(j => j.job_status !== 'Cancelled' && String(j.collection_date || '').slice(0,10) === today);
+    const completedJobs = state.jobs.filter(j => j.job_status === 'Delivered');
     const liveJobs = activeJobs.filter(j => j.last_latitude && j.last_longitude);
     const availableDrivers = state.drivers.filter(d => String(d.status || d.availability_status || '').toLowerCase() === 'available');
     const onJobDrivers = state.drivers.filter(d => ['on job','on_job','busy','assigned'].includes(String(d.status || d.availability_status || '').toLowerCase()));
@@ -197,6 +202,11 @@
     const pendingQuotes = state.quotes.filter(q => q.status === 'Pending');
     const pendingPortal = state.portalBookings.filter(b => b.status === 'Pending');
     const todayRevenue = todayJobs.reduce((sum,j)=>sum+Number(j.total_price||0),0);
+    const weekJobs = state.jobs.filter(j => j.job_status !== 'Cancelled' && new Date(j.collection_date || j.created_at || 0) >= startOfWeek);
+    const monthJobs = state.jobs.filter(j => j.job_status !== 'Cancelled' && new Date(j.collection_date || j.created_at || 0) >= startOfMonth);
+    const weekRevenue = weekJobs.reduce((sum,j)=>sum+Number(j.total_price||0),0);
+    const monthRevenue = monthJobs.reduce((sum,j)=>sum+Number(j.total_price||0),0);
+    const averageJob = state.jobs.filter(j=>j.job_status!=='Cancelled').length ? state.jobs.filter(j=>j.job_status!=='Cancelled').reduce((s,j)=>s+Number(j.total_price||0),0) / state.jobs.filter(j=>j.job_status!=='Cancelled').length : 0;
 
     const lateCollections = activeJobs.filter(j => {
       if (!j.collection_date || !j.collection_time || ['Collected','In Transit'].includes(j.job_status)) return false;
@@ -223,17 +233,35 @@
     const driverRows = state.drivers.slice(0,8).map(d => {
       const status = d.status || d.availability_status || 'Offline';
       const vehicle = d.vehicle_type || d.vehicle || d.registration || 'Vehicle not set';
-      return `<button class="command-driver" data-page="tracking"><i class="${String(status).toLowerCase().replace(/\s+/g,'-')}"></i><span><b>${esc(d.name||d.full_name||'Driver')}</b><small>${esc(vehicle)}</small></span><strong>${esc(status)}</strong></button>`;
+      const current = activeJobs.find(j => String(j.assigned_driver_id||'') === String(d.id||'') || (j.assigned_driver_name && j.assigned_driver_name === (d.name||d.full_name)));
+      return `<button class="command-driver" data-page="tracking"><i class="${String(status).toLowerCase().replace(/\s+/g,'-')}"></i><span><b>${esc(d.name||d.full_name||'Driver')}</b><small>${esc(current ? `${current.job_number||'Job'} · ${current.job_status||'Active'}` : vehicle)}</small></span><strong>${esc(status)}</strong></button>`;
     }).join('') || '<div class="command-empty">No drivers added yet.</div>';
 
-    return `<section class="command-hero"><div><small>KLS SAMEDAY COMMAND CENTRE</small><h2>${new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})}</h2><p>Live jobs, drivers, alerts and money — all from one control screen.</p></div><div><button class="secondary" data-action="refresh-dispatch">↻ Refresh</button><button class="primary" data-page="newquote">＋ New Job</button></div></section>
-      <section class="command-kpis">${card('Active jobs',activeJobs.length,`${todayJobs.length} booked today`,'dispatch')}${card('Drivers online',liveJobs.length,`${availableDrivers.length} available`,'tracking')}${card('Today’s value',money(todayRevenue),`${todayJobs.length} scheduled job${todayJobs.length===1?'':'s'}`,'jobs')}${card('Needs attention',alerts.length,alerts.length?'Action required':'All clear','dashboard')}</section>
+    const activity = state.jobs.map(j=>({
+      time:new Date(j.updated_at || j.created_at || j.collection_date || 0),
+      icon:j.job_status==='Delivered'?'✓':j.job_status==='In Transit'?'→':j.job_status==='Collected'?'□':j.assigned_driver_name?'♙':'＋',
+      title:`${j.job_number||'Job'} · ${j.job_status||'Booked'}`,
+      text:j.job_status==='Delivered' ? `POD completed${j.pod_recipient_name ? ` for ${j.pod_recipient_name}` : ''}` : (j.assigned_driver_name ? `${j.assigned_driver_name} · ${j.customer_name||j.contact_name||'Customer'}` : `${j.customer_name||j.contact_name||'Customer'} · awaiting driver`),
+      page:'jobs'
+    })).filter(a=>Number.isFinite(a.time.getTime())).sort((a,b)=>b.time-a.time).slice(0,8);
+
+    const lastSeven = Array.from({length:7},(_,i)=>{ const d=new Date(); d.setHours(0,0,0,0); d.setDate(d.getDate()-(6-i)); const iso=d.toISOString().slice(0,10); const jobs=state.jobs.filter(j=>j.job_status!=='Cancelled' && String(j.collection_date||'').slice(0,10)===iso); return {label:d.toLocaleDateString('en-GB',{weekday:'short'}), jobs:jobs.length, revenue:jobs.reduce((s,j)=>s+Number(j.total_price||0),0)}; });
+    const maxJobs = Math.max(1,...lastSeven.map(d=>d.jobs));
+    const maxRevenue = Math.max(1,...lastSeven.map(d=>d.revenue));
+    const jobsChart = lastSeven.map(d=>`<div class="ops-bar-item"><span style="height:${Math.max(5,(d.jobs/maxJobs)*100)}%" title="${d.jobs} jobs"></span><b>${d.jobs}</b><small>${d.label}</small></div>`).join('');
+    const revenueChart = lastSeven.map(d=>`<div class="ops-bar-item"><span style="height:${Math.max(5,(d.revenue/maxRevenue)*100)}%" title="${money(d.revenue)}"></span><b>${d.revenue ? money(d.revenue).replace('.00','') : '£0'}</b><small>${d.label}</small></div>`).join('');
+
+    return `<section class="command-hero"><div><small>KLS SAMEDAY OPERATIONS DASHBOARD</small><h2>${new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})}</h2><p>Live jobs, drivers, alerts and revenue from one control screen.</p></div><div><button class="secondary" data-action="refresh-dispatch">↻ Refresh</button><button class="primary" data-page="newquote">＋ New Job</button></div></section>
+      <section class="command-kpis ops-kpis">${card('Jobs today',todayJobs.length,`${activeJobs.length} currently active`,'jobs')}${card('In progress',activeJobs.length,`${unassigned.length} unassigned`,'dispatch')}${card('Completed',completedJobs.length,`${completedJobs.filter(j=>String(j.collection_date||j.updated_at||'').slice(0,10)===today).length} today`,'jobs')}${card('Active drivers',onJobDrivers.length,`${availableDrivers.length} available`,'drivers')}${card('Today’s revenue',money(todayRevenue),`${todayJobs.length} scheduled`,'jobs')}${card('Needs attention',alerts.length,alerts.length?'Action required':'All clear','dashboard')}</section>
+      <section class="ops-finance-strip"><div><small>TODAY</small><b>${money(todayRevenue)}</b></div><div><small>THIS WEEK</small><b>${money(weekRevenue)}</b></div><div><small>THIS MONTH</small><b>${money(monthRevenue)}</b></div><div><small>AVERAGE JOB</small><b>${money(averageJob)}</b></div><button data-page="accounts">Open accounts →</button></section>
       <section class="command-layout"><div class="command-main">
         <section class="command-map-panel"><header><div><small>LIVE FLEET</small><h2>Driver map</h2></div><button class="secondary" data-page="tracking">Full tracking</button></header><div id="command-map" class="command-map"></div><div id="command-map-empty" class="command-map-empty hidden"><b>No live GPS positions</b><span>Drivers appear here when location tracking starts.</span></div></section>
         <section class="command-board-panel"><header><div><small>LIVE OPERATIONS</small><h2>Dispatch snapshot</h2></div><button class="secondary" data-page="dispatch">Open full board</button></header><div class="command-board">${board}</div></section>
+        <section class="ops-chart-grid"><section class="ops-chart-panel"><header><div><small>LAST 7 DAYS</small><h2>Jobs completed</h2></div></header><div class="ops-bar-chart">${jobsChart}</div></section><section class="ops-chart-panel"><header><div><small>LAST 7 DAYS</small><h2>Booked revenue</h2></div></header><div class="ops-bar-chart revenue">${revenueChart}</div></section></section>
       </div><aside class="command-side">
         <section class="command-panel"><header><div><small>ATTENTION</small><h2>Smart alerts</h2></div><b>${alerts.length}</b></header><div class="command-alerts">${alerts.slice(0,7).map(a=>`<button class="${a.level}" data-page="${a.page}"><span></span><div><b>${esc(a.title)}</b><small>${esc(a.text)}</small></div>→</button>`).join('') || '<div class="command-all-clear"><b>✓ All clear</b><span>Nothing urgent needs your attention.</span></div>'}</div></section>
-        <section class="command-panel"><header><div><small>FLEET STATUS</small><h2>Drivers</h2></div><button data-page="dispatch">Open drivers</button></header><div class="command-drivers">${driverRows}</div><footer><span>${availableDrivers.length} available</span><span>${onJobDrivers.length} on jobs</span><span>${offlineDrivers.length} offline</span></footer></section>
+        <section class="command-panel"><header><div><small>FLEET STATUS</small><h2>Drivers</h2></div><button data-page="drivers">Driver control</button></header><div class="command-drivers">${driverRows}</div><footer><span>${availableDrivers.length} available</span><span>${onJobDrivers.length} on jobs</span><span>${offlineDrivers.length} offline</span></footer></section>
+        <section class="command-panel ops-activity"><header><div><small>RECENT ACTIVITY</small><h2>Live updates</h2></div><button data-page="jobs">All jobs</button></header><div>${activity.map(a=>`<button data-page="${a.page}"><span>${a.icon}</span><div><b>${esc(a.title)}</b><small>${esc(a.text)}</small></div><time>${a.time.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}</time></button>`).join('') || '<div class="command-empty">No recent activity yet.</div>'}</div></section>
         <section class="command-panel command-quick"><header><div><small>QUICK ACTIONS</small><h2>Run the business</h2></div></header><div><button data-page="newquote">＋<span><b>New quote</b><small>Price a delivery</small></span></button><button data-page="dispatch">🚚<span><b>Dispatch</b><small>Assign and move jobs</small></span></button><button data-page="customers">👤<span><b>Customer</b><small>Open CRM</small></span></button><button data-page="invoices">£<span><b>Invoices</b><small>${unpaid.length} unpaid</small></span></button></div></section>
       </aside></section>
       <section class="command-bottom">${card('Unassigned',unassigned.length,'Jobs waiting for a driver','dispatch')}${card('Live GPS',liveJobs.length,staleTracking.length?`${staleTracking.length} stale update${staleTracking.length===1?'':'s'}`:'Tracking healthy','tracking')}${card('Pending quotes',pendingQuotes.length,'Waiting for customer reply','quotes')}${card('Outstanding',money(unpaid.reduce((s,i)=>s+invoiceBalance(i),0)),`${overdue.length} overdue`,'invoices')}</section>`;

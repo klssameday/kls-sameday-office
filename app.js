@@ -88,7 +88,10 @@
     dispatchDriverFilter: 'all',
     invoiceSearch: '',
     invoiceFilter: 'all',
-    reportPeriod: new Date().toISOString().slice(0,7)
+    reportPeriod: new Date().toISOString().slice(0,7),
+    leads: JSON.parse(localStorage.getItem('kls_sales_leads') || '[]'),
+    leadFilter: 'all',
+    leadSearch: ''
   };
 
   let locationWatchId = null;
@@ -134,6 +137,7 @@
       ['newquote','New Quote'],
       ['quotes','Quotes'],
       ['quoterequests','Online Requests'],
+      ['pipeline','Sales Pipeline'],
       ['customers','Customers'],
       ['portalrequests','Customer Portal']
     ]],
@@ -159,13 +163,13 @@
     dashboard:'Dashboard', smart:'Smart Dispatch', routes:'Route Planner', operations:'Today’s Planner',
     dispatch:'Live Dispatch', drivers:'Driver Control', exchange:'Driver Exchange', driver:'Driver App', tracking:'Live Tracking',
     fleet:'Fleet Management', schedule:'Booking Calendar', portalrequests:'Customer Portal',
-    quoterequests:'Online Requests', newquote:'New Quote', quotes:'Quotes', jobs:'Jobs',
+    quoterequests:'Online Requests', pipeline:'Sales Pipeline', newquote:'New Quote', quotes:'Quotes', jobs:'Jobs',
     invoices:'Invoices', documents:'Delivery Documents', accounts:'Accounts & Payments', reports:'Business Reports', customers:'Customers', settings:'Settings'
   };
 
   const navIcons = {
     dashboard:'⌂', operations:'◷', dispatch:'⇄', jobs:'▤', newquote:'＋', quotes:'◫',
-    quoterequests:'↧', customers:'◎', portalrequests:'◉', drivers:'♙', driver:'♙', tracking:'⌖',
+    quoterequests:'↧', pipeline:'◆', customers:'◎', portalrequests:'◉', drivers:'♙', driver:'♙', tracking:'⌖',
     exchange:'⇆', routes:'◇', schedule:'□', invoices:'£', documents:'▧', accounts:'◌', reports:'▥', settings:'⚙'
   };
 
@@ -1081,6 +1085,22 @@
     ${panel('Network jobs',`<div class="exchange-job-list">${cards}</div>`,'Jobs stay open until you award or withdraw them. There is no bid-closing time.')}`;
   }
 
+
+  function saveLeads(){ localStorage.setItem('kls_sales_leads', JSON.stringify(state.leads)); }
+  function leadValue(lead){ return Number(lead.value || 0); }
+  function salesPipelineView(){
+    const stages=['New Lead','Contacted','Quote Requested','Quote Sent','Won','Lost'];
+    const search=String(state.leadSearch||'').toLowerCase();
+    const visible=state.leads.filter(l => (state.leadFilter==='all'||l.stage===state.leadFilter) && (!search||`${l.company} ${l.contact} ${l.email} ${l.phone}`.toLowerCase().includes(search)));
+    const open=state.leads.filter(l=>!['Won','Lost'].includes(l.stage));
+    const openValue=open.reduce((s,l)=>s+leadValue(l),0);
+    const wonValue=state.leads.filter(l=>l.stage==='Won').reduce((s,l)=>s+leadValue(l),0);
+    const due=state.leads.filter(l=>l.follow_up && l.follow_up<=todayISO() && !['Won','Lost'].includes(l.stage)).length;
+    const columns=stages.map(stage=>{ const rows=visible.filter(l=>l.stage===stage); return `<section class="pipeline-column"><header><div><h3>${stage}</h3><small>${rows.length} lead${rows.length===1?'':'s'}</small></div><strong>${money(rows.reduce((s,l)=>s+leadValue(l),0))}</strong></header><div class="pipeline-cards">${rows.map(l=>`<article class="lead-card" data-lead-id="${l.id}"><div class="lead-card-top"><div><b>${esc(l.company)}</b><small>${esc(l.contact||'No contact')}</small></div><button class="icon-button" data-delete-lead="${l.id}" title="Delete">×</button></div><p>${esc(l.notes||'No notes added.')}</p><div class="lead-meta"><span>${money(l.value)}</span><span>${l.follow_up?`Follow up ${fmtDate(l.follow_up)}`:'No follow-up'}</span></div><label>Stage<select data-lead-stage="${l.id}">${stages.map(x=>`<option ${x===l.stage?'selected':''}>${x}</option>`).join('')}</select></label><div class="lead-actions">${l.phone?`<a href="tel:${esc(l.phone)}">Call</a>`:''}${l.email?`<a href="mailto:${esc(l.email)}">Email</a>`:''}<button data-lead-quote="${l.id}">New Quote</button></div></article>`).join('')||'<div class="pipeline-empty">No leads</div>'}</div></section>`}).join('');
+    return `<section class="pipeline-hero"><div><small>SALES & GROWTH</small><h2>Sales Pipeline</h2><p>Track every prospect from first enquiry through to a paying customer.</p></div><button class="primary" data-new-lead>＋ Add Lead</button></section><section class="crm-kpis">${card('Open leads',open.length,'Active opportunities','')}${card('Pipeline value',money(openValue),'Estimated open value','')}${card('Won value',money(wonValue),'Converted business','')}${card('Follow-ups due',due,due?'Needs attention':'Nothing overdue','')}</section>${panel('Lead pipeline',`<div class="pipeline-toolbar"><input id="lead-search" placeholder="Search company, contact, phone or email" value="${esc(state.leadSearch)}"><select id="lead-filter"><option value="all">All stages</option>${stages.map(x=>`<option ${state.leadFilter===x?'selected':''}>${x}</option>`).join('')}</select><button class="primary" data-new-lead>＋ Add Lead</button></div><div class="pipeline-board">${columns}</div>${leadModal()}`,'Drag-free pipeline with clear stages and follow-up dates.')}`;
+  }
+  function leadModal(){ if(!state.editLeadId)return ''; const existing=state.leads.find(l=>l.id===state.editLeadId)||{}; return `<div class="modalback" data-close-lead><section class="customermodal crm-modal" onclick="event.stopPropagation()"><div class="modalhead"><div><small>SALES OPPORTUNITY</small><h2>${existing.id?'Edit lead':'Add new lead'}</h2></div><button data-close-lead>×</button></div><form id="lead-form"><input type="hidden" name="id" value="${esc(existing.id||'')}"><div class="grid two"><label>Company<input name="company" required value="${esc(existing.company||'')}"></label><label>Contact name<input name="contact" value="${esc(existing.contact||'')}"></label><label>Phone<input name="phone" value="${esc(existing.phone||'')}"></label><label>Email<input name="email" type="email" value="${esc(existing.email||'')}"></label><label>Estimated value (£)<input name="value" type="number" min="0" step="0.01" value="${esc(existing.value||'')}"></label><label>Follow-up date<input name="follow_up" type="date" value="${esc(existing.follow_up||'')}"></label><label>Stage<select name="stage">${['New Lead','Contacted','Quote Requested','Quote Sent','Won','Lost'].map(x=>`<option ${x===(existing.stage||'New Lead')?'selected':''}>${x}</option>`).join('')}</select></label><label>Lead source<input name="source" placeholder="Google, referral, LinkedIn…" value="${esc(existing.source||'')}"></label></div><label>Notes<textarea name="notes" rows="4">${esc(existing.notes||'')}</textarea></label><div class="actions"><button type="button" data-close-lead>Cancel</button><button class="primary">Save Lead</button></div></form></section></div>`; }
+
   function settingsView() {
     const fields = { trading_name:'Trading name',legal_name:'Legal company name',phone:'Telephone',whatsapp:'WhatsApp',email:'Email',website:'Website',address_line:'Business address',bank_name:'Bank name',sort_code:'Sort code',account_number:'Account number',default_terms:'Payment terms (days)' };
     const linked = state.portalAccessUsers.length ? `<div class="portal-access-list">${state.portalAccessUsers.map(u=>`<article><div><b>${esc(u.customers?.company||'Customer')}</b><small>${esc(u.email)}</small></div><span class="portal-status ${u.active?'approved':'cancelled'}">${u.active?'Active':'Disabled'}</span>${u.active?`<button class="danger" data-portal-revoke="${u.id}">Disable</button>`:''}</article>`).join('')}</div>` : '<div class="fleet-empty">No customer portal accounts linked yet.</div>';
@@ -1097,7 +1117,7 @@
     if (state.loading) { document.getElementById('app').innerHTML = '<div class="loading">Loading KLS SameDay Office…</div>'; return; }
     if (!state.user) { document.getElementById('app').innerHTML = authView(); bindAuth(); return; }
     if (state.portalUser) { document.getElementById('app').innerHTML = customerPortalView(); bindCustomerPortal(); return; }
-    const views = { dashboard, smart: smartDispatchView, routes: routePlannerView, operations: operationsView, dispatch: dispatchView, drivers: driversManagementView, exchange: driverExchangeView, driver: driverView, tracking: liveTrackingView, fleet: fleetView, schedule: scheduleView, newquote: newQuote, quotes: quotesView, jobs: jobsView, invoices: invoicesView, documents: deliveryDocumentsView, accounts: accountsView, reports: businessReportsView, portalrequests: portalRequestsView, quoterequests: quoteRequestsView, customers: customersView, settings: settingsView };
+    const views = { dashboard, smart: smartDispatchView, routes: routePlannerView, operations: operationsView, dispatch: dispatchView, drivers: driversManagementView, exchange: driverExchangeView, driver: driverView, tracking: liveTrackingView, fleet: fleetView, schedule: scheduleView, newquote: newQuote, quotes: quotesView, jobs: jobsView, invoices: invoicesView, documents: deliveryDocumentsView, accounts: accountsView, reports: businessReportsView, portalrequests: portalRequestsView, quoterequests: quoteRequestsView, customers: customersView, pipeline: salesPipelineView, settings: settingsView };
     document.getElementById('app').innerHTML = layout(views[state.page]());
     bindApp();
     if (state.page === 'dashboard') initialiseCommandMap();
@@ -1405,6 +1425,15 @@
       await loadAll(); state.page='exchange'; showNotice('Network job withdrawn.','ok'); render();
     });
     document.querySelectorAll('[data-page]').forEach(button => button.onclick = () => { state.page = button.dataset.page; render(); });
+    document.querySelectorAll('[data-new-lead]').forEach(b=>b.onclick=()=>{state.editLeadId='new';render();});
+    document.querySelectorAll('[data-close-lead]').forEach(b=>b.onclick=()=>{state.editLeadId=null;render();});
+    document.getElementById('lead-search')?.addEventListener('input',e=>{state.leadSearch=e.target.value;render();});
+    document.getElementById('lead-filter')?.addEventListener('change',e=>{state.leadFilter=e.target.value;render();});
+    document.getElementById('lead-form')?.addEventListener('submit',e=>{e.preventDefault();const v=Object.fromEntries(new FormData(e.currentTarget));const lead={...v,id:v.id||crypto.randomUUID(),value:Number(v.value||0),created_at:new Date().toISOString()};const i=state.leads.findIndex(x=>x.id===lead.id);if(i>=0)state.leads[i]={...state.leads[i],...lead};else state.leads.unshift(lead);saveLeads();state.editLeadId=null;showNotice('Lead saved.','ok');render();});
+    document.querySelectorAll('[data-lead-stage]').forEach(s=>s.onchange=()=>{const l=state.leads.find(x=>x.id===s.dataset.leadStage);if(l){l.stage=s.value;saveLeads();render();}});
+    document.querySelectorAll('[data-delete-lead]').forEach(b=>b.onclick=e=>{e.stopPropagation();if(confirm('Delete this lead?')){state.leads=state.leads.filter(x=>x.id!==b.dataset.deleteLead);saveLeads();render();}});
+    document.querySelectorAll('[data-lead-id]').forEach(c=>c.onclick=e=>{if(e.target.closest('button,select,a'))return;state.editLeadId=c.dataset.leadId;render();});
+    document.querySelectorAll('[data-lead-quote]').forEach(b=>b.onclick=()=>{const l=state.leads.find(x=>x.id===b.dataset.leadQuote);if(!l)return;state.page='newquote';state.quoteCustomerId=null;showNotice(`Create a quote for ${l.company}. Add them as a customer first if needed.`,'ok');render();});
     document.getElementById('report-period')?.addEventListener('change', event => { state.reportPeriod = event.target.value || todayISO().slice(0,7); render(); });
     document.querySelector('[data-export-report]')?.addEventListener('click', exportBusinessReportCsv);
     document.getElementById('route-date')?.addEventListener('change', event => { state.routeDate = event.target.value || todayISO(); render(); });

@@ -1,15 +1,12 @@
-# KLS SameDay v26.24 — Customer Management CRM
+# KLS SameDay v26.25 — Sales Pipeline & Lead Management
 
 ## Added
-- Full customer table with search and health filtering.
-- Customer health scoring: Excellent, Good, Needs Attention and Inactive.
-- 360° customer profiles with revenue, paid, outstanding, average job value and quote conversion.
-- Complete activity timeline combining quotes, jobs and invoices.
-- Expandable Jobs, Quotes and Invoices account history.
-- One-click call, email and WhatsApp actions.
-- Repeat Last Job shortcut to speed up repeat bookings.
-- Improved account notes, payment terms and billing details.
-- Responsive CRM layout for desktop, tablet and mobile.
+- Six-stage lead pipeline: New Lead, Contacted, Quote Requested, Quote Sent, Won and Lost.
+- Pipeline KPIs for open opportunities, estimated value, won value and follow-ups due.
+- Add, edit, search, filter, move and delete leads.
+- Store company, contact, phone, email, estimated value, follow-up date, source and notes.
+- One-click call, email and new quote actions.
+- Mobile-responsive sales board matching the existing KLS dark interface.
 
 ## Database
-No SQL migration is required. This upgrade uses the existing customers, quotes, jobs and invoices tables.
+No SQL migration is required. Leads are stored securely in the browser for this version, so the module works immediately after deployment.

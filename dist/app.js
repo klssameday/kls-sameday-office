@@ -63,6 +63,8 @@
     portalBookings: [],
     portalJobs: [],
     portalInvoices: [],
+    portalQuotes: [],
+    portalMessages: [],
     portalAddresses: [],
     portalFavouriteRoutes: JSON.parse(localStorage.getItem('kls_portal_routes') || '[]'),
     portalAccessUsers: [],
@@ -129,7 +131,7 @@
         <button class="primary" style="width:100%" ${configured ? '' : 'disabled'}>${signUp ? 'Create Account' : 'Sign In'}</button>
       </form>
       <div id="auth-message"></div>
-      <div class="authswitch">${signUp ? 'Already registered?' : 'First time using the system?'} <button data-auth-mode="${signUp ? 'signin' : 'signup'}">${signUp ? 'Sign in' : 'Create account'}</button></div>
+      <div class="authswitch">${signUp ? 'Already registered?' : 'First time using the system?'} <button data-auth-mode="${signUp ? 'signin' : 'signup'}">${signUp ? 'Sign in' : 'Create account'}</button></div>${!signUp ? '<div class="authswitch"><button data-password-reset>Forgot password?</button></div>' : ''}
     </section></div>`;
   }
 
@@ -884,7 +886,9 @@
     const requests = state.portalBookings.slice(0, 6);
     const paidTotal = state.portalInvoices.reduce((sum, inv) => sum + Math.max(0, Number(inv.total||0)-invoiceBalance(inv)), 0);
     const lifetimeSpend = state.portalInvoices.reduce((sum, inv) => sum + Number(inv.total||0), 0);
-    const docs = state.portalJobs.filter(j=>j.pod_photo_url).slice(0,8);
+    const docs = state.portalJobs.filter(j=>j.pod_photo_url || j.pod_signature_url).slice(0,8);
+    const portalQuotes = state.portalQuotes.slice(0,8);
+    const portalMessages = state.portalMessages.slice(0,8);
     return `<div class="portal-shell"><header class="portal-top"><div class="portal-brand"><b>KLS</b><span>SameDay Customer Portal</span></div><div><strong>${esc(customer.company || state.user?.email || 'Customer')}</strong><button class="secondary" data-action="portal-signout">Sign out</button></div></header><main class="portal-main">
       ${state.notice ? `<div class="notice ${state.notice.type}">${esc(state.notice.text)}<button data-action="notice-close">×</button></div>` : ''}
       <section class="portal-hero"><div><small>WELCOME TO KLS SAMEDAY</small><h1>${esc(customer.company || 'Your account')}</h1><p>Book collections, follow active deliveries and access your account documents.</p></div><button class="primary" data-action="portal-book-focus">＋ Book a collection</button></section>
@@ -894,12 +898,14 @@
         ${panel('Your jobs', recentJobs.length ? `<div class="portal-job-list">${recentJobs.map(j=>`<article><div><b>${esc(j.job_number||'Job')}</b>${portalStatusBadge(j.job_status)}</div><h3>${fmtDate(j.collection_date)} ${esc(String(j.collection_time||'').slice(0,5))}</h3><p><small>COLLECT</small>${esc(j.collection_address||'')}</p><p><small>DELIVER</small>${esc(j.delivery_address||'')}</p><footer>${j.tracking_token ? `<a class="secondary button-link" href="?track=${encodeURIComponent(j.tracking_token)}">Track job</a>` : ''}${j.pod_photo_url ? `<a class="secondary button-link" href="${esc(j.pod_photo_url)}" target="_blank" rel="noopener">View POD</a>` : ''}<button class="secondary" data-portal-rebook="${j.id}">Rebook</button></footer></article>`).join('')}</div>` : '<div class="fleet-empty">No jobs are visible on your account yet.</div>', 'Live and completed deliveries.')}
       </div><aside class="portal-side">
         ${panel('Booking requests', requests.length ? `<div class="portal-request-list">${requests.map(b=>`<p><span><b>${fmtDate(b.collection_date)}</b><small>${esc(b.collection_address)} → ${esc(b.delivery_address)}</small></span>${portalStatusBadge(b.status)}</p>`).join('')}</div>` : '<div class="fleet-empty">No booking requests yet.</div>')}
-        ${panel('Invoices', state.portalInvoices.length ? `<div class="portal-invoice-list">${state.portalInvoices.slice(0,10).map(inv=>`<p><span><b>${esc(inv.invoice_number||'Invoice')}</b><small>Due ${fmtDate(inv.due_date)}</small></span><strong>${money(invoiceBalance(inv))}</strong></p>`).join('')}</div>` : '<div class="fleet-empty">No invoices available.</div>', `Outstanding balance ${money(outstanding)}`)}
+        ${panel('Quotes', portalQuotes.length ? `<div class="portal-quote-list">${portalQuotes.map(q=>`<article><div><span><b>${esc(q.quote_number||'Quotation')}</b><small>${fmtDate(q.created_at)} · ${esc(q.status||'Sent')}</small></span><strong>${money(q.total_price||q.total||0)}</strong></div><p>${esc(q.collection_address||'')} → ${esc(q.delivery_address||'')}</p><footer>${['Accepted','Declined'].includes(q.status)?portalStatusBadge(q.status):`<button class="primary" data-portal-quote="${q.id}" data-status="Accepted">Accept</button><button class="danger" data-portal-quote="${q.id}" data-status="Declined">Decline</button>`}</footer></article>`).join('')}</div>` : '<div class="fleet-empty">No quotations available.</div>', 'Review and respond to quotations online.')}
+        ${panel('Invoices', state.portalInvoices.length ? `<div class="portal-invoice-list">${state.portalInvoices.slice(0,10).map(inv=>`<p><span><b>${esc(inv.invoice_number||'Invoice')}</b><small>Due ${fmtDate(inv.due_date)}</small></span><strong>${money(invoiceBalance(inv))}</strong><button class="secondary portal-invoice-print" data-portal-invoice="${inv.id}">Print / PDF</button></p>`).join('')}</div>` : '<div class="fleet-empty">No invoices available.</div>', `Outstanding balance ${money(outstanding)}`)}
         ${panel('Favourite routes', `<form id="portal-route-form"><label>Route name<input name="label" placeholder="Colchester to Birmingham" required></label><label>Collection address<textarea name="collection_address" required></textarea></label><label>Delivery address<textarea name="delivery_address" required></textarea></label><div class="actions"><button class="primary">Save route</button></div></form>${state.portalFavouriteRoutes.length?`<div class="portal-address-list">${state.portalFavouriteRoutes.map(r=>`<article><span><b>${esc(r.label)}</b><small>${esc(r.collection_address)} → ${esc(r.delivery_address)}</small></span><div><button class="secondary" data-use-route="${r.id}">Use</button><button class="danger" data-delete-route="${r.id}">×</button></div></article>`).join('')}</div>`:'<div class="fleet-empty">No favourite routes yet.</div>'}`, 'Save regular journeys for one-click booking.')}
         ${panel('Documents', docs.length?`<div class="portal-invoice-list">${docs.map(j=>`<p><span><b>${esc(j.job_number||'POD')}</b><small>${fmtDate(j.collection_date)} · Delivered</small></span><a class="secondary button-link" href="${esc(j.pod_photo_url)}" target="_blank" rel="noopener">Open POD</a></p>`).join('')}</div>`:'<div class="fleet-empty">No POD documents available yet.</div>', `${docs.length} POD document${docs.length===1?'':'s'}`)}
         ${panel('Account summary', `<div class="portal-help"><p>Payment terms <b>${esc(String(customer.payment_terms||state.settings.default_terms||7))} days</b></p><p>Lifetime spend <b>${money(lifetimeSpend)}</b></p><p>Payments recorded <b>${money(paidTotal)}</b></p><p>Outstanding <b>${money(outstanding)}</b></p></div>`)}
         ${panel('Saved addresses', `<form id="portal-address-form"><label>Address name<input name="label" placeholder="Main warehouse" required></label><label>Full address<textarea name="address" required></textarea></label><div class="actions"><button class="primary">Save address</button></div></form>${state.portalAddresses.length?`<div class="portal-address-list">${state.portalAddresses.map(a=>`<article><span><b>${esc(a.label)}</b><small>${esc(a.address)}</small></span><button class="danger" data-delete-address="${a.id}">×</button></article>`).join('')}</div>`:'<div class="fleet-empty">No saved addresses yet.</div>'}`, 'Use saved locations to make repeat bookings faster.')}
-        ${panel('Need help?', `<div class="portal-help"><p>Call <b>${esc(state.settings.phone)}</b></p><p>WhatsApp <b>${esc(state.settings.whatsapp)}</b></p><p>Email <b>${esc(state.settings.email)}</b></p></div>`)}
+        ${panel('Messages', `<form id="portal-message-form"><label>Subject<input name="subject" required placeholder="How can we help?"></label><label>Message<textarea name="message" required></textarea></label><div class="actions"><button class="primary">Send to KLS</button></div></form>${portalMessages.length?`<div class="portal-message-list">${portalMessages.map(m=>`<article><div><b>${esc(m.subject||'Message')}</b><small>${fmtDate(m.created_at)} · ${esc(m.sender_type==='office'?'KLS SameDay':'You')}</small></div><p>${esc(m.message||'')}</p></article>`).join('')}</div>`:'<div class="fleet-empty">No messages yet.</div>'}`, 'Keep customer queries linked to the account.')}
+        ${panel('Need help?', `<div class="portal-help"><p><a href="tel:${esc(String(state.settings.phone||'').replace(/\s/g,''))}">Call <b>${esc(state.settings.phone)}</b></a></p><p><a href="https://wa.me/44${esc(String(state.settings.whatsapp||'').replace(/\D/g,'').replace(/^0/,''))}" target="_blank" rel="noopener">WhatsApp <b>${esc(state.settings.whatsapp)}</b></a></p><p><a href="mailto:${esc(state.settings.email)}">Email <b>${esc(state.settings.email)}</b></a></p></div>`)}
       </aside></section></main></div>`;
   }
 
@@ -928,6 +934,9 @@
       const job=state.portalJobs.find(j=>j.id===btn.dataset.portalRebook); if(!job)return;
       try{const payload={owner_id:state.portalUser.owner_id,customer_id:state.portalCustomer.id,requested_by:state.user.id,collection_date:todayISO(),collection_time:job.collection_time||null,collection_address:job.collection_address,delivery_address:job.delivery_address,vehicle:job.vehicle||'Luton Tail Lift',load_description:`Rebook of ${job.job_number||'previous job'}`,status:'Pending'};const{data,error}=await db.from('portal_bookings').insert(payload).select().single();if(error)throw error;state.portalBookings.unshift(data);showNotice('Rebooking request sent. Choose the final date with the office if needed.','ok');render();}catch(error){showNotice(error.message,'error');render();}
     }));
+    document.querySelectorAll('[data-portal-quote]').forEach(btn=>btn.addEventListener('click',async()=>{try{const status=btn.dataset.status;const {error}=await db.from('quotes').update({status}).eq('id',btn.dataset.portalQuote);if(error)throw error;const quote=state.portalQuotes.find(q=>q.id===btn.dataset.portalQuote);if(quote)quote.status=status;showNotice(`Quotation ${status.toLowerCase()}.`,'ok');render();}catch(error){showNotice(error.message,'error');render();}}));
+    document.querySelectorAll('[data-portal-invoice]').forEach(btn=>btn.addEventListener('click',()=>{const inv=state.portalInvoices.find(i=>i.id===btn.dataset.portalInvoice);if(inv)printDocument(inv,'invoice');}));
+    document.getElementById('portal-message-form')?.addEventListener('submit',async e=>{e.preventDefault();try{const form=Object.fromEntries(new FormData(e.currentTarget));const payload={owner_id:state.portalUser.owner_id,customer_id:state.portalCustomer.id,auth_user_id:state.user.id,sender_type:'customer',subject:form.subject,message:form.message};const {data,error}=await db.from('portal_messages').insert(payload).select().single();if(error)throw error;state.portalMessages.unshift(data);showNotice('Message sent to KLS SameDay.','ok');render();}catch(error){showNotice(error.message,'error');render();}});
   }
 
 
@@ -1059,7 +1068,7 @@
   function portalRequestsView() {
     const pending=state.portalBookings.filter(b=>b.status==='Pending');
     const rows=state.portalBookings.length?`<div class="portal-admin-list">${state.portalBookings.map(b=>{const customer=state.customers.find(c=>c.id===b.customer_id);return `<article><div><span><b>${esc(customer?.company||'Customer')}</b><small>${fmtDate(b.collection_date)} ${esc(String(b.collection_time||'').slice(0,5))}</small></span>${portalStatusBadge(b.status)}</div><p><small>COLLECT</small>${esc(b.collection_address)}</p><p><small>DELIVER</small>${esc(b.delivery_address)}</p><p><small>VEHICLE</small>${esc(b.vehicle||'Not specified')}</p>${b.load_description?`<p><small>LOAD</small>${esc(b.load_description)}</p>`:''}<footer>${b.status==='Pending'?`<button class="primary" data-portal-approve="${b.id}">Approve & create job</button><button class="danger" data-portal-reject="${b.id}">Reject</button>`:''}</footer></article>`}).join('')}</div>`:'<div class="fleet-empty">No portal booking requests yet.</div>';
-    return `<section class="fleet-hero"><div><small>V16 CUSTOMER PORTAL</small><h2>Customer Portal</h2><p>Review requests sent directly by customer accounts.</p></div><strong>${pending.length} pending</strong></section>${panel('Customer requests',rows,'Approved requests create a confirmed job in your booking calendar.')}`;
+    return `<section class="fleet-hero"><div><small>V26.32 CUSTOMER PORTAL</small><h2>Customer Portal</h2><p>Review requests sent directly by customer accounts.</p></div><strong>${pending.length} pending</strong></section>${panel('Customer requests',rows,'Approved requests create a confirmed job in your booking calendar.')}`;
   }
 
   function driverExchangeView() {
@@ -1422,6 +1431,7 @@ function settingsView() {
 
   function bindAuth() {
     document.querySelector('[data-auth-mode]')?.addEventListener('click', e => { state.authMode = e.currentTarget.dataset.authMode; render(); });
+    document.querySelector('[data-password-reset]')?.addEventListener('click', async()=>{const email=prompt('Enter your login email address:');if(!email)return;const {error}=await db.auth.resetPasswordForEmail(email,{redirectTo:location.origin+location.pathname});showNotice(error?error.message:'Password reset email sent.',error?'error':'ok');render();});
     document.getElementById('auth-form')?.addEventListener('submit', async e => {
       e.preventDefault();
       const message = document.getElementById('auth-message');
@@ -1451,15 +1461,17 @@ function settingsView() {
       if (portalUser) {
         state.portalUser = portalUser;
         state.portalCustomer = portalUser.customers || null;
-        const [bookings, jobs, invoices, addresses, settings] = await Promise.all([
+        const [bookings, jobs, invoices, quotes, messages, addresses, settings] = await Promise.all([
           db.from('portal_bookings').select('*').eq('customer_id', portalUser.customer_id).order('created_at',{ascending:false}),
           db.from('jobs').select('*').eq('customer_id', portalUser.customer_id).eq('customer_visible', true).order('created_at',{ascending:false}),
           db.from('invoices').select('*').eq('customer_id', portalUser.customer_id).eq('portal_visible', true).order('created_at',{ascending:false}),
+          db.from('quotes').select('*').eq('customer_id', portalUser.customer_id).in('status',['Sent','Accepted','Declined']).order('created_at',{ascending:false}),
+          db.from('portal_messages').select('*').eq('customer_id', portalUser.customer_id).order('created_at',{ascending:false}),
           db.from('customer_addresses').select('*').eq('customer_id', portalUser.customer_id).order('label',{ascending:true}),
           db.from('business_settings').select('*').eq('user_id', portalUser.owner_id).maybeSingle()
         ]);
         for (const result of [bookings,jobs,invoices,addresses,settings]) if(result.error) throw result.error;
-        state.portalBookings=bookings.data||[]; state.portalJobs=jobs.data||[]; state.portalInvoices=invoices.data||[]; state.portalAddresses=addresses.data||[]; state.settings={...defaults,...(settings.data||{})};
+        state.portalBookings=bookings.data||[]; state.portalJobs=jobs.data||[]; state.portalInvoices=invoices.data||[]; state.portalQuotes=quotes.data||[]; state.portalMessages=messages.data||[]; state.portalAddresses=addresses.data||[]; state.settings={...defaults,...(settings.data||{})};
         state.loading=false; render(); return;
       }
       state.portalUser = null;

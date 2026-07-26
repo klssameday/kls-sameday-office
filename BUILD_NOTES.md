@@ -1,10 +1,13 @@
-# KLS SameDay v26.19 — Operations Dashboard
+# KLS SameDay v26.20 — Automated Billing Centre
 
-- Rebuilt the Dashboard as a live operations control screen.
-- Added KPI tiles for today’s jobs, active jobs, completed jobs, drivers, revenue and alerts.
-- Added revenue summaries for today, this week, this month and average job value.
-- Added seven-day jobs and booked-revenue charts without external chart libraries.
-- Added a live recent-activity panel based on job updates and POD completion.
-- Improved the driver panel to show each driver’s current job when assigned.
-- Preserved the working Jobs Control Centre, Dispatch Centre, Driver App and POD upload.
-- No Supabase SQL changes are required.
+## Added
+- Delivered jobs automatically appear in a billing queue.
+- One-click invoice creation from each completed job.
+- Create all waiting invoices in one action.
+- Live billing KPIs for ready, outstanding, overdue and paid invoices.
+- Payment reminder action opens WhatsApp first when a customer phone is saved, otherwise email.
+- Reminder text is copied when no contact details are available.
+- Existing Driver App, POD, Jobs, Dispatch and Operations Dashboard remain unchanged.
+
+## Database
+No SQL migration is required.

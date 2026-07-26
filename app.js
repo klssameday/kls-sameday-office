@@ -136,6 +136,7 @@
   const navGroups = [
     ['Core', [
       ['dashboard','Dashboard'],
+      ['aiassistant','AI Dispatch Assistant'],
       ['operations','Today’s Planner'],
       ['dispatch','Live Dispatch'],
       ['jobs','Jobs']
@@ -169,7 +170,7 @@
   ];
 
   const pageTitles = {
-    dashboard:'Dashboard', smart:'Smart Dispatch', routes:'Route Planner', operations:'Today’s Planner',
+    dashboard:'Dashboard', aiassistant:'AI Dispatch Assistant', smart:'Smart Dispatch', routes:'Route Planner', operations:'Today’s Planner',
     dispatch:'Live Dispatch', drivers:'Driver Control', exchange:'Driver Exchange', driver:'Driver App', tracking:'Live Tracking',
     fleet:'Fleet Management', fleetcentre:'Driver & Fleet Centre', schedule:'Booking Calendar', portalrequests:'Customer Portal',
     quoterequests:'Online Requests', pipeline:'Sales Pipeline', newquote:'New Quote', quotes:'Quotes', jobs:'Jobs',
@@ -177,7 +178,7 @@
   };
 
   const navIcons = {
-    dashboard:'⌂', operations:'◷', dispatch:'⇄', jobs:'▤', newquote:'＋', quotes:'◫',
+    dashboard:'⌂', aiassistant:'✦', operations:'◷', dispatch:'⇄', jobs:'▤', newquote:'＋', quotes:'◫',
     quoterequests:'↧', pipeline:'◆', customers:'◎', portalrequests:'◉', drivers:'♙', fleetcentre:'▣', driver:'♙', tracking:'⌖',
     exchange:'⇆', routes:'◇', schedule:'□', invoices:'£', documents:'▧', accounts:'◌', reports:'▥', communications:'✉', settings:'⚙'
   };
@@ -976,6 +977,64 @@
 
 
 
+  function aiDriverSuggestion(job) {
+    const active = state.jobs.filter(j => !['Delivered','Cancelled'].includes(j.job_status));
+    const drivers = state.drivers.filter(d => d.active !== false);
+    if (!drivers.length) return null;
+    const wanted = String(job.vehicle || job.vehicle_required || '').toLowerCase();
+    return drivers.map(driver => {
+      const workload = active.filter(j => j.assigned_driver_id === driver.id).length;
+      const availability = String(driver.availability_status || 'Available').toLowerCase();
+      const driverVehicle = String(driver.vehicle || '').toLowerCase();
+      let score = 100 - workload * 18;
+      if (availability.includes('available') || availability.includes('online')) score += 25;
+      if (availability.includes('off') || availability.includes('unavailable')) score -= 80;
+      if (wanted && driverVehicle && (driverVehicle.includes(wanted) || wanted.includes(driverVehicle))) score += 35;
+      else if (wanted && driverVehicle) score -= 12;
+      return { driver, workload, score };
+    }).sort((a,b)=>b.score-a.score)[0];
+  }
+
+  function aiDispatchAlerts() {
+    const now = new Date();
+    const alerts = [];
+    state.jobs.filter(j => !['Delivered','Cancelled'].includes(j.job_status)).forEach(job => {
+      if (!job.assigned_driver_id) alerts.push({type:'urgent',title:`${job.job_number||'Job'} is unassigned`,detail:job.collection_address||'Collection address not entered',job});
+      const date = String(job.collection_date||'').slice(0,10);
+      const time = String(job.collection_time||'09:00').slice(0,5);
+      if (date) {
+        const due = new Date(`${date}T${time}:00`);
+        if (Number.isFinite(due.getTime()) && due < now && ['Booked','Pending','Quoted'].includes(job.job_status||'Booked')) alerts.push({type:'late',title:`${job.job_number||'Job'} may be late`,detail:`Collection was due ${due.toLocaleString('en-GB')}`,job});
+      }
+    });
+    state.jobs.filter(j => j.job_status === 'Delivered' && !j.pod_photo_url && !j.pod_signature_url).forEach(job => alerts.push({type:'pod',title:`POD missing for ${job.job_number||'job'}`,detail:job.customer_name||'Customer',job}));
+    return alerts.slice(0,12);
+  }
+
+  function aiDispatchAssistantView() {
+    const today = todayISO();
+    const todayJobs = state.jobs.filter(j => String(j.collection_date||'').slice(0,10) === today);
+    const activeJobs = state.jobs.filter(j => !['Delivered','Cancelled'].includes(j.job_status));
+    const unassigned = activeJobs.filter(j => !j.assigned_driver_id);
+    const availableDrivers = state.drivers.filter(d => d.active !== false && !String(d.availability_status||'').toLowerCase().includes('off'));
+    const alerts = aiDispatchAlerts();
+    const revenue = todayJobs.reduce((sum,j)=>sum+Number(j.total_price||j.quoted_price||0),0);
+    const completed = todayJobs.filter(j=>j.job_status==='Delivered');
+    const onTime = completed.length ? Math.round(completed.filter(j=>!j.delivered_at || !j.delivery_date || new Date(j.delivered_at) <= new Date(`${String(j.delivery_date).slice(0,10)}T${String(j.delivery_time||'23:59').slice(0,5)}:00`)).length/completed.length*100) : 100;
+    const recommendations = unassigned.slice(0,10).map(job => ({job,suggestion:aiDriverSuggestion(job)}));
+    const recommendationRows = recommendations.length ? recommendations.map(({job,suggestion})=>{
+      const estimate=smartRecommendation(job);
+      return `<article class="ai-recommendation"><div class="ai-route"><small>${esc(job.job_number||'JOB')}</small><b>${esc(job.customer_name||'Customer')}</b><p>${esc(job.collection_address||'Collection not entered')} <span>→</span> ${esc(job.delivery_address||'Delivery not entered')}</p></div><div class="ai-profit"><small>EST. PROFIT</small><b>${money(estimate.profit)}</b><span>${estimate.margin.toFixed(0)}% margin</span></div><div class="ai-driver"><small>BEST DRIVER</small><b>${esc(suggestion?.driver?.name||'No driver available')}</b><span>${suggestion?`${esc(suggestion.driver.vehicle||'Vehicle not set')} · ${suggestion.workload} active job(s)`:''}</span></div>${suggestion?`<button class="primary" data-ai-assign="${job.id}" data-driver-id="${suggestion.driver.id}">Assign</button>`:`<button class="secondary" data-page="drivers">Add driver</button>`}</article>`;
+    }).join('') : '<div class="ai-all-clear"><span>✓</span><div><b>No unassigned jobs</b><small>Every active job currently has a driver.</small></div></div>';
+    const alertRows = alerts.length ? alerts.map(a=>`<button class="ai-alert ${a.type}" data-page="dispatch"><span>${a.type==='late'?'◷':a.type==='pod'?'▧':'!'}</span><div><b>${esc(a.title)}</b><small>${esc(a.detail)}</small></div></button>`).join('') : '<div class="ai-all-clear"><span>✓</span><div><b>Operations clear</b><small>No urgent dispatch warnings found.</small></div></div>';
+    const workload = state.drivers.filter(d=>d.active!==false).map(d=>{const count=activeJobs.filter(j=>j.assigned_driver_id===d.id).length;return `<div class="ai-workload-row"><span><b>${esc(d.name)}</b><small>${esc(d.vehicle||'Vehicle not set')} · ${esc(d.availability_status||'Available')}</small></span><strong>${count} active</strong></div>`}).join('') || '<div class="fleet-empty">No drivers added yet.</div>';
+    return `<section class="ai-hero"><div><small>V26.30 AI DISPATCH ASSISTANT</small><h2>Your live dispatch co-pilot</h2><p>Analyses workload, availability, vehicle suitability, deadlines and estimated profit to help you make faster dispatch decisions.</p></div><button class="primary" data-page="newquote">＋ Add work</button></section>
+      <section class="ai-kpis">${card('Jobs today',todayJobs.length,'Collections scheduled today')}${card('Unassigned',unassigned.length,unassigned.length?'Needs attention':'All work allocated')}${card('Drivers available',availableDrivers.length,`${state.drivers.length} total drivers`)}${card('Revenue today',money(revenue),'Booked job value')}${card('On-time',`${onTime}%`,`${completed.length} completed today`)}</section>
+      <section class="ai-command-grid"><div>${panel('Recommended assignments',`<div class="ai-recommendations">${recommendationRows}</div>`,'Suggestions are rule-based and should be checked before assignment.')}</div><aside>${panel('Priority alerts',`<div class="ai-alerts">${alertRows}</div>`,`${alerts.length} warning${alerts.length===1?'':'s'} detected`)}${panel('Driver workload',`<div class="ai-workload">${workload}</div>`,'Balanced using active assigned jobs.')}</aside></section>
+      <section class="panel ai-guidance"><div><small>AI RECOMMENDATION</small><h3>${unassigned.length?`Assign ${esc(unassigned[0].job_number||'the next job')} before taking more work.`:'Current workload is under control.'}</h3><p>${alerts.length?`${alerts.length} operational item${alerts.length===1?' needs':'s need'} attention.`:'No urgent operational risks were detected.'}</p></div><button class="secondary" data-page="dispatch">Open Live Dispatch</button></section>`;
+  }
+
+
   function routePlannerView() {
     const date = state.routeDate || todayISO();
     const routeJobs = state.jobs.filter(job => String(job.collection_date || '').slice(0,10) === date && !['Cancelled','Delivered'].includes(job.job_status));
@@ -1254,7 +1313,7 @@ function settingsView() {
     if (state.loading) { document.getElementById('app').innerHTML = '<div class="loading">Loading KLS SameDay Office…</div>'; return; }
     if (!state.user) { document.getElementById('app').innerHTML = authView(); bindAuth(); return; }
     if (state.portalUser) { document.getElementById('app').innerHTML = customerPortalView(); bindCustomerPortal(); return; }
-    const views = { dashboard, smart: smartDispatchView, routes: routePlannerView, operations: operationsView, dispatch: dispatchView, drivers: driversManagementView, exchange: driverExchangeView, driver: driverView, tracking: liveTrackingView, fleet: fleetView, schedule: scheduleView, newquote: newQuote, quotes: quotesView, jobs: jobsView, invoices: invoicesView, documents: deliveryDocumentsView, accounts: accountsView, reports: businessReportsView, portalrequests: portalRequestsView, quoterequests: quoteRequestsView, customers: customersView, pipeline: salesPipelineView, fleetcentre: fleetCentreView, communications: communicationView, settings: settingsView };
+    const views = { dashboard, aiassistant: aiDispatchAssistantView, smart: smartDispatchView, routes: routePlannerView, operations: operationsView, dispatch: dispatchView, drivers: driversManagementView, exchange: driverExchangeView, driver: driverView, tracking: liveTrackingView, fleet: fleetView, schedule: scheduleView, newquote: newQuote, quotes: quotesView, jobs: jobsView, invoices: invoicesView, documents: deliveryDocumentsView, accounts: accountsView, reports: businessReportsView, portalrequests: portalRequestsView, quoterequests: quoteRequestsView, customers: customersView, pipeline: salesPipelineView, fleetcentre: fleetCentreView, communications: communicationView, settings: settingsView };
     document.getElementById('app').innerHTML = layout(views[state.page]());
     bindApp();
     if (state.page === 'dashboard') initialiseCommandMap();
@@ -1616,6 +1675,17 @@ function settingsView() {
     document.querySelectorAll('[data-lead-quote]').forEach(b=>b.onclick=()=>{const l=state.leads.find(x=>x.id===b.dataset.leadQuote);if(!l)return;state.page='newquote';state.quoteCustomerId=null;showNotice(`Create a quote for ${l.company}. Add them as a customer first if needed.`,'ok');render();});
     document.getElementById('report-period')?.addEventListener('change', event => { state.reportPeriod = event.target.value || todayISO().slice(0,7); render(); });
     document.querySelector('[data-export-report]')?.addEventListener('click', exportBusinessReportCsv);
+    document.querySelectorAll('[data-ai-assign]').forEach(button => button.onclick = async () => {
+      const job = state.jobs.find(j => j.id === button.dataset.aiAssign);
+      const driver = state.drivers.find(d => d.id === button.dataset.driverId);
+      if (!job || !driver) return;
+      const payload = { assigned_driver_id: driver.id, assigned_driver_name: driver.name };
+      const { error } = await db.from('jobs').update(payload).eq('id', job.id);
+      if (error) { showNotice(error.message,'error'); render(); return; }
+      Object.assign(job,payload);
+      showNotice(`${job.job_number||'Job'} assigned to ${driver.name}.`,'ok');
+      render();
+    });
     document.getElementById('route-date')?.addEventListener('change', event => { state.routeDate = event.target.value || todayISO(); render(); });
     document.querySelectorAll('[data-route-job]').forEach(card => {
       card.addEventListener('dragstart', event => { card.classList.add('dragging'); event.dataTransfer.effectAllowed='move'; event.dataTransfer.setData('text/plain', card.dataset.routeJob); });

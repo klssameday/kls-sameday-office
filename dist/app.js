@@ -94,7 +94,11 @@
     leadFilter: 'all',
     leadSearch: '',
     fleetDefects: JSON.parse(localStorage.getItem('kls_fleet_defects') || '[]'),
-    fleetTab: 'overview'
+    fleetTab: 'overview',
+    communications: JSON.parse(localStorage.getItem('kls_communications') || '[]'),
+    communicationTemplates: JSON.parse(localStorage.getItem('kls_communication_templates') || 'null') || [],
+    communicationTab: 'overview',
+    communicationSearch: ''
   };
 
   let locationWatchId = null;
@@ -132,6 +136,7 @@
   const navGroups = [
     ['Core', [
       ['dashboard','Dashboard'],
+      ['aiassistant','AI Dispatch Assistant'],
       ['operations','Today’s Planner'],
       ['dispatch','Live Dispatch'],
       ['jobs','Jobs']
@@ -142,7 +147,8 @@
       ['quoterequests','Online Requests'],
       ['pipeline','Sales Pipeline'],
       ['customers','Customers'],
-      ['portalrequests','Customer Portal']
+      ['portalrequests','Customer Portal'],
+      ['communications','Communications']
     ]],
     ['Drivers & Tracking', [
       ['drivers','Driver Control'],
@@ -164,17 +170,17 @@
   ];
 
   const pageTitles = {
-    dashboard:'Dashboard', smart:'Smart Dispatch', routes:'Route Planner', operations:'Today’s Planner',
+    dashboard:'Dashboard', aiassistant:'AI Dispatch Assistant', smart:'Smart Dispatch', routes:'Route Planner', operations:'Today’s Planner',
     dispatch:'Live Dispatch', drivers:'Driver Control', exchange:'Driver Exchange', driver:'Driver App', tracking:'Live Tracking',
     fleet:'Fleet Management', fleetcentre:'Driver & Fleet Centre', schedule:'Booking Calendar', portalrequests:'Customer Portal',
     quoterequests:'Online Requests', pipeline:'Sales Pipeline', newquote:'New Quote', quotes:'Quotes', jobs:'Jobs',
-    invoices:'Invoices', documents:'Delivery Documents', accounts:'Accounts & Payments', reports:'Business Reports', customers:'Customers', settings:'Settings'
+    invoices:'Invoices', documents:'Delivery Documents', accounts:'Accounts & Payments', reports:'Business Reports', customers:'Customers', communications:'Automated Communications', settings:'Settings'
   };
 
   const navIcons = {
-    dashboard:'⌂', operations:'◷', dispatch:'⇄', jobs:'▤', newquote:'＋', quotes:'◫',
+    dashboard:'⌂', aiassistant:'✦', operations:'◷', dispatch:'⇄', jobs:'▤', newquote:'＋', quotes:'◫',
     quoterequests:'↧', pipeline:'◆', customers:'◎', portalrequests:'◉', drivers:'♙', fleetcentre:'▣', driver:'♙', tracking:'⌖',
-    exchange:'⇆', routes:'◇', schedule:'□', invoices:'£', documents:'▧', accounts:'◌', reports:'▥', settings:'⚙'
+    exchange:'⇆', routes:'◇', schedule:'□', invoices:'£', documents:'▧', accounts:'◌', reports:'▥', communications:'✉', settings:'⚙'
   };
 
   function layout(content) {
@@ -971,6 +977,64 @@
 
 
 
+  function aiDriverSuggestion(job) {
+    const active = state.jobs.filter(j => !['Delivered','Cancelled'].includes(j.job_status));
+    const drivers = state.drivers.filter(d => d.active !== false);
+    if (!drivers.length) return null;
+    const wanted = String(job.vehicle || job.vehicle_required || '').toLowerCase();
+    return drivers.map(driver => {
+      const workload = active.filter(j => j.assigned_driver_id === driver.id).length;
+      const availability = String(driver.availability_status || 'Available').toLowerCase();
+      const driverVehicle = String(driver.vehicle || '').toLowerCase();
+      let score = 100 - workload * 18;
+      if (availability.includes('available') || availability.includes('online')) score += 25;
+      if (availability.includes('off') || availability.includes('unavailable')) score -= 80;
+      if (wanted && driverVehicle && (driverVehicle.includes(wanted) || wanted.includes(driverVehicle))) score += 35;
+      else if (wanted && driverVehicle) score -= 12;
+      return { driver, workload, score };
+    }).sort((a,b)=>b.score-a.score)[0];
+  }
+
+  function aiDispatchAlerts() {
+    const now = new Date();
+    const alerts = [];
+    state.jobs.filter(j => !['Delivered','Cancelled'].includes(j.job_status)).forEach(job => {
+      if (!job.assigned_driver_id) alerts.push({type:'urgent',title:`${job.job_number||'Job'} is unassigned`,detail:job.collection_address||'Collection address not entered',job});
+      const date = String(job.collection_date||'').slice(0,10);
+      const time = String(job.collection_time||'09:00').slice(0,5);
+      if (date) {
+        const due = new Date(`${date}T${time}:00`);
+        if (Number.isFinite(due.getTime()) && due < now && ['Booked','Pending','Quoted'].includes(job.job_status||'Booked')) alerts.push({type:'late',title:`${job.job_number||'Job'} may be late`,detail:`Collection was due ${due.toLocaleString('en-GB')}`,job});
+      }
+    });
+    state.jobs.filter(j => j.job_status === 'Delivered' && !j.pod_photo_url && !j.pod_signature_url).forEach(job => alerts.push({type:'pod',title:`POD missing for ${job.job_number||'job'}`,detail:job.customer_name||'Customer',job}));
+    return alerts.slice(0,12);
+  }
+
+  function aiDispatchAssistantView() {
+    const today = todayISO();
+    const todayJobs = state.jobs.filter(j => String(j.collection_date||'').slice(0,10) === today);
+    const activeJobs = state.jobs.filter(j => !['Delivered','Cancelled'].includes(j.job_status));
+    const unassigned = activeJobs.filter(j => !j.assigned_driver_id);
+    const availableDrivers = state.drivers.filter(d => d.active !== false && !String(d.availability_status||'').toLowerCase().includes('off'));
+    const alerts = aiDispatchAlerts();
+    const revenue = todayJobs.reduce((sum,j)=>sum+Number(j.total_price||j.quoted_price||0),0);
+    const completed = todayJobs.filter(j=>j.job_status==='Delivered');
+    const onTime = completed.length ? Math.round(completed.filter(j=>!j.delivered_at || !j.delivery_date || new Date(j.delivered_at) <= new Date(`${String(j.delivery_date).slice(0,10)}T${String(j.delivery_time||'23:59').slice(0,5)}:00`)).length/completed.length*100) : 100;
+    const recommendations = unassigned.slice(0,10).map(job => ({job,suggestion:aiDriverSuggestion(job)}));
+    const recommendationRows = recommendations.length ? recommendations.map(({job,suggestion})=>{
+      const estimate=smartRecommendation(job);
+      return `<article class="ai-recommendation"><div class="ai-route"><small>${esc(job.job_number||'JOB')}</small><b>${esc(job.customer_name||'Customer')}</b><p>${esc(job.collection_address||'Collection not entered')} <span>→</span> ${esc(job.delivery_address||'Delivery not entered')}</p></div><div class="ai-profit"><small>EST. PROFIT</small><b>${money(estimate.profit)}</b><span>${estimate.margin.toFixed(0)}% margin</span></div><div class="ai-driver"><small>BEST DRIVER</small><b>${esc(suggestion?.driver?.name||'No driver available')}</b><span>${suggestion?`${esc(suggestion.driver.vehicle||'Vehicle not set')} · ${suggestion.workload} active job(s)`:''}</span></div>${suggestion?`<button class="primary" data-ai-assign="${job.id}" data-driver-id="${suggestion.driver.id}">Assign</button>`:`<button class="secondary" data-page="drivers">Add driver</button>`}</article>`;
+    }).join('') : '<div class="ai-all-clear"><span>✓</span><div><b>No unassigned jobs</b><small>Every active job currently has a driver.</small></div></div>';
+    const alertRows = alerts.length ? alerts.map(a=>`<button class="ai-alert ${a.type}" data-page="dispatch"><span>${a.type==='late'?'◷':a.type==='pod'?'▧':'!'}</span><div><b>${esc(a.title)}</b><small>${esc(a.detail)}</small></div></button>`).join('') : '<div class="ai-all-clear"><span>✓</span><div><b>Operations clear</b><small>No urgent dispatch warnings found.</small></div></div>';
+    const workload = state.drivers.filter(d=>d.active!==false).map(d=>{const count=activeJobs.filter(j=>j.assigned_driver_id===d.id).length;return `<div class="ai-workload-row"><span><b>${esc(d.name)}</b><small>${esc(d.vehicle||'Vehicle not set')} · ${esc(d.availability_status||'Available')}</small></span><strong>${count} active</strong></div>`}).join('') || '<div class="fleet-empty">No drivers added yet.</div>';
+    return `<section class="ai-hero"><div><small>V26.30 AI DISPATCH ASSISTANT</small><h2>Your live dispatch co-pilot</h2><p>Analyses workload, availability, vehicle suitability, deadlines and estimated profit to help you make faster dispatch decisions.</p></div><button class="primary" data-page="newquote">＋ Add work</button></section>
+      <section class="ai-kpis">${card('Jobs today',todayJobs.length,'Collections scheduled today')}${card('Unassigned',unassigned.length,unassigned.length?'Needs attention':'All work allocated')}${card('Drivers available',availableDrivers.length,`${state.drivers.length} total drivers`)}${card('Revenue today',money(revenue),'Booked job value')}${card('On-time',`${onTime}%`,`${completed.length} completed today`)}</section>
+      <section class="ai-command-grid"><div>${panel('Recommended assignments',`<div class="ai-recommendations">${recommendationRows}</div>`,'Suggestions are rule-based and should be checked before assignment.')}</div><aside>${panel('Priority alerts',`<div class="ai-alerts">${alertRows}</div>`,`${alerts.length} warning${alerts.length===1?'':'s'} detected`)}${panel('Driver workload',`<div class="ai-workload">${workload}</div>`,'Balanced using active assigned jobs.')}</aside></section>
+      <section class="panel ai-guidance"><div><small>AI RECOMMENDATION</small><h3>${unassigned.length?`Assign ${esc(unassigned[0].job_number||'the next job')} before taking more work.`:'Current workload is under control.'}</h3><p>${alerts.length?`${alerts.length} operational item${alerts.length===1?' needs':'s need'} attention.`:'No urgent operational risks were detected.'}</p></div><button class="secondary" data-page="dispatch">Open Live Dispatch</button></section>`;
+  }
+
+
   function routePlannerView() {
     const date = state.routeDate || todayISO();
     const routeJobs = state.jobs.filter(job => String(job.collection_date || '').slice(0,10) === date && !['Cancelled','Delivered'].includes(job.job_status));
@@ -1136,7 +1200,104 @@
     return `<section class="pipeline-hero"><div><small>TRANSPORT MANAGEMENT</small><h2>Driver & Fleet Management Centre</h2><p>Manage drivers, vehicles, compliance, defects, fuel and operating costs.</p></div><button class="primary" data-new-defect>＋ Report Defect</button></section>${tabbar}${body}${state.newDefect?`<div class="modalback"><section class="customermodal crm-modal"><div class="modalhead"><h2>Report Vehicle Defect</h2><button data-close-defect>×</button></div><form id="defect-form"><div class="grid two"><label>Vehicle<select name="vehicle" required><option value="">Choose vehicle</option>${vehicles.map(v=>`<option>${esc(v.registration||v.reg||v.vehicle_type||'Vehicle')}</option>`).join('')}</select></label><label>Category<select name="category"><option>Tyres</option><option>Lights</option><option>Brakes</option><option>Tail lift</option><option>Body damage</option><option>Windscreen</option><option>Other</option></select></label><label>Severity<select name="severity"><option>Low</option><option selected>Medium</option><option>Critical</option></select></label><label>Date<input name="date" type="date" value="${todayISO()}"></label></div><label>Notes<textarea name="notes" rows="4" required></textarea></label><div class="actions"><button type="button" data-close-defect>Cancel</button><button class="primary">Save Defect</button></div></form></section></div>`:''}`;
   }
 
-  function settingsView() {
+  
+  const defaultCommunicationTemplates = [
+    { id:'quote-follow-up', name:'Quote follow-up', channel:'email', subject:'Following up on your KLS SameDay quote', body:'Hi {{contact_name}},\n\nI’m following up on quote {{quote_number}} for {{collection}} to {{delivery}}. The quoted price is {{price}}.\n\nPlease let us know if you would like us to secure the vehicle.\n\nKind regards,\nKLS SameDay' },
+    { id:'booking-confirmation', name:'Booking confirmation', channel:'email', subject:'Booking confirmed – {{job_number}}', body:'Hi {{contact_name}},\n\nYour KLS SameDay booking {{job_number}} is confirmed.\n\nCollection: {{collection}}\nDelivery: {{delivery}}\nDate: {{collection_date}}\nVehicle: {{vehicle}}\n\nKind regards,\nKLS SameDay' },
+    { id:'driver-allocated', name:'Driver allocated', channel:'whatsapp', subject:'', body:'KLS SameDay update: a driver has been allocated to job {{job_number}}. We will keep you updated.' },
+    { id:'collected', name:'Collection complete', channel:'whatsapp', subject:'', body:'KLS SameDay update: job {{job_number}} has been collected and is now on the way to {{delivery}}.' },
+    { id:'delivered', name:'Delivery complete', channel:'email', subject:'Delivery complete – {{job_number}}', body:'Hi {{contact_name}},\n\nJob {{job_number}} has been delivered successfully. Your POD is available in KLS SameDay Office.\n\nKind regards,\nKLS SameDay' },
+    { id:'invoice-reminder', name:'Invoice reminder', channel:'email', subject:'Payment reminder – invoice {{invoice_number}}', body:'Hi {{contact_name}},\n\nThis is a friendly reminder that invoice {{invoice_number}} for {{amount}} is now due.\n\nPlease let us know if you need another copy.\n\nKind regards,\nKLS SameDay' },
+    { id:'customer-reengagement', name:'Customer re-engagement', channel:'email', subject:'Can KLS SameDay help with your next delivery?', body:'Hi {{contact_name}},\n\nWe have not worked together recently, so I wanted to check whether KLS SameDay can help with any upcoming deliveries.\n\nWe provide dedicated same-day transport from Essex with nationwide coverage.\n\nKind regards,\nKLS SameDay' }
+  ];
+
+  function ensureCommunicationTemplates() {
+    if (!Array.isArray(state.communicationTemplates) || !state.communicationTemplates.length) {
+      state.communicationTemplates = defaultCommunicationTemplates.map(item => ({ ...item }));
+      localStorage.setItem('kls_communication_templates', JSON.stringify(state.communicationTemplates));
+    }
+  }
+
+  function saveCommunications() {
+    localStorage.setItem('kls_communications', JSON.stringify(state.communications));
+  }
+
+  function replaceTemplateTokens(value, data={}) {
+    return String(value || '').replace(/\{\{([a-z0-9_]+)\}\}/gi, (_, key) => data[key] ?? '');
+  }
+
+  function communicationCustomer(customerId) {
+    return state.customers.find(customer => customer.id === customerId) || null;
+  }
+
+  function communicationReminders() {
+    const now = new Date();
+    const reminders = [];
+    state.quotes.forEach(quote => {
+      const status = String(quote.status || quote.quote_status || '').toLowerCase();
+      const created = new Date(quote.created_at || quote.quote_date || quote.created || 0);
+      const ageHours = (now - created) / 36e5;
+      if (created.getTime() && ageHours >= 48 && !['accepted','declined','expired','converted'].includes(status)) {
+        const customer = communicationCustomer(quote.customer_id);
+        reminders.push({ id:`quote-${quote.id}`, type:'quote', priority:ageHours >= 96 ? 'high' : 'normal', title:`Follow up quote ${quote.quote_number || quote.reference || ''}`.trim(), detail:`${customer?.company || quote.customer_name || 'Customer'} · ${Math.floor(ageHours/24)} days old`, customer, record:quote, template:'quote-follow-up' });
+      }
+    });
+    state.invoices.forEach(invoice => {
+      const status = String(invoice.status || invoice.invoice_status || '').toLowerCase();
+      const due = new Date(invoice.due_date || invoice.payment_due || 0);
+      if (due.getTime() && due < now && !['paid','cancelled','void'].includes(status)) {
+        const days = Math.max(1, Math.floor((now - due) / 864e5));
+        const customer = communicationCustomer(invoice.customer_id);
+        reminders.push({ id:`invoice-${invoice.id}`, type:'invoice', priority:days >= 14 ? 'high' : 'normal', title:`Invoice ${invoice.invoice_number || invoice.reference || ''} overdue`.trim(), detail:`${customer?.company || invoice.customer_name || 'Customer'} · ${days} day${days===1?'':'s'} overdue · ${money(invoice.total || invoice.amount || invoice.total_amount)}`, customer, record:invoice, template:'invoice-reminder' });
+      }
+    });
+    state.customers.forEach(customer => {
+      const relatedJobs = state.jobs.filter(job => job.customer_id === customer.id);
+      const latest = relatedJobs.map(job => new Date(job.collection_date || job.created_at || 0)).filter(date=>date.getTime()).sort((a,b)=>b-a)[0];
+      const days = latest ? Math.floor((now - latest) / 864e5) : null;
+      if (days !== null && days >= 60) reminders.push({ id:`customer-${customer.id}`, type:'customer', priority:days >= 120 ? 'high' : 'normal', title:`Reconnect with ${customer.company || 'customer'}`, detail:`No completed work recorded for ${days} days`, customer, record:customer, template:'customer-reengagement' });
+    });
+    return reminders.sort((a,b) => Number(b.priority === 'high') - Number(a.priority === 'high'));
+  }
+
+  function communicationStats() {
+    const today = new Date().toISOString().slice(0,10);
+    const todayItems = state.communications.filter(item => String(item.created_at || '').slice(0,10) === today);
+    return { email:todayItems.filter(i=>i.channel==='email').length, whatsapp:todayItems.filter(i=>i.channel==='whatsapp').length, sms:todayItems.filter(i=>i.channel==='sms').length, reminders:communicationReminders().length };
+  }
+
+  function communicationView() {
+    ensureCommunicationTemplates();
+    const stats = communicationStats(), reminders = communicationReminders(), search = state.communicationSearch.trim().toLowerCase();
+    const history = state.communications.filter(item => !search || [item.customer_name,item.recipient,item.subject,item.body,item.status,item.channel].some(value => String(value||'').toLowerCase().includes(search)));
+    const tabs = [['overview','Overview'],['compose','New message'],['reminders',`Reminders (${reminders.length})`],['templates','Templates'],['history','History']];
+    const tabBar = `<div class="communication-tabs">${tabs.map(([id,label])=>`<button class="${state.communicationTab===id?'active':''}" data-communication-tab="${id}">${label}</button>`).join('')}</div>`;
+    let body = '';
+    if (state.communicationTab === 'compose') {
+      body = `<div class="communications-grid compose-layout">
+        ${panel('Create communication', `<form id="communication-compose-form"><div class="grid two"><label>Customer<select name="customer_id"><option value="">Choose customer</option>${state.customers.map(c=>`<option value="${c.id}">${esc(c.company||c.contact_name||'Customer')}</option>`).join('')}</select></label><label>Channel<select name="channel"><option value="email">Email</option><option value="whatsapp">WhatsApp</option><option value="sms">SMS</option><option value="phone">Phone note</option></select></label></div><div class="grid two"><label>Template<select name="template_id"><option value="">No template</option>${state.communicationTemplates.map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join('')}</select></label><label>Recipient<input name="recipient" placeholder="Email address or mobile number"></label></div><label>Subject<input name="subject" placeholder="Email subject"></label><label>Message<textarea name="body" rows="9" required placeholder="Write your message…"></textarea></label><div class="actions"><button type="button" class="secondary" data-communication-preview>Preview</button><button class="primary">Save & open message</button></div></form>`, 'Messages are logged automatically. Email and WhatsApp open in your normal app so you stay in control.')}
+        ${panel('Live preview', '<div id="communication-preview" class="communication-preview"><small>PREVIEW</small><h3>Your message will appear here</h3><p>Select a template or start typing.</p></div>')}
+      </div>`;
+    } else if (state.communicationTab === 'reminders') {
+      body = panel('Automated follow-ups', reminders.length ? `<div class="reminder-list">${reminders.map(r=>`<article class="${r.priority}"><div><span>${r.type.toUpperCase()}</span><b>${esc(r.title)}</b><small>${esc(r.detail)}</small></div><button class="primary" data-run-reminder="${r.id}">Prepare message</button></article>`).join('')}</div>` : '<div class="all-clear"><b>Nothing needs chasing</b><span>Quotes, invoices and inactive customers are all up to date.</span></div>', 'Generated automatically from your live quotes, invoices and customer history.');
+    } else if (state.communicationTab === 'templates') {
+      body = panel('Message templates', `<div class="template-list">${state.communicationTemplates.map(t=>`<article><div><span class="channel-pill ${t.channel}">${esc(t.channel)}</span><b>${esc(t.name)}</b><small>${esc(t.subject || 'No subject required')}</small></div><button class="secondary" data-edit-template="${t.id}">Edit</button></article>`).join('')}</div><div id="template-editor"></div>`, 'Use {{contact_name}}, {{quote_number}}, {{invoice_number}}, {{job_number}}, {{price}}, {{amount}}, {{collection}}, {{delivery}}, {{collection_date}} and {{vehicle}}.');
+    } else if (state.communicationTab === 'history') {
+      body = panel('Communication history', `<div class="panelhead"><div><p>${history.length} logged communication${history.length===1?'':'s'}</p></div><label class="search">⌕<input id="communication-search" value="${esc(state.communicationSearch)}" placeholder="Search customer, recipient or subject"></label></div>${history.length?`<div class="communication-history">${history.map(item=>`<article><span class="history-icon">${item.channel==='email'?'✉':item.channel==='whatsapp'?'◉':item.channel==='sms'?'▣':'☎'}</span><div><b>${esc(item.subject || item.type || 'Communication')}</b><small>${esc(item.customer_name || item.recipient || 'No customer')} · ${esc(item.channel)} · ${fmtDate(item.created_at)}</small><p>${esc(String(item.body||'').slice(0,180))}</p></div><span class="communication-status ${esc(item.status||'logged')}">${esc(item.status||'logged')}</span></article>`).join('')}</div>`:'<div class="fleet-empty">No communications logged yet.</div>'}`);
+    } else {
+      const recent = state.communications.slice(0,6);
+      body = `<div class="communication-cards"><button class="card dashboard-card" data-communication-tab="history"><span>✉</span><div><small>Emails today</small><b>${stats.email}</b><em>View communication history</em></div></button><button class="card dashboard-card" data-communication-tab="history"><span>◉</span><div><small>WhatsApp today</small><b>${stats.whatsapp}</b><em>Customer updates sent</em></div></button><button class="card dashboard-card" data-communication-tab="history"><span>▣</span><div><small>SMS today</small><b>${stats.sms}</b><em>Text messages logged</em></div></button><button class="card dashboard-card ${stats.reminders?'attention-card':''}" data-communication-tab="reminders"><span>!</span><div><small>Follow-ups due</small><b>${stats.reminders}</b><em>${stats.reminders?'Action required':'Nothing overdue'}</em></div></button></div>
+      <div class="communications-grid">${panel('Follow-up queue', reminders.length?`<div class="reminder-list compact">${reminders.slice(0,5).map(r=>`<article class="${r.priority}"><div><span>${r.type.toUpperCase()}</span><b>${esc(r.title)}</b><small>${esc(r.detail)}</small></div><button class="secondary" data-run-reminder="${r.id}">Prepare</button></article>`).join('')}</div>`:'<div class="all-clear"><b>All caught up</b><span>No automated communication reminders are due.</span></div>', reminders.length>5?`${reminders.length-5} more reminders waiting.`:'Quotes, invoices and customer activity checked automatically.')}${panel('Recent activity', recent.length?`<div class="recent-communications">${recent.map(item=>`<button data-communication-tab="history"><span>${item.channel==='email'?'✉':item.channel==='whatsapp'?'◉':item.channel==='sms'?'▣':'☎'}</span><div><b>${esc(item.subject||item.type||'Communication')}</b><small>${esc(item.customer_name||item.recipient||'Unknown')} · ${fmtDate(item.created_at)}</small></div></button>`).join('')}</div>`:'<div class="fleet-empty">Your sent and logged messages will appear here.</div>', 'One communication history across customers, quotes, jobs and invoices.')}</div>`;
+    }
+    return `<section class="communications-hero"><div><small>V26.29 AUTOMATED COMMUNICATIONS CENTRE</small><h2>Keep every customer updated</h2><p>Prepare messages, chase quotes and invoices, and keep a complete contact history without leaving KLS SameDay Office.</p></div><button class="primary" data-communication-tab="compose">＋ New message</button></section>${tabBar}${body}`;
+  }
+
+  function communicationContextForReminder(reminder) {
+    const customer = reminder.customer || {}, record = reminder.record || {};
+    return { contact_name:customer.contact_name||customer.company||'there', quote_number:record.quote_number||record.reference||'', invoice_number:record.invoice_number||record.reference||'', job_number:record.job_number||record.reference||'', price:money(record.total||record.price||record.quoted_price), amount:money(record.total||record.amount||record.total_amount), collection:record.collection_address||record.collection_postcode||'', delivery:record.delivery_address||record.delivery_postcode||'', collection_date:record.collection_date?fmtDate(record.collection_date):'', vehicle:record.vehicle_required||record.vehicle||'' };
+  }
+
+function settingsView() {
     const fields = { trading_name:'Trading name',legal_name:'Legal company name',phone:'Telephone',whatsapp:'WhatsApp',email:'Email',website:'Website',address_line:'Business address',bank_name:'Bank name',sort_code:'Sort code',account_number:'Account number',default_terms:'Payment terms (days)' };
     const linked = state.portalAccessUsers.length ? `<div class="portal-access-list">${state.portalAccessUsers.map(u=>`<article><div><b>${esc(u.customers?.company||'Customer')}</b><small>${esc(u.email)}</small></div><span class="portal-status ${u.active?'approved':'cancelled'}">${u.active?'Active':'Disabled'}</span>${u.active?`<button class="danger" data-portal-revoke="${u.id}">Disable</button>`:''}</article>`).join('')}</div>` : '<div class="fleet-empty">No customer portal accounts linked yet.</div>';
     return panel('Business settings', `<form id="settings-form"><div class="grid two">${Object.entries(fields).map(([key,label]) => `<label>${label}<input name="${key}" value="${esc(state.settings[key] ?? '')}" ${key === 'default_terms' ? 'type="number"' : ''}></label>`).join('')}</div><div class="actions"><button class="primary">Save Settings</button></div></form><p class="saved">✓ Saved securely in Supabase.</p><hr class="portal-divider"><div class="portal-section-head"><div><h2>Customer Portal Access</h2><p>Ask the customer to create an account using their email address, then link that login here.</p></div><span>${state.portalAccessUsers.filter(u=>u.active).length} active</span></div><form id="portal-access-form"><div class="grid two"><label>Customer<select name="customer_id" required><option value="">Choose customer</option>${state.customers.map(c=>`<option value="${c.id}">${esc(c.company)}</option>`).join('')}</select></label><label>Customer login email<input name="email" type="email" required></label></div><div class="actions"><button class="primary">Enable Customer Portal</button></div></form><h3 class="linked-title">Linked customer accounts</h3>${linked}`);
@@ -1152,7 +1313,7 @@
     if (state.loading) { document.getElementById('app').innerHTML = '<div class="loading">Loading KLS SameDay Office…</div>'; return; }
     if (!state.user) { document.getElementById('app').innerHTML = authView(); bindAuth(); return; }
     if (state.portalUser) { document.getElementById('app').innerHTML = customerPortalView(); bindCustomerPortal(); return; }
-    const views = { dashboard, smart: smartDispatchView, routes: routePlannerView, operations: operationsView, dispatch: dispatchView, drivers: driversManagementView, exchange: driverExchangeView, driver: driverView, tracking: liveTrackingView, fleet: fleetView, schedule: scheduleView, newquote: newQuote, quotes: quotesView, jobs: jobsView, invoices: invoicesView, documents: deliveryDocumentsView, accounts: accountsView, reports: businessReportsView, portalrequests: portalRequestsView, quoterequests: quoteRequestsView, customers: customersView, pipeline: salesPipelineView, fleetcentre: fleetCentreView, settings: settingsView };
+    const views = { dashboard, aiassistant: aiDispatchAssistantView, smart: smartDispatchView, routes: routePlannerView, operations: operationsView, dispatch: dispatchView, drivers: driversManagementView, exchange: driverExchangeView, driver: driverView, tracking: liveTrackingView, fleet: fleetView, schedule: scheduleView, newquote: newQuote, quotes: quotesView, jobs: jobsView, invoices: invoicesView, documents: deliveryDocumentsView, accounts: accountsView, reports: businessReportsView, portalrequests: portalRequestsView, quoterequests: quoteRequestsView, customers: customersView, pipeline: salesPipelineView, fleetcentre: fleetCentreView, communications: communicationView, settings: settingsView };
     document.getElementById('app').innerHTML = layout(views[state.page]());
     bindApp();
     if (state.page === 'dashboard') initialiseCommandMap();
@@ -1460,6 +1621,44 @@
       await loadAll(); state.page='exchange'; showNotice('Network job withdrawn.','ok'); render();
     });
     document.querySelectorAll('[data-page]').forEach(button => button.onclick = () => { state.page = button.dataset.page; render(); });
+    document.querySelectorAll('[data-communication-tab]').forEach(button => button.onclick = () => { state.communicationTab = button.dataset.communicationTab; render(); });
+    document.getElementById('communication-search')?.addEventListener('input', event => { state.communicationSearch = event.target.value; render(); });
+    const composeForm = document.getElementById('communication-compose-form');
+    if (composeForm) {
+      const customerField=composeForm.elements.customer_id, templateField=composeForm.elements.template_id, channelField=composeForm.elements.channel, recipientField=composeForm.elements.recipient, subjectField=composeForm.elements.subject, bodyField=composeForm.elements.body;
+      const updatePreview = () => {
+        const customer=communicationCustomer(customerField.value)||{}, template=state.communicationTemplates.find(item=>item.id===templateField.value), context={contact_name:customer.contact_name||customer.company||'there'};
+        if (template) { channelField.value=template.channel; subjectField.value=replaceTemplateTokens(template.subject,context); bodyField.value=replaceTemplateTokens(template.body,context); }
+        if (!recipientField.value) recipientField.value=channelField.value==='email'?(customer.email||''):(customer.phone||'');
+        const preview=document.getElementById('communication-preview');
+        if (preview) preview.innerHTML=`<small>${esc(channelField.value.toUpperCase())} PREVIEW</small><h3>${esc(subjectField.value||'Customer message')}</h3><p>${esc(bodyField.value||'Your message will appear here.').replace(/\n/g,'<br>')}</p>`;
+      };
+      customerField.addEventListener('change',updatePreview); templateField.addEventListener('change',updatePreview); channelField.addEventListener('change',updatePreview); subjectField.addEventListener('input',updatePreview); bodyField.addEventListener('input',updatePreview);
+      document.querySelector('[data-communication-preview]')?.addEventListener('click',updatePreview);
+      composeForm.addEventListener('submit',event=>{
+        event.preventDefault();
+        const values=Object.fromEntries(new FormData(composeForm)), customer=communicationCustomer(values.customer_id);
+        state.communications.unshift({id:crypto.randomUUID(),customer_id:values.customer_id||null,customer_name:customer?.company||customer?.contact_name||'',channel:values.channel,recipient:values.recipient,subject:values.subject,body:values.body,status:'prepared',created_at:new Date().toISOString()});
+        saveCommunications();
+        const subject=encodeURIComponent(values.subject||''), body=encodeURIComponent(values.body||'');
+        if(values.channel==='email'&&values.recipient)window.open(`mailto:${values.recipient}?subject=${subject}&body=${body}`,'_blank');
+        if(values.channel==='whatsapp'&&values.recipient){const phone=String(values.recipient).replace(/\D/g,'').replace(/^0/,'44');window.open(`https://wa.me/${phone}?text=${body}`,'_blank');}
+        if(values.channel==='sms'&&values.recipient)window.open(`sms:${values.recipient}?body=${body}`,'_blank');
+        showNotice('Communication prepared and logged.','ok'); state.communicationTab='history'; render();
+      });
+    }
+    document.querySelectorAll('[data-run-reminder]').forEach(button=>button.onclick=()=>{
+      const reminder=communicationReminders().find(item=>item.id===button.dataset.runReminder); if(!reminder)return;
+      ensureCommunicationTemplates(); const template=state.communicationTemplates.find(item=>item.id===reminder.template), context=communicationContextForReminder(reminder);
+      state.communicationTab='compose'; render();
+      setTimeout(()=>{const form=document.getElementById('communication-compose-form');if(!form||!template)return;form.elements.customer_id.value=reminder.customer?.id||'';form.elements.template_id.value=template.id;form.elements.channel.value=template.channel;form.elements.recipient.value=template.channel==='email'?(reminder.customer?.email||''):(reminder.customer?.phone||'');form.elements.subject.value=replaceTemplateTokens(template.subject,context);form.elements.body.value=replaceTemplateTokens(template.body,context);form.elements.body.dispatchEvent(new Event('input'));},0);
+    });
+    document.querySelectorAll('[data-edit-template]').forEach(button=>button.onclick=()=>{
+      const template=state.communicationTemplates.find(item=>item.id===button.dataset.editTemplate), editor=document.getElementById('template-editor'); if(!template||!editor)return;
+      editor.innerHTML=`<form id="template-edit-form" class="template-edit-form"><h3>Edit ${esc(template.name)}</h3><div class="grid two"><label>Name<input name="name" value="${esc(template.name)}"></label><label>Channel<select name="channel"><option value="email" ${template.channel==='email'?'selected':''}>Email</option><option value="whatsapp" ${template.channel==='whatsapp'?'selected':''}>WhatsApp</option><option value="sms" ${template.channel==='sms'?'selected':''}>SMS</option></select></label></div><label>Subject<input name="subject" value="${esc(template.subject||'')}"></label><label>Message<textarea name="body" rows="8">${esc(template.body)}</textarea></label><div class="actions"><button type="button" class="secondary" data-cancel-template>Cancel</button><button class="primary">Save template</button></div></form>`;
+      editor.querySelector('[data-cancel-template]').onclick=()=>editor.innerHTML='';
+      editor.querySelector('form').onsubmit=event=>{event.preventDefault();Object.assign(template,Object.fromEntries(new FormData(event.currentTarget)));localStorage.setItem('kls_communication_templates',JSON.stringify(state.communicationTemplates));showNotice('Template updated.','ok');render();};
+    });
     document.querySelectorAll('[data-fleet-tab]').forEach(b=>b.onclick=()=>{state.fleetTab=b.dataset.fleetTab;render();});
     document.querySelectorAll('[data-new-defect]').forEach(b=>b.onclick=()=>{state.newDefect=true;render();});
     document.querySelectorAll('[data-close-defect]').forEach(b=>b.onclick=()=>{state.newDefect=false;render();});
@@ -1476,6 +1675,17 @@
     document.querySelectorAll('[data-lead-quote]').forEach(b=>b.onclick=()=>{const l=state.leads.find(x=>x.id===b.dataset.leadQuote);if(!l)return;state.page='newquote';state.quoteCustomerId=null;showNotice(`Create a quote for ${l.company}. Add them as a customer first if needed.`,'ok');render();});
     document.getElementById('report-period')?.addEventListener('change', event => { state.reportPeriod = event.target.value || todayISO().slice(0,7); render(); });
     document.querySelector('[data-export-report]')?.addEventListener('click', exportBusinessReportCsv);
+    document.querySelectorAll('[data-ai-assign]').forEach(button => button.onclick = async () => {
+      const job = state.jobs.find(j => j.id === button.dataset.aiAssign);
+      const driver = state.drivers.find(d => d.id === button.dataset.driverId);
+      if (!job || !driver) return;
+      const payload = { assigned_driver_id: driver.id, assigned_driver_name: driver.name };
+      const { error } = await db.from('jobs').update(payload).eq('id', job.id);
+      if (error) { showNotice(error.message,'error'); render(); return; }
+      Object.assign(job,payload);
+      showNotice(`${job.job_number||'Job'} assigned to ${driver.name}.`,'ok');
+      render();
+    });
     document.getElementById('route-date')?.addEventListener('change', event => { state.routeDate = event.target.value || todayISO(); render(); });
     document.querySelectorAll('[data-route-job]').forEach(card => {
       card.addEventListener('dragstart', event => { card.classList.add('dragging'); event.dataTransfer.effectAllowed='move'; event.dataTransfer.setData('text/plain', card.dataset.routeJob); });

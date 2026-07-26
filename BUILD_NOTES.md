@@ -1,17 +1,18 @@
-# KLS SameDay v26.29 — Automated Communications Centre
+# KLS SameDay Office v26.30
 
-## Added
-- New Communications section in the main office navigation
-- Communications dashboard with email, WhatsApp, SMS and follow-up totals
-- New-message composer with customer selection and live preview
-- Built-in email, WhatsApp and SMS launch actions
-- Automatic quote follow-ups after 48 hours
-- Automatic overdue invoice reminders
-- Automatic inactive-customer reminders after 60 days
-- Editable communication templates with merge fields
-- Searchable customer communication history
-- Local persistence for message history and custom templates
-- Responsive desktop and mobile interface
+## AI Dispatch Assistant
 
-## Upgrade
-Replace the deployed project files with this build. Existing Supabase data is unchanged.
+Added a new AI Dispatch Assistant page with:
+
+- Live dispatch KPIs
+- Recommended driver assignments
+- One-click assignment
+- Driver workload balancing
+- Vehicle suitability scoring
+- Unassigned-job warnings
+- Potential late-collection warnings
+- Missing POD warnings
+- Estimated job profit and margin
+- Live operational guidance
+
+The assistant is rule-based and uses the records already stored in KLS SameDay Office. It does not send business data to an external AI service.

@@ -1,18 +1,11 @@
-# KLS SameDay Office v26.32
+# KLS SameDay Office v26.33
 
-## Customer Portal
+## Finance & Accounts Centre
 
-Added and upgraded:
-- Secure customer account area
-- Online collection booking requests
-- Live job status and tracking links
-- Customer quotation review with Accept / Decline
-- Invoice view with Print / Save PDF
-- POD document access
-- Saved addresses and favourite routes
-- Customer-to-office message centre
-- Password reset link on the login screen
-- Mobile portal layout improvements
-
-## Important setup
-Run `KLS_SameDay_v26_32_Customer_Portal_Upgrade.sql` once in the Supabase SQL Editor before deploying this version.
+- New finance overview with cash received, spending and net monthly result.
+- Invoice ageing split into current, 1–7, 8–30 and 31+ day balances.
+- Dedicated money-owed screen with collection rate and average outstanding invoice.
+- Improved expense ledger and monthly category breakdown.
+- 7, 30, 60 and 90-day cash forecast using invoice due dates.
+- Clear note that figures are cash-management information rather than statutory accounts.
+- Existing Supabase invoices, payments and expenses are reused; no extra SQL migration is required.

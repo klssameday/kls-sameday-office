@@ -100,7 +100,9 @@
     communications: JSON.parse(localStorage.getItem('kls_communications') || '[]'),
     communicationTemplates: JSON.parse(localStorage.getItem('kls_communication_templates') || 'null') || [],
     communicationTab: 'overview',
-    communicationSearch: ''
+    communicationSearch: '',
+    financeTab: 'overview',
+    financeForecastDays: 30
   };
 
   let locationWatchId = null;
@@ -163,7 +165,7 @@
     ['Finance', [
       ['invoices','Invoices'],
       ['documents','Delivery Documents'],
-      ['accounts','Accounts & Payments'],
+      ['accounts','Finance Centre'],
       ['reports','Business Reports']
     ]],
     ['System', [
@@ -176,7 +178,7 @@
     dispatch:'Live Dispatch', drivers:'Driver Control', exchange:'Driver Exchange', driver:'Driver App', tracking:'Live Tracking',
     fleet:'Fleet Management', fleetcentre:'Driver & Fleet Centre', schedule:'Booking Calendar', portalrequests:'Customer Portal',
     quoterequests:'Online Requests', pipeline:'Sales Pipeline', newquote:'New Quote', quotes:'Quotes', jobs:'Jobs',
-    invoices:'Invoices', documents:'Delivery Documents', accounts:'Accounts & Payments', reports:'Business Reports', customers:'Customers', communications:'Automated Communications', settings:'Settings'
+    invoices:'Invoices', documents:'Delivery Documents', accounts:'Finance Centre', reports:'Business Reports', customers:'Customers', communications:'Automated Communications', settings:'Settings'
   };
 
   const navIcons = {
@@ -658,17 +660,47 @@
     const totalInvoiced = active.reduce((s,i)=>s+Number(i.total||0),0);
     const totalPaid = active.reduce((s,i)=>s+invoicePaid(i),0);
     const outstanding = active.reduce((s,i)=>s+invoiceBalance(i),0);
-    const overdue = active.filter(i=>invoiceBalance(i)>0 && i.due_date && i.due_date < todayISO()).reduce((s,i)=>s+invoiceBalance(i),0);
-    const month = todayISO().slice(0,7);
+    const today = todayISO();
+    const overdueInvoices = active.filter(i=>invoiceBalance(i)>0 && i.due_date && i.due_date < today);
+    const overdue = overdueInvoices.reduce((s,i)=>s+invoiceBalance(i),0);
+    const month = today.slice(0,7);
     const monthIncome = active.filter(i=>String(i.paid_date||'').slice(0,7)===month).reduce((s,i)=>s+invoicePaid(i),0);
     const monthExpenses = state.expenses.filter(e=>String(e.expense_date||'').slice(0,7)===month).reduce((s,e)=>s+Number(e.amount||0),0);
-    const rows = active.map(inv=>[esc(inv.invoice_number),esc(inv.customer_name),money(inv.total),money(invoicePaid(inv)),money(invoiceBalance(inv)),esc(invoiceDisplayStatus(inv)),`<button data-record-payment="${inv.id}">Record payment</button>`]);
-    const expenseRows = state.expenses.map(e=>[fmtDate(e.expense_date),esc(e.category),esc(e.supplier||'—'),esc(e.description||'—'),money(e.amount),`<button class="danger" data-delete-expense="${e.id}">Delete</button>`]);
-    return `<section class="accounts-hero"><div><small>V15 ACCOUNTS & PAYMENTS</small><h2>Cash flow and business costs</h2><p>Track invoice balances, payments, overdue accounts and operating expenses.</p></div></section>
-      <section class="cards accounts-kpis">${card('Total invoiced',money(totalInvoiced),'All active invoices','invoices')}${card('Received',money(totalPaid),'Payments recorded','accounts')}${card('Outstanding',money(outstanding),`${money(overdue)} overdue`,'accounts')}${card('This month profit',money(monthIncome-monthExpenses),`${money(monthIncome)} in · ${money(monthExpenses)} out`,'accounts')}</section>
-      <section class="accounts-layout"><div>${panel('Customer balances',table(['Invoice','Customer','Total','Paid','Balance','Status','Action'],rows),'Part-payments automatically update the balance and status.')}</div>
-      <div class="accounts-side">${panel('Record an expense',`<form id="expense-form"><label>Date<input name="expense_date" type="date" value="${todayISO()}" required></label><label>Category<select name="category"><option>Fuel</option><option>Vehicle</option><option>Insurance</option><option>Maintenance</option><option>Tolls & Parking</option><option>Office</option><option>Marketing</option><option>Subcontractor</option><option>Other</option></select></label><label>Supplier<input name="supplier"></label><label>Description<input name="description"></label><label>Amount<input name="amount" type="number" step="0.01" min="0" required></label><button class="primary" style="width:100%">Save Expense</button></form>`)}
-      ${panel('Recent expenses',table(['Date','Category','Supplier','Description','Amount',''],expenseRows),'Running business costs saved securely.')}</div></section>`;
+    const monthProfit = monthIncome-monthExpenses;
+    const dueSoonDate = new Date(); dueSoonDate.setDate(dueSoonDate.getDate()+Number(state.financeForecastDays||30));
+    const dueSoonISO = dueSoonDate.toISOString().slice(0,10);
+    const expectedIncome = active.filter(i=>invoiceBalance(i)>0 && i.due_date && i.due_date<=dueSoonISO).reduce((s,i)=>s+invoiceBalance(i),0);
+    const projectedCash = monthProfit + expectedIncome;
+    const tab = state.financeTab || 'overview';
+    const tabs = `<div class="finance-tabs"><button class="${tab==='overview'?'active':''}" data-finance-tab="overview">Overview</button><button class="${tab==='receivables'?'active':''}" data-finance-tab="receivables">Money owed</button><button class="${tab==='expenses'?'active':''}" data-finance-tab="expenses">Expenses</button><button class="${tab==='forecast'?'active':''}" data-finance-tab="forecast">Cash forecast</button></div>`;
+
+    const ageingBuckets = [
+      ['Not overdue', active.filter(i=>invoiceBalance(i)>0 && (!i.due_date || i.due_date>=today)).reduce((s,i)=>s+invoiceBalance(i),0)],
+      ['1–7 days', overdueInvoices.filter(i=>Math.ceil((new Date(today)-new Date(i.due_date))/86400000)<=7).reduce((s,i)=>s+invoiceBalance(i),0)],
+      ['8–30 days', overdueInvoices.filter(i=>{const d=Math.ceil((new Date(today)-new Date(i.due_date))/86400000);return d>7&&d<=30;}).reduce((s,i)=>s+invoiceBalance(i),0)],
+      ['31+ days', overdueInvoices.filter(i=>Math.ceil((new Date(today)-new Date(i.due_date))/86400000)>30).reduce((s,i)=>s+invoiceBalance(i),0)]
+    ];
+    const maxAge=Math.max(1,...ageingBuckets.map(x=>x[1]));
+    const ageing=`<div class="finance-ageing">${ageingBuckets.map(([label,value])=>`<article><span><b>${esc(label)}</b><small>${money(value)}</small></span><div><i style="width:${Math.max(value?4:0,value/maxAge*100)}%"></i></div></article>`).join('')}</div>`;
+
+    const invoiceRows = active.sort((a,b)=>String(a.due_date||'9999').localeCompare(String(b.due_date||'9999'))).map(inv=>[
+      esc(inv.invoice_number), esc(inv.customer_name), fmtDate(inv.issue_date), fmtDate(inv.due_date), money(inv.total), money(invoicePaid(inv)), money(invoiceBalance(inv)),
+      `<span class="finance-status ${invoiceBalance(inv)<=0?'paid':(inv.due_date&&inv.due_date<today?'overdue':'due')}">${esc(invoiceDisplayStatus(inv))}</span>`,
+      `<button data-record-payment="${inv.id}">Record payment</button>`
+    ]);
+    const expenseRows = [...state.expenses].sort((a,b)=>String(b.expense_date||'').localeCompare(String(a.expense_date||''))).map(e=>[fmtDate(e.expense_date),esc(e.category),esc(e.supplier||'—'),esc(e.description||'—'),money(e.amount),`<button class="danger" data-delete-expense="${e.id}">Delete</button>`]);
+    const categoryTotals = new Map(); state.expenses.filter(e=>String(e.expense_date||'').slice(0,7)===month).forEach(e=>categoryTotals.set(e.category||'Other',(categoryTotals.get(e.category||'Other')||0)+Number(e.amount||0)));
+    const categoryList=[...categoryTotals.entries()].sort((a,b)=>b[1]-a[1]);
+    const expenseBreakdown=categoryList.length?`<div class="finance-breakdown">${categoryList.map(([name,value])=>`<article><span><b>${esc(name)}</b><small>${money(value)}</small></span><strong>${monthExpenses?Math.round(value/monthExpenses*100):0}%</strong></article>`).join('')}</div>`:'<div class="fleet-empty">No expenses recorded this month.</div>';
+
+    let body='';
+    if(tab==='receivables') body=`<section class="finance-grid"><div>${panel('Invoice ageing',ageing,'Focus collection work on the oldest balances first.')}</div><div>${panel('Collection summary',`<div class="finance-summary-list"><p><span>Invoices outstanding</span><b>${active.filter(i=>invoiceBalance(i)>0).length}</b></p><p><span>Overdue invoices</span><b>${overdueInvoices.length}</b></p><p><span>Average outstanding invoice</span><b>${money(active.filter(i=>invoiceBalance(i)>0).length?outstanding/active.filter(i=>invoiceBalance(i)>0).length:0)}</b></p><p><span>Collection rate</span><b>${totalInvoiced?Math.round(totalPaid/totalInvoiced*100):0}%</b></p></div>`,'Amounts use payments already recorded in the system.')}</div></section>${panel('Customer balances',table(['Invoice','Customer','Issued','Due','Total','Paid','Balance','Status','Action'],invoiceRows),'Part-payments automatically update the balance and status.')}`;
+    else if(tab==='expenses') body=`<section class="finance-grid"><div>${panel('Record an expense',`<form id="expense-form" class="finance-expense-form"><div class="grid two"><label>Date<input name="expense_date" type="date" value="${today}" required></label><label>Category<select name="category"><option>Fuel</option><option>Vehicle</option><option>Insurance</option><option>Maintenance</option><option>Tolls & Parking</option><option>Office</option><option>Marketing</option><option>Subcontractor</option><option>Other</option></select></label></div><div class="grid two"><label>Supplier<input name="supplier"></label><label>Amount<input name="amount" type="number" step="0.01" min="0" required></label></div><label>Description<input name="description"></label><button class="primary">Save Expense</button></form>`,'Record all operating costs for accurate profit reporting.')}</div><div>${panel('This month by category',expenseBreakdown,`${money(monthExpenses)} recorded in ${new Date().toLocaleDateString('en-GB',{month:'long'})}.`)}</div></section>${panel('Expense ledger',table(['Date','Category','Supplier','Description','Amount',''],expenseRows),'Running business costs saved securely.')}`;
+    else if(tab==='forecast') body=`<section class="forecast-hero"><div><small>NEXT ${state.financeForecastDays||30} DAYS</small><h3>${money(projectedCash)}</h3><p>Projected cash position based on this month’s recorded result and invoices due.</p></div><label>Forecast window<select id="finance-forecast-days"><option value="7" ${state.financeForecastDays==7?'selected':''}>7 days</option><option value="30" ${state.financeForecastDays==30?'selected':''}>30 days</option><option value="60" ${state.financeForecastDays==60?'selected':''}>60 days</option><option value="90" ${state.financeForecastDays==90?'selected':''}>90 days</option></select></label></section><section class="finance-grid"><div>${panel('Expected inflow',`<div class="forecast-number positive"><small>Invoices due</small><b>${money(expectedIncome)}</b><span>${active.filter(i=>invoiceBalance(i)>0&&i.due_date&&i.due_date<=dueSoonISO).length} invoice(s)</span></div>`,'Based on current due dates, not a payment guarantee.')}</div><div>${panel('Current month result',`<div class="forecast-number ${monthProfit>=0?'positive':'negative'}"><small>Cash received minus expenses</small><b>${money(monthProfit)}</b><span>${money(monthIncome)} in · ${money(monthExpenses)} out</span></div>`,'Only recorded payments and expenses are included.')}</div></section>${panel('Invoices feeding the forecast',table(['Invoice','Customer','Due','Balance','Status'],active.filter(i=>invoiceBalance(i)>0&&i.due_date&&i.due_date<=dueSoonISO).map(i=>[esc(i.invoice_number),esc(i.customer_name),fmtDate(i.due_date),money(invoiceBalance(i)),esc(invoiceDisplayStatus(i))])),'Use this list to plan follow-ups before cash becomes tight.')}`;
+    else body=`<section class="finance-grid"><div>${panel('Cash position',`<div class="finance-cash-card"><div><small>RECEIVED THIS MONTH</small><b>${money(monthIncome)}</b></div><div><small>SPENT THIS MONTH</small><b>${money(monthExpenses)}</b></div><div class="${monthProfit>=0?'positive':'negative'}"><small>NET CASH RESULT</small><b>${money(monthProfit)}</b></div></div>`,'This is a cash view, not a full statutory profit-and-loss account.')}</div><div>${panel('Invoice health',`<div class="finance-summary-list"><p><span>Total invoiced</span><b>${money(totalInvoiced)}</b></p><p><span>Received</span><b>${money(totalPaid)}</b></p><p><span>Outstanding</span><b>${money(outstanding)}</b></p><p class="danger"><span>Overdue</span><b>${money(overdue)}</b></p></div>`,'KLS is currently recorded as not VAT registered, so figures are shown without VAT calculations.')}</div></section><section class="finance-grid"><div>${panel('Invoice ageing',ageing,'A quick view of where collection attention is needed.')}</div><div>${panel('This month costs',expenseBreakdown,'Add every business cost for better decisions.')}</div></section>`;
+
+    return `<section class="accounts-hero finance-v2633-hero"><div><small>V26.33 FINANCE & ACCOUNTS CENTRE</small><h2>Know exactly what is owed, paid and spent</h2><p>Cash flow, invoice collection, expenses and forward planning in one control centre.</p></div><button class="primary" data-page="invoices">Open invoices</button></section>
+      <section class="cards accounts-kpis">${card('Total invoiced',money(totalInvoiced),'All active invoices','invoices')}${card('Received',money(totalPaid),'Payments recorded','accounts')}${card('Outstanding',money(outstanding),`${money(overdue)} overdue`,'accounts')}${card('This month result',money(monthProfit),`${money(monthIncome)} in · ${money(monthExpenses)} out`,'accounts')}</section>${tabs}${body}`;
   }
 
 
@@ -1668,6 +1700,8 @@ function settingsView() {
     });
     document.querySelectorAll('[data-page]').forEach(button => button.onclick = () => { state.page = button.dataset.page; render(); });
     document.querySelectorAll('[data-communication-tab]').forEach(button => button.onclick = () => { state.communicationTab = button.dataset.communicationTab; render(); });
+    document.querySelectorAll('[data-finance-tab]').forEach(button => button.onclick = () => { state.financeTab = button.dataset.financeTab; render(); });
+    document.getElementById('finance-forecast-days')?.addEventListener('change', event => { state.financeForecastDays = Number(event.target.value || 30); render(); });
     document.getElementById('communication-search')?.addEventListener('input', event => { state.communicationSearch = event.target.value; render(); });
     const composeForm = document.getElementById('communication-compose-form');
     if (composeForm) {

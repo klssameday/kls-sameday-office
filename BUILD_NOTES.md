@@ -1,13 +1,13 @@
-# KLS SameDay v26.20 — Automated Billing Centre
+# KLS SameDay v26.21 — Delivery Documents Centre
 
 ## Added
-- Delivered jobs automatically appear in a billing queue.
-- One-click invoice creation from each completed job.
-- Create all waiting invoices in one action.
-- Live billing KPIs for ready, outstanding, overdue and paid invoices.
-- Payment reminder action opens WhatsApp first when a customer phone is saved, otherwise email.
-- Reminder text is copied when no contact details are available.
-- Existing Driver App, POD, Jobs, Dispatch and Operations Dashboard remain unchanged.
+- New Delivery Documents section in the Finance menu.
+- Delivered jobs automatically appear in a searchable POD library.
+- Professional proof-of-delivery certificate with collection, delivery, recipient, driver, vehicle, goods, notes, POD photo and signature.
+- Print or save each certificate as a PDF using the browser print screen.
+- Share POD details from supported phones or copy them to the clipboard on desktop.
+- Direct links to the original POD photograph and signature.
+- Live totals for delivered jobs, POD-ready documents, missing POD records and monthly completions.
 
 ## Database
 No SQL migration is required.

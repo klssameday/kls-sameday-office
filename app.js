@@ -143,6 +143,7 @@
     ]],
     ['Finance', [
       ['invoices','Invoices'],
+      ['documents','Delivery Documents'],
       ['accounts','Accounts & Payments']
     ]],
     ['System', [
@@ -155,13 +156,13 @@
     dispatch:'Live Dispatch', drivers:'Driver Control', exchange:'Driver Exchange', driver:'Driver App', tracking:'Live Tracking',
     fleet:'Fleet Management', schedule:'Booking Calendar', portalrequests:'Customer Portal',
     quoterequests:'Online Requests', newquote:'New Quote', quotes:'Quotes', jobs:'Jobs',
-    invoices:'Invoices', accounts:'Accounts & Payments', customers:'Customers', settings:'Settings'
+    invoices:'Invoices', documents:'Delivery Documents', accounts:'Accounts & Payments', customers:'Customers', settings:'Settings'
   };
 
   const navIcons = {
     dashboard:'⌂', operations:'◷', dispatch:'⇄', jobs:'▤', newquote:'＋', quotes:'◫',
     quoterequests:'↧', customers:'◎', portalrequests:'◉', drivers:'♙', driver:'♙', tracking:'⌖',
-    exchange:'⇆', routes:'◇', schedule:'□', invoices:'£', accounts:'◌', settings:'⚙'
+    exchange:'⇆', routes:'◇', schedule:'□', invoices:'£', documents:'▧', accounts:'◌', settings:'⚙'
   };
 
   function layout(content) {
@@ -598,6 +599,30 @@
       <section class="billing-layout"><div>${panel('Billing queue',`<div class="billing-queue">${queueHtml}</div>`,'Delivered jobs appear here automatically.')}</div><div>${panel('All invoices',table(['Invoice','Customer','Issue','Due','Total','Paid','Balance','Status','Actions'],rows),'Use Reminder to open a ready-written email or WhatsApp payment chase.')}</div></section>`;
   }
 
+
+  function deliveryDocumentsView() {
+    const delivered = state.jobs.filter(job => job.job_status === 'Delivered').sort((a,b)=>new Date(b.delivered_at || b.updated_at || b.created_at || 0)-new Date(a.delivered_at || a.updated_at || a.created_at || 0));
+    const withPod = delivered.filter(job => job.pod_photo_url || job.pod_signature_url || job.delivered_to);
+    const withoutPod = delivered.filter(job => !(job.pod_photo_url || job.pod_signature_url || job.delivered_to));
+    const thisMonth = todayISO().slice(0,7);
+    const monthCount = delivered.filter(job => String(job.delivered_at || job.collection_date || '').slice(0,7) === thisMonth).length;
+    const cards = delivered.map(job => {
+      const invoice = state.invoices.find(inv => inv.job_id === job.id);
+      const completed = job.delivered_at ? new Date(job.delivered_at).toLocaleString('en-GB',{dateStyle:'medium',timeStyle:'short'}) : fmtDate(job.collection_date);
+      const podReady = Boolean(job.pod_photo_url || job.pod_signature_url || job.delivered_to);
+      return `<article class="document-card" data-document-card>
+        <header><div><small>${podReady ? 'POD COMPLETE' : 'POD NEEDS REVIEW'}</small><h3>${esc(job.job_number || 'Delivered job')}</h3><p>${esc(job.customer_name || job.contact_name || 'Customer')}</p></div><span class="document-status ${podReady?'ready':'missing'}">${podReady?'Ready':'Missing POD'}</span></header>
+        <div class="document-route"><p><small>COLLECTION</small>${esc(job.collection_address || '—')}</p><p><small>DELIVERY</small>${esc(job.delivery_address || '—')}</p></div>
+        <div class="document-meta"><span><small>Delivered</small><b>${esc(completed)}</b></span><span><small>Received by</small><b>${esc(job.delivered_to || 'Not recorded')}</b></span><span><small>Invoice</small><b>${esc(invoice?.invoice_number || 'Not raised')}</b></span></div>
+        ${job.pod_notes ? `<p class="document-note"><small>DRIVER NOTES</small>${esc(job.pod_notes)}</p>` : ''}
+        <footer><button class="primary" data-print-pod="${job.id}" ${podReady?'':'disabled'}>Open POD certificate</button><button data-share-pod="${job.id}" ${podReady?'':'disabled'}>Share</button>${job.pod_photo_url?`<a class="button-link secondary" href="${esc(job.pod_photo_url)}" target="_blank" rel="noopener">Photo</a>`:''}${job.pod_signature_url?`<a class="button-link secondary" href="${esc(job.pod_signature_url)}" target="_blank" rel="noopener">Signature</a>`:''}</footer>
+      </article>`;
+    }).join('') || '<div class="billing-clear"><span>✓</span><div><b>No delivered jobs yet</b><small>Completed deliveries will appear here automatically.</small></div></div>';
+    return `<section class="documents-hero"><div><small>KLS DELIVERY RECORDS</small><h2>POD & Delivery Documents</h2><p>Open, print and share professional proof-of-delivery certificates from completed jobs.</p></div><label>Search documents<input id="document-search" placeholder="Job, customer, address or recipient"></label></section>
+      <section class="documents-kpis">${card('Delivered jobs',delivered.length,'All completed work','documents')}${card('POD ready',withPod.length,'Certificates available','documents')}${card('Needs review',withoutPod.length,withoutPod.length?'Missing POD details':'Everything complete','jobs')}${card('This month',monthCount,'Deliveries completed','documents')}</section>
+      ${panel('Delivery document library',`<div class="document-grid">${cards}</div>`,'Use your browser print screen to save any certificate as a PDF.')}`;
+  }
+
   function accountsView() {
     const active = state.invoices.filter(i => i.status !== 'Cancelled');
     const totalInvoiced = active.reduce((s,i)=>s+Number(i.total||0),0);
@@ -993,7 +1018,7 @@
     if (state.loading) { document.getElementById('app').innerHTML = '<div class="loading">Loading KLS SameDay Office…</div>'; return; }
     if (!state.user) { document.getElementById('app').innerHTML = authView(); bindAuth(); return; }
     if (state.portalUser) { document.getElementById('app').innerHTML = customerPortalView(); bindCustomerPortal(); return; }
-    const views = { dashboard, smart: smartDispatchView, routes: routePlannerView, operations: operationsView, dispatch: dispatchView, drivers: driversManagementView, exchange: driverExchangeView, driver: driverView, tracking: liveTrackingView, fleet: fleetView, schedule: scheduleView, newquote: newQuote, quotes: quotesView, jobs: jobsView, invoices: invoicesView, accounts: accountsView, portalrequests: portalRequestsView, quoterequests: quoteRequestsView, customers: customersView, settings: settingsView };
+    const views = { dashboard, smart: smartDispatchView, routes: routePlannerView, operations: operationsView, dispatch: dispatchView, drivers: driversManagementView, exchange: driverExchangeView, driver: driverView, tracking: liveTrackingView, fleet: fleetView, schedule: scheduleView, newquote: newQuote, quotes: quotesView, jobs: jobsView, invoices: invoicesView, documents: deliveryDocumentsView, accounts: accountsView, portalrequests: portalRequestsView, quoterequests: quoteRequestsView, customers: customersView, settings: settingsView };
     document.getElementById('app').innerHTML = layout(views[state.page]());
     bindApp();
     if (state.page === 'dashboard') initialiseCommandMap();
@@ -1673,6 +1698,17 @@
     document.querySelectorAll('[data-request-convert]').forEach(button=>button.onclick=async()=>{const r=state.quoteRequests.find(x=>x.id===button.dataset.requestConvert);if(!r)return;state.quoteCustomerId=null;state.page='newquote';state.pendingRequest=r;render();setTimeout(()=>{const f=document.getElementById('quote-form');if(!f)return;['company','contact_name','email','phone','collection_date','collection_time','collection_address','delivery_address','vehicle','miles','goods_description'].forEach(k=>{if(f[k]&&r[k]!=null)f[k].value=r[k];});},0);});
     document.querySelectorAll('[data-request-reject]').forEach(button=>button.onclick=async()=>{const {error}=await db.from('public_quote_requests').update({status:'Rejected'}).eq('id',button.dataset.requestReject);if(error)return showNotice(error.message,'error'),render();const r=state.quoteRequests.find(x=>x.id===button.dataset.requestReject);if(r)r.status='Rejected';showNotice('Request rejected.','ok');render();});
 
+    document.getElementById('document-search')?.addEventListener('input', event => {
+      const term = event.target.value.toLowerCase();
+      document.querySelectorAll('[data-document-card]').forEach(card => card.style.display = card.textContent.toLowerCase().includes(term) ? '' : 'none');
+    });
+    document.querySelectorAll('[data-print-pod]').forEach(button => button.onclick = () => printPodCertificate(state.jobs.find(job => job.id === button.dataset.printPod)));
+    document.querySelectorAll('[data-share-pod]').forEach(button => button.onclick = async () => {
+      const job = state.jobs.find(item => item.id === button.dataset.sharePod); if (!job) return;
+      const text = `${state.settings.trading_name} proof of delivery\n${job.job_number || 'Delivered job'}\nDelivered to: ${job.delivered_to || 'Recipient recorded'}\nDelivery: ${job.delivery_address || ''}${job.pod_photo_url ? `\nPOD photo: ${job.pod_photo_url}` : ''}${job.pod_signature_url ? `\nSignature: ${job.pod_signature_url}` : ''}`;
+      try { if (navigator.share) await navigator.share({title:`POD ${job.job_number || ''}`,text}); else { await navigator.clipboard.writeText(text); showNotice('POD details copied.','ok'); render(); } } catch(error) { if(error.name !== 'AbortError'){ showNotice('Unable to share POD.','error'); render(); } }
+    });
+
     document.querySelectorAll('[data-print-quote]').forEach(button => button.onclick = () => printDocument('quote', state.quotes.find(q => q.id === button.dataset.printQuote)));
     const quoteMessage = quote => `${state.settings.trading_name} quotation ${quote.quote_number}\n\nCollection: ${quote.collection_address}\nDelivery: ${quote.delivery_address}\nVehicle: ${quote.vehicle}\nPrice: ${money(quote.quoted_price)}\n\nDedicated vehicle • No shared loads\n${state.settings.phone} • ${state.settings.email}`;
     document.querySelectorAll('[data-email-quote]').forEach(button => button.onclick = () => {
@@ -1791,6 +1827,15 @@
 
   function filterRows(value) { const term = value.toLowerCase(); document.querySelectorAll('tbody tr').forEach(row => row.style.display = row.textContent.toLowerCase().includes(term) ? '' : 'none'); }
   function filterCards(value) { const term = value.toLowerCase(); document.querySelectorAll('.customergrid article').forEach(card => card.style.display = card.textContent.toLowerCase().includes(term) ? '' : 'none'); }
+
+  function printPodCertificate(job) {
+    if (!job) { showNotice('POD certificate could not be opened.','error'); return; }
+    const win = window.open('', '_blank');
+    if (!win) { showNotice('Your browser blocked the POD window. Please allow pop-ups for KLS SameDay Office.','error'); return; }
+    const delivered = job.delivered_at ? new Date(job.delivered_at).toLocaleString('en-GB',{dateStyle:'full',timeStyle:'short'}) : fmtDate(job.collection_date);
+    win.document.write(`<html><head><title>POD ${esc(job.job_number || '')}</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font-family:Arial,sans-serif;color:#111;margin:0;padding:36px;background:#f4f4f5}.sheet{max-width:820px;margin:auto;background:#fff;padding:42px;box-shadow:0 10px 35px #0002}.toolbar{display:flex;justify-content:flex-end;gap:10px;margin-bottom:25px}.toolbar button{border:0;border-radius:8px;padding:12px 18px;font-weight:700;cursor:pointer}.primary{background:#111;color:#fff}.secondary{background:#e5e7eb}.brand{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:4px solid #111;padding-bottom:20px}.brand h1{font-size:34px;margin:0}.brand p{text-align:right;margin:0;line-height:1.5}.title{margin:28px 0}.title small{font-weight:800;letter-spacing:.14em}.title h2{font-size:28px;margin:5px 0}.route{display:grid;grid-template-columns:1fr 1fr;gap:16px}.box{background:#f4f4f5;border-radius:10px;padding:18px}.box small,.details small{display:block;font-weight:800;letter-spacing:.08em;margin-bottom:7px}.details{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:18px 0}.details div{border:1px solid #ddd;border-radius:10px;padding:15px}.images{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:20px}.images figure{margin:0;border:1px solid #ddd;border-radius:10px;padding:12px}.images img{display:block;width:100%;max-height:340px;object-fit:contain}.images figcaption{font-weight:700;margin-top:8px}.notes{margin-top:18px;border-left:4px solid #111;padding:12px 16px;background:#fafafa}footer{margin-top:30px;padding-top:18px;border-top:1px solid #ccc;font-size:13px}@media(max-width:650px){body{padding:0}.sheet{padding:22px}.route,.details,.images{grid-template-columns:1fr}.brand{display:block}.brand p{text-align:left;margin-top:12px}}@media print{body{padding:0;background:#fff}.sheet{box-shadow:none;max-width:none}.toolbar{display:none}}</style></head><body><main class="sheet"><div class="toolbar"><button class="secondary" onclick="window.close()">Close</button><button class="primary" onclick="window.print()">Print / Save PDF</button></div><header class="brand"><div><h1>${esc(state.settings.trading_name || 'KLS SameDay')}</h1><b>DEDICATED SAME-DAY LOGISTICS</b></div><p>${esc(state.settings.legal_name || '')}<br>${esc(state.settings.phone || '')}<br>${esc(state.settings.email || '')}</p></header><section class="title"><small>PROOF OF DELIVERY</small><h2>${esc(job.job_number || 'Delivery certificate')}</h2><p>This confirms that the delivery below was completed by KLS SameDay.</p></section><section class="route"><div class="box"><small>COLLECTION</small>${esc(job.collection_address || '—')}</div><div class="box"><small>DELIVERY</small>${esc(job.delivery_address || '—')}</div></section><section class="details"><div><small>CUSTOMER</small><b>${esc(job.customer_name || job.contact_name || '—')}</b></div><div><small>DELIVERED</small><b>${esc(delivered)}</b></div><div><small>RECEIVED BY</small><b>${esc(job.delivered_to || 'Not recorded')}</b></div><div><small>DRIVER</small><b>${esc(job.assigned_driver_name || 'KLS Driver')}</b></div><div><small>VEHICLE</small><b>${esc(job.vehicle || '—')}</b></div><div><small>GOODS</small><b>${esc(job.goods_description || 'As booked')}</b></div></section>${job.pod_notes?`<div class="notes"><b>Delivery notes</b><p>${esc(job.pod_notes)}</p></div>`:''}<section class="images">${job.pod_photo_url?`<figure><img src="${esc(job.pod_photo_url)}" alt="POD delivery photo"><figcaption>Delivery photograph</figcaption></figure>`:''}${job.pod_signature_url?`<figure><img src="${esc(job.pod_signature_url)}" alt="Recipient signature"><figcaption>Recipient signature</figcaption></figure>`:''}</section><footer>Generated by KLS SameDay Operations Platform · Dedicated vehicle · No shared loads</footer></main></body></html>`);
+    win.document.close(); win.focus();
+  }
 
   function printDocument(type, row) {
     if (!row) { showNotice('Document could not be opened.', 'error'); return; }

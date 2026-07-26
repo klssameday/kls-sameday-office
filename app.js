@@ -87,7 +87,8 @@
     dispatchSearch: '',
     dispatchDriverFilter: 'all',
     invoiceSearch: '',
-    invoiceFilter: 'all'
+    invoiceFilter: 'all',
+    reportPeriod: new Date().toISOString().slice(0,7)
   };
 
   let locationWatchId = null;
@@ -146,7 +147,8 @@
     ['Finance', [
       ['invoices','Invoices'],
       ['documents','Delivery Documents'],
-      ['accounts','Accounts & Payments']
+      ['accounts','Accounts & Payments'],
+      ['reports','Business Reports']
     ]],
     ['System', [
       ['settings','Settings']
@@ -158,13 +160,13 @@
     dispatch:'Live Dispatch', drivers:'Driver Control', exchange:'Driver Exchange', driver:'Driver App', tracking:'Live Tracking',
     fleet:'Fleet Management', schedule:'Booking Calendar', portalrequests:'Customer Portal',
     quoterequests:'Online Requests', newquote:'New Quote', quotes:'Quotes', jobs:'Jobs',
-    invoices:'Invoices', documents:'Delivery Documents', accounts:'Accounts & Payments', customers:'Customers', settings:'Settings'
+    invoices:'Invoices', documents:'Delivery Documents', accounts:'Accounts & Payments', reports:'Business Reports', customers:'Customers', settings:'Settings'
   };
 
   const navIcons = {
     dashboard:'⌂', operations:'◷', dispatch:'⇄', jobs:'▤', newquote:'＋', quotes:'◫',
     quoterequests:'↧', customers:'◎', portalrequests:'◉', drivers:'♙', driver:'♙', tracking:'⌖',
-    exchange:'⇆', routes:'◇', schedule:'□', invoices:'£', documents:'▧', accounts:'◌', settings:'⚙'
+    exchange:'⇆', routes:'◇', schedule:'□', invoices:'£', documents:'▧', accounts:'◌', reports:'▥', settings:'⚙'
   };
 
   function layout(content) {
@@ -652,6 +654,62 @@
       ${panel('Recent expenses',table(['Date','Category','Supplier','Description','Amount',''],expenseRows),'Running business costs saved securely.')}</div></section>`;
   }
 
+
+  function businessReportsView() {
+    const period = state.reportPeriod || todayISO().slice(0,7);
+    const periodDate = new Date(`${period}-01T12:00:00`);
+    const periodLabel = Number.isNaN(periodDate.getTime()) ? period : periodDate.toLocaleDateString('en-GB',{month:'long',year:'numeric'});
+    const inPeriod = value => String(value || '').slice(0,7) === period;
+    const periodJobs = state.jobs.filter(job => inPeriod(job.collection_date || job.delivered_at || job.created_at) && job.job_status !== 'Cancelled');
+    const delivered = periodJobs.filter(job => job.job_status === 'Delivered' || job.delivered_at);
+    const periodInvoices = state.invoices.filter(inv => inv.status !== 'Cancelled' && inPeriod(inv.issue_date || inv.created_at));
+    const periodExpenses = state.expenses.filter(exp => inPeriod(exp.expense_date || exp.created_at));
+    const bookedRevenue = periodJobs.reduce((sum,job)=>sum+Number(job.total_price || job.quoted_price || 0),0);
+    const invoicedRevenue = periodInvoices.reduce((sum,inv)=>sum+Number(inv.total || 0),0);
+    const received = state.invoices.filter(inv=>inv.status!=='Cancelled' && inPeriod(inv.paid_date)).reduce((sum,inv)=>sum+invoicePaid(inv),0);
+    const expenses = periodExpenses.reduce((sum,exp)=>sum+Number(exp.amount || 0),0);
+    const operatingProfit = received - expenses;
+    const avgJob = periodJobs.length ? bookedRevenue / periodJobs.length : 0;
+    const completionRate = periodJobs.length ? delivered.length / periodJobs.length * 100 : 0;
+    const paidInvoices = periodInvoices.filter(inv=>invoiceBalance(inv)<=0).length;
+    const paymentRate = periodInvoices.length ? paidInvoices / periodInvoices.length * 100 : 0;
+
+    const customerMap = new Map();
+    periodJobs.forEach(job=>{
+      const key=job.customer_id || job.customer_name || job.contact_name || 'Unknown customer';
+      const row=customerMap.get(key)||{name:job.customer_name||job.contact_name||'Unknown customer',jobs:0,revenue:0};
+      row.jobs += 1; row.revenue += Number(job.total_price || job.quoted_price || 0); customerMap.set(key,row);
+    });
+    const topCustomers=[...customerMap.values()].sort((a,b)=>b.revenue-a.revenue).slice(0,8);
+    const maxCustomer=Math.max(1,...topCustomers.map(row=>row.revenue));
+    const customerRows=topCustomers.map(row=>`<div class="report-rank-row"><span><b>${esc(row.name)}</b><small>${row.jobs} job${row.jobs===1?'':'s'}</small></span><div><i style="width:${Math.max(4,row.revenue/maxCustomer*100)}%"></i></div><strong>${money(row.revenue)}</strong></div>`).join('') || '<div class="fleet-empty">No customer activity for this month.</div>';
+
+    const vehicleMap = new Map();
+    periodJobs.forEach(job=>{
+      const key=job.vehicle || 'Not specified'; const row=vehicleMap.get(key)||{vehicle:key,jobs:0,revenue:0};
+      row.jobs += 1; row.revenue += Number(job.total_price || job.quoted_price || 0); vehicleMap.set(key,row);
+    });
+    const vehicleRows=[...vehicleMap.values()].sort((a,b)=>b.revenue-a.revenue).map(row=>[
+      esc(row.vehicle), row.jobs, money(row.revenue), money(row.jobs?row.revenue/row.jobs:0)
+    ]);
+
+    const categoryMap = new Map();
+    periodExpenses.forEach(exp=>categoryMap.set(exp.category||'Other',(categoryMap.get(exp.category||'Other')||0)+Number(exp.amount||0)));
+    const categoryRows=[...categoryMap.entries()].sort((a,b)=>b[1]-a[1]).map(([category,total])=>[esc(category),money(total),expenses?`${(total/expenses*100).toFixed(0)}%`:'0%']);
+
+    const daysInMonth = new Date(periodDate.getFullYear(), periodDate.getMonth()+1, 0).getDate();
+    const daily = Array.from({length:daysInMonth},(_,idx)=>({day:idx+1,revenue:0,jobs:0}));
+    periodJobs.forEach(job=>{ const date=new Date(job.collection_date||job.delivered_at||job.created_at); if(!Number.isNaN(date.getTime())){ const bucket=daily[date.getDate()-1]; if(bucket){bucket.jobs++;bucket.revenue+=Number(job.total_price||job.quoted_price||0);} } });
+    const maxDaily=Math.max(1,...daily.map(item=>item.revenue));
+    const chart=daily.map(item=>`<div class="report-chart-bar" title="${item.day} ${periodLabel}: ${item.jobs} jobs, ${money(item.revenue)}"><i style="height:${Math.max(item.revenue?6:1,item.revenue/maxDaily*100)}%"></i><small>${item.day}</small></div>`).join('');
+
+    return `<section class="reports-hero"><div><small>KLS BUSINESS INTELLIGENCE</small><h2>Business Reports</h2><p>Monthly performance, customers, vehicles, cash received and operating costs in one place.</p></div><div class="reports-actions"><label>Reporting month<input id="report-period" type="month" value="${esc(period)}"></label><button class="primary" data-export-report>Export CSV</button></div></section>
+      <section class="reports-kpis">${card('Booked revenue',money(bookedRevenue),`${periodJobs.length} active job${periodJobs.length===1?'':'s'}`,'jobs')}${card('Cash received',money(received),`${paymentRate.toFixed(0)}% invoice payment rate`,'accounts')}${card('Operating costs',money(expenses),`${periodExpenses.length} expense${periodExpenses.length===1?'':'s'}`,'accounts')}${card('Cash result',money(operatingProfit),operatingProfit>=0?'Positive after recorded costs':'Costs exceeded receipts','reports')}</section>
+      <section class="reports-summary"><article><small>REPORTING PERIOD</small><h3>${esc(periodLabel)}</h3><p>${delivered.length} of ${periodJobs.length} jobs delivered · ${completionRate.toFixed(0)}% completion rate</p></article><article><small>AVERAGE JOB VALUE</small><h3>${money(avgJob)}</h3><p>${money(invoicedRevenue)} invoiced during the month</p></article><article><small>INVOICE COLLECTION</small><h3>${paymentRate.toFixed(0)}%</h3><p>${paidInvoices} of ${periodInvoices.length} invoices paid</p></article></section>
+      <section class="reports-grid"><div>${panel('Revenue by day',`<div class="report-chart">${chart}</div>`,`Booked job value across ${periodLabel}.`)}</div><div>${panel('Top customers',`<div class="report-rank">${customerRows}</div>`,'Ranked by booked job value.')}</div></section>
+      <section class="reports-grid reports-grid-lower"><div>${panel('Vehicle performance',table(['Vehicle','Jobs','Revenue','Average'],vehicleRows),'Shows which vehicle types generated the most work.')}</div><div>${panel('Expense breakdown',table(['Category','Total','Share'],categoryRows),'Only expenses recorded in Accounts & Payments are included.')}</div></section>`;
+  }
+
   function customerMetrics(customer) {
     const quotes = state.quotes.filter(q => q.customer_id === customer.id);
     const jobs = state.jobs.filter(j => j.customer_id === customer.id);
@@ -1029,7 +1087,7 @@
     if (state.loading) { document.getElementById('app').innerHTML = '<div class="loading">Loading KLS SameDay Office…</div>'; return; }
     if (!state.user) { document.getElementById('app').innerHTML = authView(); bindAuth(); return; }
     if (state.portalUser) { document.getElementById('app').innerHTML = customerPortalView(); bindCustomerPortal(); return; }
-    const views = { dashboard, smart: smartDispatchView, routes: routePlannerView, operations: operationsView, dispatch: dispatchView, drivers: driversManagementView, exchange: driverExchangeView, driver: driverView, tracking: liveTrackingView, fleet: fleetView, schedule: scheduleView, newquote: newQuote, quotes: quotesView, jobs: jobsView, invoices: invoicesView, documents: deliveryDocumentsView, accounts: accountsView, portalrequests: portalRequestsView, quoterequests: quoteRequestsView, customers: customersView, settings: settingsView };
+    const views = { dashboard, smart: smartDispatchView, routes: routePlannerView, operations: operationsView, dispatch: dispatchView, drivers: driversManagementView, exchange: driverExchangeView, driver: driverView, tracking: liveTrackingView, fleet: fleetView, schedule: scheduleView, newquote: newQuote, quotes: quotesView, jobs: jobsView, invoices: invoicesView, documents: deliveryDocumentsView, accounts: accountsView, reports: businessReportsView, portalrequests: portalRequestsView, quoterequests: quoteRequestsView, customers: customersView, settings: settingsView };
     document.getElementById('app').innerHTML = layout(views[state.page]());
     bindApp();
     if (state.page === 'dashboard') initialiseCommandMap();
@@ -1260,6 +1318,26 @@
     form.onsubmit=async e=>{e.preventDefault();const button=form.querySelector('button.primary');button.disabled=true;button.textContent='Sending…';const values=Object.fromEntries(new FormData(form));values.miles=values.miles?Number(values.miles):null;const {error}=await db.from('public_quote_requests').insert(values);if(error){button.disabled=false;button.textContent='Send quote request';alert(error.message);return;}document.querySelector('.public-quote-card').innerHTML='<div class="public-quote-brand"><b>KLS</b><span>SameDay</span></div><div class="request-success"><b>Request received</b><p>Thank you. KLS SameDay will review the delivery and contact you shortly.</p></div><footer>0330 043 5237 · info@klssameday.co.uk</footer>';};
   }
 
+
+  function exportBusinessReportCsv() {
+    const period = state.reportPeriod || todayISO().slice(0,7);
+    const inPeriod = value => String(value || '').slice(0,7) === period;
+    const rows = [['Type','Reference','Date','Customer / Supplier','Vehicle / Category','Description','Amount','Status']];
+    state.jobs.filter(job=>inPeriod(job.collection_date||job.delivered_at||job.created_at) && job.job_status!=='Cancelled').forEach(job=>rows.push([
+      'Job',job.job_number||'',job.collection_date||job.delivered_at||job.created_at||'',job.customer_name||job.contact_name||'',job.vehicle||'',`${job.collection_address||''} to ${job.delivery_address||''}`,Number(job.total_price||job.quoted_price||0).toFixed(2),job.job_status||''
+    ]));
+    state.invoices.filter(inv=>inv.status!=='Cancelled' && inPeriod(inv.issue_date||inv.created_at)).forEach(inv=>rows.push([
+      'Invoice',inv.invoice_number||'',inv.issue_date||inv.created_at||'',inv.customer_name||'', '', 'Invoice raised',Number(inv.total||0).toFixed(2),invoiceDisplayStatus(inv)
+    ]));
+    state.expenses.filter(exp=>inPeriod(exp.expense_date||exp.created_at)).forEach(exp=>rows.push([
+      'Expense','',exp.expense_date||exp.created_at||'',exp.supplier||'',exp.category||'',exp.description||'',(-Number(exp.amount||0)).toFixed(2),'Recorded'
+    ]));
+    const csv=rows.map(row=>row.map(value=>`"${String(value??'').replace(/"/g,'""')}"`).join(',')).join('\r\n');
+    const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'});
+    const url=URL.createObjectURL(blob); const link=document.createElement('a'); link.href=url; link.download=`KLS-Business-Report-${period}.csv`; document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url);
+    showNotice(`Business report for ${period} exported.`, 'ok'); render();
+  }
+
   function bindApp() {
     const networkForm = document.getElementById('network-job-form');
     if (networkForm) networkForm.onsubmit = async event => {
@@ -1317,6 +1395,8 @@
       await loadAll(); state.page='exchange'; showNotice('Network job withdrawn.','ok'); render();
     });
     document.querySelectorAll('[data-page]').forEach(button => button.onclick = () => { state.page = button.dataset.page; render(); });
+    document.getElementById('report-period')?.addEventListener('change', event => { state.reportPeriod = event.target.value || todayISO().slice(0,7); render(); });
+    document.querySelector('[data-export-report]')?.addEventListener('click', exportBusinessReportCsv);
     document.getElementById('route-date')?.addEventListener('change', event => { state.routeDate = event.target.value || todayISO(); render(); });
     document.querySelectorAll('[data-route-job]').forEach(card => {
       card.addEventListener('dragstart', event => { card.classList.add('dragging'); event.dataTransfer.effectAllowed='move'; event.dataTransfer.setData('text/plain', card.dataset.routeJob); });

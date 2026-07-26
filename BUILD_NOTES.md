@@ -1,12 +1,13 @@
-# KLS SameDay v26.22 — Professional Invoice Centre
+# KLS SameDay v26.23 — Business Reports Centre
 
 ## Added
-- Search and status filters for the invoice register.
-- Professional invoice document with customer details, job route, goods, dates, payment status and bank details.
-- Print or Save PDF directly from the invoice window.
-- Email and WhatsApp invoice messages generated from the saved customer record.
-- Clear overdue markers and live paid/balance figures.
-- Existing billing queue, payment recording and reminders remain in place.
+- New Business Reports page in the Finance section.
+- Monthly booked revenue, cash received, costs and cash-result KPIs.
+- Completion rate, average job value and invoice collection rate.
+- Revenue-by-day chart for the selected month.
+- Top-customer ranking and vehicle performance table.
+- Expense category breakdown.
+- One-click CSV export covering jobs, invoices and expenses for the selected month.
 
 ## Database
 No SQL migration is required.

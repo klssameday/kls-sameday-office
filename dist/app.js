@@ -1684,6 +1684,16 @@
   }
 
   let officePollId=null;
+  async function refreshOfficeJobsNow(){
+    if(!db||!state.user||state.portalUser)return;
+    const {data,error}=await db.from('jobs').select('*').order('created_at',{ascending:false});
+    if(error)return;
+    state.jobs=(data||[]).map(j=>({...j,customer_name:j.customer_name||j.contact_name||''}));
+    if(state.page==='jobs'||state.page==='dispatch'||state.page==='planner')render();
+  }
+  window.addEventListener('focus',refreshOfficeJobsNow);
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshOfficeJobsNow();});
+
   function startOfficePolling(){
     if(officePollId)clearInterval(officePollId);
     officePollId=setInterval(async()=>{

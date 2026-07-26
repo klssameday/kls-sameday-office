@@ -66,7 +66,7 @@
   }
 
   function podView(job){
-    return `<div class="pod-overlay"><section class="pod-sheet"><div class="pod-head"><div><small>PROOF OF DELIVERY</small><h2>${esc(job.job_number||'Job')}</h2></div><button data-close-pod>×</button></div><p class="tracking-note">Photo, signature and recipient name are required. Live tracking will stop only after all POD details are uploaded successfully.</p>${state.notice?`<div class="driver-msg ${state.notice.type}">${esc(state.notice.text)}</div>`:''}<form id="driver-pod-form" class="pod-form"><label>Recipient name<input name="recipient_name" required></label><label>Delivery photo<input name="photo" type="file" accept="image/*" required><small>Take a new photo or choose one from your photo library.</small></label><label>Signature<canvas id="driver-signature" class="signature" width="700" height="280"></canvas></label><button class="btn secondary" type="button" data-clear-signature>Clear signature</button><label>Notes<textarea name="notes" rows="3"></textarea></label><div class="pod-actions"><button class="btn primary full">Upload POD & complete job</button><button class="btn secondary full" type="button" data-close-pod>Cancel</button></div></form></section></div>`;
+    return `<div class="pod-overlay"><section class="pod-sheet"><div class="pod-head"><div><small>PROOF OF DELIVERY</small><h2>${esc(job.job_number||'Job')}</h2></div><button data-close-pod>×</button></div><p class="tracking-note">Photo, signature and recipient name are required. Live tracking will stop only after all POD details are uploaded successfully.</p>${state.notice?`<div class="driver-msg ${state.notice.type}">${esc(state.notice.text)}</div>`:''}<form id="driver-pod-form" class="pod-form"><label>Recipient name<input name="recipient_name" required></label><label>Delivery photo<input name="photo" type="file" accept="image/*" required><small>Take a new photo or choose one from your photo library.</small></label><label>Signature<canvas id="driver-signature" class="signature" width="700" height="280"></canvas></label><button class="btn secondary" type="button" data-clear-signature>Clear signature</button><label>Notes<textarea name="notes" rows="3"></textarea></label><div id="pod-upload-status" class="driver-msg" hidden></div><div class="pod-actions"><button id="pod-submit-button" type="button" class="btn primary full">Upload POD & complete job</button><button class="btn secondary full" type="button" data-close-pod>Cancel</button></div></form></section></div>`;
   }
 
 
@@ -122,7 +122,7 @@
     document.querySelectorAll('[data-pod]').forEach(btn=>{btn.onclick=()=>{state.podJob=state.jobs.find(j=>j.id===btn.dataset.pod);render();};});
     document.querySelectorAll('[data-close-pod]').forEach(btn=>btn.onclick=()=>{state.podJob=null;render();});
     setupSignature();
-    document.getElementById('driver-pod-form')?.addEventListener('submit',completePod);
+    document.getElementById('pod-submit-button')?.addEventListener('click',completePod);
   }
 
   const withTimeout = (promise, ms, label) => Promise.race([
@@ -251,57 +251,59 @@
   async function upload(job,file,type){const ext=type==='signature'?'png':((file.name||'photo.jpg').split('.').pop()||'jpg');const path=`${state.user.id}/${job.id}/${type}-${Date.now()}.${ext}`;const{error}=await db.storage.from('pod').upload(path,file,{contentType:file.type||'image/jpeg'});if(error)throw error;return db.storage.from('pod').getPublicUrl(path).data.publicUrl;}
 
   async function completePod(e){
-    e.preventDefault();
+    e?.preventDefault?.();
     const job=state.podJob;
-    const form=e.currentTarget;
-    const btn=form.querySelector('button[type="submit"]');
+    const form=document.getElementById('driver-pod-form');
+    const btn=document.getElementById('pod-submit-button');
+    const statusBox=document.getElementById('pod-upload-status');
+    const showStage=(text,type='ok')=>{
+      if(statusBox){statusBox.hidden=false;statusBox.className=`driver-msg ${type}`;statusBox.textContent=text;}
+      if(btn)btn.textContent=text;
+    };
+    const timed=(promise,label,ms=25000)=>Promise.race([
+      promise,
+      new Promise((_,reject)=>setTimeout(()=>reject(new Error(`${label} timed out. Check your connection and try again.`)),ms))
+    ]);
     try{
-      if(!job)throw new Error('The delivery job could not be found. Close this screen and try again.');
+      if(!job||!form||!btn)throw new Error('The POD form was not ready. Close it and open it again.');
       if(signatureIsBlank())throw new Error('Please obtain the recipient signature.');
       const fd=new FormData(form);
+      const recipient=String(fd.get('recipient_name')||'').trim();
+      if(!recipient)throw new Error('Please enter the recipient name.');
       const photo=fd.get('photo');
       if(!photo?.size)throw new Error('Please take a delivery photo or choose one from your photo library.');
-      btn.disabled=true;btn.textContent='Uploading photo…';
+      btn.disabled=true;
       state.notice=null;
-      const photoUrl=await upload(job,photo,'photo');
-      btn.textContent='Uploading signature…';
+      showStage('Uploading photo…');
+      const photoUrl=await timed(upload(job,photo,'photo'),'Photo upload');
+      showStage('Uploading signature…');
       const blob=await new Promise(resolve=>signatureCanvas.toBlob(resolve,'image/png'));
       if(!blob)throw new Error('The signature could not be prepared. Please clear it and sign again.');
-      const signatureUrl=await upload(job,blob,'signature');
-      btn.textContent='Completing job…';
+      const signatureUrl=await timed(upload(job,blob,'signature'),'Signature upload');
+      showStage('Completing job…');
       const pos=await nowPosition().catch(()=>null);
       const payload={
         p_job_id:job.id,
-        p_recipient_name:String(fd.get('recipient_name')||'').trim(),
+        p_recipient_name:recipient,
         p_pod_notes:String(fd.get('notes')||'').trim()||null,
         p_photo_url:photoUrl,
         p_signature_url:signatureUrl,
         p_latitude:pos?.coords.latitude??null,
         p_longitude:pos?.coords.longitude??null
       };
-      let {error}=await db.rpc('driver_complete_job',payload);
-      if(error && ['PGRST202','42883'].includes(error.code)){
-        const direct={
-          recipient_name:payload.p_recipient_name,
-          pod_notes:payload.p_pod_notes,
-          pod_photo_url:photoUrl,
-          pod_signature_url:signatureUrl,
-          job_status:'Delivered',
-          delivered_at:new Date().toISOString(),
-          pod_latitude:payload.p_latitude,
-          pod_longitude:payload.p_longitude
-        };
-        const result=await db.from('jobs').update(direct).eq('id',job.id).eq('assigned_driver_id',state.profile.linked_driver_id).select().maybeSingle();
-        error=result.error;
-      }
-      if(error)throw error;
-      Object.assign(job,{job_status:'Delivered',delivered_at:new Date().toISOString(),recipient_name:payload.p_recipient_name,pod_notes:payload.p_pod_notes,pod_photo_url:photoUrl,pod_signature_url:signatureUrl});
+      const rpcResult=await timed(db.rpc('driver_complete_job',payload),'Job completion');
+      if(rpcResult.error)throw rpcResult.error;
+      const verify=await timed(db.from('jobs').select('*').eq('id',job.id).maybeSingle(),'Delivery confirmation');
+      if(verify.error)throw verify.error;
+      Object.assign(job,verify.data||{job_status:'Delivered',delivered_at:new Date().toISOString(),recipient_name:recipient,pod_photo_url:photoUrl,pod_signature_url:signatureUrl});
       state.podJob=null;stopTracking(false);
-      notice(`${job.job_number||'Job'} delivered. POD has been sent back to the office.`,'ok');
-    }catch(error){
-      btn.disabled=false;btn.textContent='Upload POD & complete job';
-      state.notice={text:error?.message||'The POD could not be uploaded.',type:'error'};
+      state.notice={text:`${job.job_number||'Job'} delivered. POD saved successfully.`,type:'ok'};
+      await refreshAssignedJobs();
       render();
+    }catch(error){
+      if(btn){btn.disabled=false;btn.textContent='Upload POD & complete job';}
+      if(statusBox){statusBox.hidden=false;statusBox.className='driver-msg error';statusBox.textContent=error?.message||'The POD could not be uploaded.';}
+      console.error('KLS POD upload failed',error);
     }
   }
 

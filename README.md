@@ -34,3 +34,11 @@ Description: Redesigned the KLS Driver App with a faster job-first mobile layout
 - Structured collection, delivery, goods and booking-information cards.
 - Richer completed-job cards with POD evidence indicators.
 - Clearer no-work states and mobile layout improvements.
+
+
+## v31.5 – Driver New Job Alerts
+- Courier-style new assignment alert card on the Driver dashboard.
+- Optional browser notifications for newly assigned jobs.
+- Quick access from a new-job alert directly into the job.
+- Driver-controlled alert permission from Profile.
+- Alerts are dismissed when the job is opened.

@@ -23,3 +23,11 @@ v31.4 DRIVER CHECKS
 [ ] Confirm navigation opens the correct current destination.
 [ ] Confirm Previous Step and Main Screen buttons still work.
 [ ] Complete a test job and check the completed-job evidence display.
+
+
+v31.5 DRIVER ALERT CHECKS
+[ ] Enable notifications from Driver Profile
+[ ] Assign a new job after the driver app is open
+[ ] Confirm the new-job alert appears
+[ ] Confirm View new job opens the correct booking
+[ ] Confirm dismiss removes the alert without changing the job

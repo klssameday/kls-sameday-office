@@ -1,18 +1,23 @@
-# KLS SameDay Office v32.1
+# KLS SameDay Office v33.0
 
-## Live Driver Dispatch Integration
+## Professional Dispatch Board
 
-This release connects the redesigned Driver App more clearly with the office Dispatch Centre.
+This is a working upgrade based on v32.1. It adds real dispatch controls rather than placeholder screens.
 
-### What is new
+### Included
+- Live five-column drag-and-drop dispatch board
+- Search by job, customer, postcode, vehicle or driver
+- Driver, priority and date filters
+- Urgent, Timed, VIP and Normal priority badges
+- One-click urgent/normal priority toggle on job cards
+- Multi-select jobs
+- Bulk driver assignment
+- Bulk status updates
+- Live driver cards, GPS freshness, alerts, activity and map retained
+- Supabase migration for dispatch priority and delivery deadline fields
 
-- Live driver status cards in Dispatch
-- Current job and GPS freshness shown for each driver
-- Quick driver assignment directly on every dispatch card
-- Driver availability shown inside assignment choices
-- Clear Driver App connected indicator and last-updated time
-- Existing drag-and-drop dispatch, live map, alerts and POD workflow retained
+### Before using priority controls
+Run `SUPABASE-v33-DISPATCH.sql` once in the Supabase SQL Editor.
 
 ### GitHub Summary
-
-`Release v32.1 – Live Driver Dispatch Integration`
+`Release v33.0 – Professional Dispatch Board`

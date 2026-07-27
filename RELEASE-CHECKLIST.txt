@@ -1,15 +1,15 @@
-KLS SameDay Office v32.1 – Release Checklist
+KLS SameDay Office v33.0 – Release Checklist
 
-[ ] Upload the complete v32.1 project to GitHub/Vercel
-[ ] Confirm the office app opens normally
-[ ] Open Dispatch Centre
-[ ] Confirm live driver status cards appear
-[ ] Assign a job using the quick driver selector
-[ ] Confirm the assigned job appears in the Driver App
-[ ] Change a job status in the Driver App and confirm Dispatch updates
-[ ] Confirm GPS freshness appears when tracking is active
-[ ] Test drag-and-drop dispatch columns
-[ ] Test on desktop and mobile
+[ ] Run SUPABASE-v33-DISPATCH.sql in Supabase SQL Editor
+[ ] Upload the complete v33.0 project to GitHub/Vercel
+[ ] Confirm Dispatch opens without errors
+[ ] Test search, driver, priority and date filters
+[ ] Toggle a job between Normal and Urgent
+[ ] Select multiple jobs and bulk assign a driver
+[ ] Select multiple jobs and bulk change status
+[ ] Drag a job between dispatch columns
+[ ] Confirm Driver App still receives assigned jobs
+[ ] Confirm live GPS and POD still work
 
 GitHub Summary:
-Release v32.1 – Live Driver Dispatch Integration
+Release v33.0 – Professional Dispatch Board

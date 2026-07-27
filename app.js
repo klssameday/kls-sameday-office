@@ -90,6 +90,9 @@
     exchangeBids: [],
     dispatchSearch: '',
     dispatchDriverFilter: 'all',
+    dispatchPriorityFilter: 'all',
+    dispatchDateFilter: 'all',
+    dispatchSelectedJobs: [],
     invoiceSearch: '',
     invoiceFilter: 'all',
     reportPeriod: new Date().toISOString().slice(0,7),
@@ -595,12 +598,19 @@
     const transit = active.filter(job => ['In Transit','Arrived at Delivery'].includes(job.job_status));
     const query = String(state.dispatchSearch || '').trim().toLowerCase();
     const driverFilter = String(state.dispatchDriverFilter || 'all');
+    const priorityFilter = String(state.dispatchPriorityFilter || 'all');
+    const dateFilter = String(state.dispatchDateFilter || 'all');
+    const selectedJobs = Array.isArray(state.dispatchSelectedJobs) ? state.dispatchSelectedJobs : [];
 
     const matches = job => {
       const text = [job.job_number,job.customer_name,job.contact_name,job.collection_address,job.delivery_address,job.assigned_driver_name,job.vehicle].join(' ').toLowerCase();
       const searchOk = !query || text.includes(query);
       const driverOk = driverFilter === 'all' || (driverFilter === 'unassigned' ? !job.assigned_driver_id : job.assigned_driver_id === driverFilter);
-      return searchOk && driverOk;
+      const priority = String(job.priority || 'Normal');
+      const priorityOk = priorityFilter === 'all' || priority.toLowerCase() === priorityFilter.toLowerCase();
+      const jobDate = String(job.collection_date || '').slice(0,10);
+      const dateOk = dateFilter === 'all' || (dateFilter === 'today' ? jobDate === today : (dateFilter === 'tomorrow' ? jobDate === new Date(Date.now()+86400000).toISOString().slice(0,10) : jobDate === dateFilter));
+      return searchOk && driverOk && priorityOk && dateOk;
     };
 
     const compactCard = job => {
@@ -608,8 +618,11 @@
       const driver = job.assigned_driver_name || 'Unassigned';
       const liveAge = job.location_updated_at ? Math.max(0, Math.round((Date.now()-new Date(job.location_updated_at).getTime())/60000)) : null;
       const assignOptions = state.drivers.map(d=>`<option value="${d.id}" ${job.assigned_driver_id===d.id?'selected':''}>${esc(d.name)} · ${esc(d.availability_status||'Available')}</option>`).join('');
-      return `<article class="dispatch-board-card" draggable="true" data-dispatch-job="${job.id}">
-        <header><div><small>${esc(time)}</small><b>${esc(job.job_number || 'Job')}</b></div><span class="dispatch-status-pill">${esc(job.job_status || 'Booked')}</span></header>
+      const priority = String(job.priority || 'Normal');
+      const deadline = job.delivery_deadline ? String(job.delivery_deadline).slice(0,5) : '';
+      const checked = selectedJobs.includes(job.id);
+      return `<article class="dispatch-board-card priority-${priority.toLowerCase()} ${checked?'selected':''}" draggable="true" data-dispatch-job="${job.id}">
+        <header><div class="dispatch-card-title"><input type="checkbox" data-dispatch-select="${job.id}" ${checked?'checked':''} aria-label="Select ${esc(job.job_number||'job')}"><div><small>${esc(time)}${deadline?` → ${esc(deadline)}`:''}</small><b>${esc(job.job_number || 'Job')}</b></div></div><div class="dispatch-card-badges"><button type="button" class="priority-badge ${priority.toLowerCase()}" data-job-priority="${job.id}" data-priority="${priority==='Urgent'?'Normal':'Urgent'}">${esc(priority)}</button><span class="dispatch-status-pill">${esc(job.job_status || 'Booked')}</span></div></header>
         <h3>${esc(job.customer_name || job.contact_name || 'Customer')}</h3>
         <div class="dispatch-board-route"><p><small>COLLECT</small>${esc(job.collection_address || 'Not set')}</p><i>↓</i><p><small>DELIVER</small>${esc(job.delivery_address || 'Not set')}</p></div>
         <div class="dispatch-board-meta"><span>🚚 ${esc(job.vehicle || 'Vehicle TBC')}</span><span>👤 ${esc(driver)}</span>${liveAge !== null ? `<span class="live-chip">● GPS ${liveAge < 1 ? 'now' : `${liveAge}m`}</span>` : ''}</div>
@@ -650,7 +663,8 @@
 
     return `<section class="dispatch-v4-hero"><div><small>KLS LIVE CONTROL</small><h2>Dispatch Centre</h2><p>Live jobs, drivers, GPS, alerts and POD from one control screen.</p></div><div><button class="secondary" data-action="refresh-dispatch">↻ Refresh</button><button class="primary" data-page="newquote">＋ New Job</button></div></section>
       <section class="dispatch-v4-kpis">${card('Active jobs',active.length,'Currently moving','jobs')}${card('Unassigned',unassigned.length,'Needs a driver','dispatch')}${card('Live GPS',liveCount,'Reporting now','tracking')}${card('Collection alerts',lateCount,lateCount ? 'Check immediately' : 'No late collections','dispatch')}</section>
-      <section class="dispatch-v4-tools"><label>Search<input id="dispatch-search" value="${esc(state.dispatchSearch||'')}" placeholder="Job, customer, postcode or driver"></label><label>Driver<select id="dispatch-driver-filter"><option value="all">All drivers</option><option value="unassigned" ${driverFilter==='unassigned'?'selected':''}>Unassigned only</option>${driverOptions}</select></label><div class="realtime-indicator"><span></span> Driver App connected</div><div class="dispatch-last-sync">Updated ${new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}</div></section>
+      <section class="dispatch-v4-tools"><label>Search<input id="dispatch-search" value="${esc(state.dispatchSearch||'')}" placeholder="Job, customer, postcode or driver"></label><label>Driver<select id="dispatch-driver-filter"><option value="all">All drivers</option><option value="unassigned" ${driverFilter==='unassigned'?'selected':''}>Unassigned only</option>${driverOptions}</select></label><label>Priority<select id="dispatch-priority-filter"><option value="all">All priorities</option>${['Urgent','Timed','VIP','Normal'].map(x=>`<option value="${x}" ${priorityFilter===x?'selected':''}>${x}</option>`).join('')}</select></label><label>Date<select id="dispatch-date-filter"><option value="all">All dates</option><option value="today" ${dateFilter==='today'?'selected':''}>Today</option><option value="tomorrow" ${dateFilter==='tomorrow'?'selected':''}>Tomorrow</option></select></label><div class="realtime-indicator"><span></span> Driver App connected</div><div class="dispatch-last-sync">Updated ${new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}</div></section>
+      ${selectedJobs.length ? `<section class="dispatch-bulk-bar"><b>${selectedJobs.length} job${selectedJobs.length===1?'':'s'} selected</b><label>Assign<select id="dispatch-bulk-driver"><option value="">Choose driver</option>${state.drivers.map(d=>`<option value="${d.id}">${esc(d.name)} · ${esc(d.availability_status||'Available')}</option>`).join('')}</select></label><button class="secondary" data-bulk-status="Booked">Booked</button><button class="secondary" data-bulk-status="In Transit">In Transit</button><button class="primary" data-bulk-status="Delivered">Delivered</button><button class="secondary" data-action="dispatch-clear-selection">Clear</button></section>` : ''}
       <section class="dispatch-live-drivers"><header><div><small>LIVE DRIVER APP STATUS</small><h2>Your drivers now</h2></div><button class="secondary" data-page="drivers">Manage drivers</button></header><div>${driverLiveCards}</div></section>
       <section class="dispatch-board">
         ${column('unassigned','Unassigned','WAITING FOR DRIVER',unassigned,'Booked')}
@@ -2149,6 +2163,14 @@ function systemHealthSummary() {
     });
     document.getElementById('dispatch-search')?.addEventListener('input', event => { state.dispatchSearch = event.target.value; render(); });
     document.getElementById('dispatch-driver-filter')?.addEventListener('change', event => { state.dispatchDriverFilter = event.target.value; render(); });
+    document.getElementById('dispatch-priority-filter')?.addEventListener('change', event => { state.dispatchPriorityFilter = event.target.value; render(); });
+    document.getElementById('dispatch-date-filter')?.addEventListener('change', event => { state.dispatchDateFilter = event.target.value; render(); });
+    document.querySelectorAll('[data-dispatch-select]').forEach(input => input.addEventListener('click', event => event.stopPropagation()));
+    document.querySelectorAll('[data-dispatch-select]').forEach(input => input.addEventListener('change', () => { const id=input.dataset.dispatchSelect; const set=new Set(state.dispatchSelectedJobs||[]); input.checked?set.add(id):set.delete(id); state.dispatchSelectedJobs=[...set]; render(); }));
+    document.querySelectorAll('[data-job-priority]').forEach(button => button.onclick = async event => { event.stopPropagation(); const job=state.jobs.find(j=>j.id===button.dataset.jobPriority); if(!job)return; const previous=job.priority||'Normal'; const priority=button.dataset.priority; job.priority=priority; render(); const {error}=await db.from('jobs').update({priority}).eq('id',job.id); if(error){job.priority=previous;showNotice(`${error.message}. Run SUPABASE-v33-DISPATCH.sql first.`,'error');render();return;} showNotice(`${job.job_number||'Job'} priority set to ${priority}.`,'ok');render(); });
+    document.getElementById('dispatch-bulk-driver')?.addEventListener('change', async event => { const driver=state.drivers.find(d=>d.id===event.target.value); if(!driver)return; const ids=[...(state.dispatchSelectedJobs||[])]; const {error}=await db.from('jobs').update({assigned_driver_id:driver.id,assigned_driver_name:driver.name}).in('id',ids); if(error){showNotice(error.message,'error');render();return;} state.jobs.filter(j=>ids.includes(j.id)).forEach(j=>Object.assign(j,{assigned_driver_id:driver.id,assigned_driver_name:driver.name})); showNotice(`${ids.length} job${ids.length===1?'':'s'} assigned to ${driver.name}.`,'ok'); state.dispatchSelectedJobs=[]; render(); });
+    document.querySelectorAll('[data-bulk-status]').forEach(button => button.onclick = async () => { const ids=[...(state.dispatchSelectedJobs||[])]; if(!ids.length)return; const status=button.dataset.bulkStatus; const payload={job_status:status}; if(status==='Delivered')payload.delivered_at=new Date().toISOString(); const {error}=await db.from('jobs').update(payload).in('id',ids); if(error){showNotice(error.message,'error');render();return;} state.jobs.filter(j=>ids.includes(j.id)).forEach(j=>Object.assign(j,payload)); showNotice(`${ids.length} job${ids.length===1?'':'s'} moved to ${status}.`,'ok'); state.dispatchSelectedJobs=[]; render(); });
+    document.querySelector('[data-action="dispatch-clear-selection"]')?.addEventListener('click',()=>{state.dispatchSelectedJobs=[];render();});
     document.querySelector('[data-action="refresh-dispatch"]')?.addEventListener('click', async () => { await loadAll(); state.page='dispatch'; render(); });
     document.querySelector('[data-action="menu-open"]')?.addEventListener('click', () => document.getElementById('side').classList.add('open'));
     document.querySelector('[data-action="menu-close"]')?.addEventListener('click', () => document.getElementById('side').classList.remove('open'));

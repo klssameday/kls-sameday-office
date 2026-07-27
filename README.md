@@ -1,17 +1,15 @@
-# KLS SameDay Office v29.0
+# KLS SameDay Office v30.0
 
-## Operations Command Centre
+## Connected Workflow Automation
 
-This milestone upgrades the dashboard into a clearer commercial operations command centre while retaining every working v28.1 feature.
+This release strengthens the complete commercial workflow while retaining all v29.0 Operations Command Centre features.
 
-- Live command-centre header and clock
-- Next collection visibility
-- Daily completion rate
-- Driver utilisation indicator
-- Clear system position and alerts
-- Stronger dashboard hierarchy and spacing
-- Refined live map, dispatch snapshot, activity and KPI panels
-- Responsive desktop, tablet and mobile layouts
-- Updated PWA cache and asset versions
+- Accepted quotes now transfer the full customer, contact, quote and notes information into the job
+- Quote-to-job linkage is retained with `quote_id`
+- New **Deliver & invoice** action when a driver/job reaches Arrived at Delivery
+- One action marks the job delivered, records delivery time and creates the invoice
+- Invoice creation now uses one shared workflow to prevent duplicate logic
+- Existing delivered-job billing queue and manual invoice controls remain available
+- PWA cache and asset versions updated to v30.0
 
-Commit summary: `Launch KLS SameDay Office v29.0 Operations Command Centre`
+Commit summary: `Launch KLS SameDay Office v30.0 Connected Workflow Automation`

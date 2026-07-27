@@ -458,6 +458,7 @@
         <a class="secondary button-link" target="_blank" rel="noopener" href="${jobNavigationUrl(job.collection_address)}">Navigate collection</a>
         <a class="secondary button-link" target="_blank" rel="noopener" href="${jobNavigationUrl(job.delivery_address)}">Navigate delivery</a>
         <button class="secondary" type="button" data-send-job-eta data-message="${esc(etaText)}">Send ETA</button>
+        ${job.job_status==='Arrived at Delivery'&&!invoice?`<button class="primary" type="button" data-deliver-invoice="${job.id}">Deliver & invoice</button>`:''}
         ${job.job_status==='Delivered'&&!invoice?`<button class="primary" type="button" data-invoice="${job.id}">Create invoice</button>`:''}
         ${invoice?`<button class="secondary" type="button" data-page="invoices">Open invoice</button>`:''}
         ${pod?`<button class="secondary" type="button" data-print-pod="${job.id}">Open POD</button>`:''}
@@ -1886,6 +1887,33 @@ function systemHealthSummary() {
     render();
   }
 
+  async function createInvoiceForJob(job) {
+    if (!job) throw new Error('Job could not be found.');
+    const existing = state.invoices.find(invoice => invoice.job_id === job.id);
+    if (existing) return existing;
+    const due = new Date(Date.now() + Number(state.settings.default_terms || 7) * 86400000).toISOString().slice(0, 10);
+    const payload = {
+      user_id: state.user.id,
+      job_id: job.id,
+      customer_id: job.customer_id,
+      invoice_number: numberCode('INV'),
+      customer_name: job.customer_name || job.contact_name || 'Customer',
+      total: Number(job.total_price || 0),
+      status: 'Unpaid',
+      amount_paid: 0,
+      issue_date: todayISO(),
+      due_date: due
+    };
+    const { data: invoice, error } = await db.from('invoices').insert(payload).select().single();
+    if (error) throw error;
+    const { error: jobError } = await db.from('jobs').update({ invoice_status: 'Invoiced', invoice_date: todayISO() }).eq('id', job.id);
+    if (jobError) throw jobError;
+    job.invoice_status = 'Invoiced';
+    job.invoice_date = todayISO();
+    state.invoices.unshift(invoice);
+    return invoice;
+  }
+
   function bindPublicQuote() {
     const form=document.getElementById('public-quote-response');
     if(!form||!state.publicQuote)return;
@@ -2262,11 +2290,13 @@ function systemHealthSummary() {
       try {
         const quote = state.quotes.find(q => q.id === button.dataset.accept);
         const jobPayload = {
-          user_id: state.user.id, customer_id: quote.customer_id, contact_name: quote.customer_name, customer_email: quote.email,
+          user_id: state.user.id, customer_id: quote.customer_id, quote_id: quote.id,
+          customer_name: quote.customer_name, contact_name: quote.contact_name || quote.customer_name,
+          customer_email: quote.email || null, contact_email: quote.email || null, contact_phone: quote.phone || null,
           collection_date: quote.collection_date, collection_time: quote.collection_time, collection_address: quote.collection_address,
           delivery_address: quote.delivery_address, route_stops: quote.route_stops || [], vehicle: quote.vehicle, goods_description: quote.goods_description,
           miles: quote.miles, base_price: quote.quoted_price, extras: 0, total_price: quote.quoted_price, costs: 0,
-          job_status: 'Booked', quote_status: 'Accepted', invoice_status: 'Not Invoiced'
+          booking_notes: quote.notes || null, job_status: 'Booked', quote_status: 'Accepted', invoice_status: 'Not Invoiced'
         };
         const { data: job, error: jobError } = await db.from('jobs').insert(jobPayload).select().single();
         if (jobError) throw jobError;
@@ -2359,17 +2389,32 @@ function systemHealthSummary() {
       if (error) { job.job_status = previous; showNotice(error.message, 'error'); render(); }
     });
 
+    document.querySelectorAll('[data-deliver-invoice]').forEach(button => button.onclick = async () => {
+      const job = state.jobs.find(item => item.id === button.dataset.deliverInvoice);
+      if (!job) return;
+      button.disabled = true;
+      try {
+        const deliveredAt = new Date().toISOString();
+        const { data, error } = await db.from('jobs').update({ job_status: 'Delivered', delivered_at: deliveredAt }).eq('id', job.id).select().single();
+        if (error) throw error;
+        Object.assign(job, data || { job_status: 'Delivered', delivered_at: deliveredAt });
+        const invoice = await createInvoiceForJob(job);
+        state.jobEditorId = null;
+        state.page = 'invoices';
+        showNotice(`${job.job_number || 'Job'} delivered and ${invoice.invoice_number} created.`, 'ok');
+        render();
+        loadAll().catch(error => showNotice(error.message, 'error'));
+      } catch (error) {
+        showNotice(error.message, 'error');
+        render();
+      }
+    });
+
     document.querySelectorAll('[data-invoice]').forEach(button => button.onclick = async () => {
       try {
         const job = state.jobs.find(j => j.id === button.dataset.invoice);
         if (state.invoices.some(i => i.job_id === job.id)) throw new Error('An invoice already exists for this job.');
-        const due = new Date(Date.now() + Number(state.settings.default_terms || 7) * 86400000).toISOString().slice(0, 10);
-        const payload = { user_id: state.user.id, job_id: job.id, customer_id: job.customer_id, invoice_number: numberCode('INV'), customer_name: job.customer_name || job.contact_name, total: Number(job.total_price || 0), status: 'Unpaid', amount_paid: 0, issue_date: todayISO(), due_date: due };
-        const { data: invoice, error } = await db.from('invoices').insert(payload).select().single();
-        if (error) throw error;
-        await db.from('jobs').update({ invoice_status: 'Invoiced', invoice_date: todayISO() }).eq('id', job.id);
-        job.invoice_status = 'Invoiced';
-        state.invoices.unshift(invoice);
+        const invoice = await createInvoiceForJob(job);
         state.page = 'invoices';
         showNotice(`${invoice.invoice_number} created.`, 'ok');
         render();

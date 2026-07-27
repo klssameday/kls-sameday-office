@@ -1342,3 +1342,5 @@ tbody tr:hover{background:#f8fafc}
 @media(max-width:1100px){.command-pulse{grid-template-columns:1fr 1fr}.command-hero-v29{align-items:flex-start!important}.command-hero-actions{justify-content:flex-start}}
 @media(max-width:700px){.command-hero-v29{padding:25px 22px!important}.command-hero-v29 h2{font-size:29px!important}.command-hero-actions{width:100%}.command-live-clock{width:100%}.command-hero-actions button{flex:1}.command-pulse{grid-template-columns:1fr}.command-pulse>div{padding:15px 17px}.command-pulse b,.command-pulse span{white-space:normal}}
 @media(prefers-reduced-motion:reduce){.pulse-dot{animation:none}}
+
+/* KLS SameDay Office v30.0 — connected workflow automation */

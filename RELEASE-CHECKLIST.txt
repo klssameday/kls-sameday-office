@@ -1,34 +1,12 @@
-KLS SameDay Office v31.0 — Customer Portal
+KLS SameDay Office v31.0.1 — Customer Portal Hotfix
 
-Before GitHub upload
-- Extract the ZIP
-- Upload all files over the current GitHub project
-- Keep config.js included
-- Include the icons folder
-- Commit the new SUPABASE-v31-CUSTOMER-PORTAL.sql file
-
-Supabase setup
-- Open Supabase → SQL Editor
-- Paste and run SUPABASE-v31-CUSTOMER-PORTAL.sql
-- Confirm it completes without an error
-
-Customer portal test
-- Create a normal customer record in the office app
-- Sign up once with the customer's email address
-- Sign back into the office owner account
-- Open Settings → Customer Portal Access
-- Choose the customer and enter the same email
-- Press Enable Customer Portal
-- Sign in as the customer
-- Submit a booking request
-- Accept or decline a visible quotation
-- Check jobs, tracking, POD and invoices
-- Sign back into the office account
-- Open Customer Portal and approve the booking request
-- Confirm one new job is created
-
-Validation
-- JavaScript syntax checked
-- JSON checked
-- Service-worker cache updated to v31.0
-- Asset query versions updated to v31.0
+1. Upload all project files to GitHub/Vercel.
+2. Run HOTFIX-v31.0.1.sql in Supabase if v31.0 SQL was already installed.
+3. Sign in with a linked customer test account.
+4. Confirm the customer name/profile loads.
+5. Submit a booking request.
+6. Save and delete a customer address.
+7. Accept or decline a test quote.
+8. Confirm the office can see and approve the booking request.
+9. Confirm the approved booking creates a job.
+10. Confirm browser cache updates to v31.0.1.

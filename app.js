@@ -803,9 +803,9 @@
     const weak = jobs.filter(j=>j.margin<targetMargin), loss = jobs.filter(j=>j.profit<0);
     const vehicleMap = new Map();
     jobs.forEach(j=>{const key=j.vehicle_required||j.vehicle_type||j.vehicle||'Not specified';const row=vehicleMap.get(key)||{jobs:0,revenue:0,cost:0,profit:0};row.jobs++;row.revenue+=j.revenue;row.cost+=j.cost;row.profit+=j.profit;vehicleMap.set(key,row)});
-    const vehicleRows=[...vehicleMap.entries()].map(([name,v])=>[esc(name),v.jobs,money(v.revenue),money(v.profit),`${v.revenue?v.profit/v.revenue*100:0 .toFixed?.(1)}%`]);
+    const vehicleRows=[...vehicleMap.entries()].map(([name,v])=>[esc(name),v.jobs,money(v.revenue),money(v.profit),`${(v.revenue?v.profit/v.revenue*100:0).toFixed(1)}%`]);
     const jobRows=jobs.slice(0,30).map(j=>{const tone=j.profit<0?'loss':j.margin<targetMargin?'warn':'good';return [esc(j.job_number||'Job'),fmtDate(j.collection_date||j.created_at),esc(j.customer_name||'Customer'),`${j.miles.toFixed(0)} mi`,money(j.revenue),money(j.cost),`<span class="profit-pill ${tone}">${money(j.profit)} · ${j.margin.toFixed(0)}%</span>`,j.revenue<j.recommended?`<b>${money(j.recommended)}</b>`:'On target'];});
-    return `<section class="profit-hero"><div><small>V26.35 JOB PROFIT CONTROL</small><h2>Know the true profit before accepting the price</h2><p>Estimated fuel, vehicle wear, labour and fixed costs are measured against every priced job.</p></div><button class="primary" data-page="newquote">Create profitable quote</button></section>
+    return `<section class="profit-hero"><div><small>V26.37 JOB PROFIT CONTROL</small><h2>Know the true profit before accepting the price</h2><p>Estimated fuel, vehicle wear, labour and fixed costs are measured against every priced job.</p></div><button class="primary" data-page="newquote">Create profitable quote</button></section>
       <section class="profit-kpis">${card('Estimated revenue',money(totalRevenue),`${jobs.length} priced jobs`,'jobs')}${card('Estimated operating cost',money(totalCost),'Fuel, wear, labour and fixed cost','accounts')}${card('Estimated profit',money(totalProfit),avgMargin>=targetMargin?'On target':'Below target','profitcentre')}${card('Average margin',`${avgMargin.toFixed(1)}%`,`Target ${targetMargin}%`,'profitcentre')}${card('Weak-margin jobs',weak.length,'Below your target','profitcentre')}${card('Loss-making jobs',loss.length,loss.length?'Immediate review needed':'None detected','profitcentre')}</section>
       <section class="profit-layout"><div>${panel('Recent job profitability',table(['Job','Date','Customer','Miles','Revenue','Est. cost','Profit / margin','Safer minimum'],jobRows),'Costs are estimates based on the assumptions shown. Update them to match your actual operation.')}</div><aside>${panel('Cost assumptions',`<form id="profit-settings-form"><div class="grid two"><label>Fuel price per litre (£)<input name="fuelPrice" type="number" min="0" step="0.01" value="${fuelPrice}"></label><label>Vehicle MPG<input name="mpg" type="number" min="1" step="0.1" value="${mpg}"></label><label>Wear per mile (£)<input name="wearPerMile" type="number" min="0" step="0.01" value="${wearPerMile}"></label><label>Driver cost per hour (£)<input name="hourlyCost" type="number" min="0" step="0.01" value="${hourlyCost}"></label><label>Fixed cost per job (£)<input name="fixedJobCost" type="number" min="0" step="0.01" value="${fixedJobCost}"></label><label>Target margin (%)<input name="targetMargin" type="number" min="1" max="90" step="1" value="${targetMargin}"></label></div><button class="primary full-width">Save assumptions</button></form>`,'These settings are saved on this device and do not change customer prices automatically.')}${panel('Pricing warning',weak.length?`<div class="profit-warning"><b>${weak.length} job${weak.length===1?'':'s'} below target</b><p>${money(weak.reduce((s,j)=>s+Math.max(0,j.recommended-j.revenue),0))} extra revenue would have brought them up to the selected target margin.</p></div>`:'<div class="all-clear"><b>Prices are on target</b><span>No priced jobs fall below your selected margin.</span></div>')}</aside></section>
       ${panel('Vehicle profitability',table(['Vehicle','Jobs','Revenue','Estimated profit','Margin'],[...vehicleMap.entries()].map(([name,v])=>[esc(name),v.jobs,money(v.revenue),money(v.profit),`${(v.revenue?v.profit/v.revenue*100:0).toFixed(1)}%`])),'Use this to compare the commercial return from each vehicle type.')}`;
@@ -1479,10 +1479,81 @@
     return { contact_name:customer.contact_name||customer.company||'there', quote_number:record.quote_number||record.reference||'', invoice_number:record.invoice_number||record.reference||'', job_number:record.job_number||record.reference||'', price:money(record.total||record.price||record.quoted_price), amount:money(record.total||record.amount||record.total_amount), collection:record.collection_address||record.collection_postcode||'', delivery:record.delivery_address||record.delivery_postcode||'', collection_date:record.collection_date?fmtDate(record.collection_date):'', vehicle:record.vehicle_required||record.vehicle||'' };
   }
 
-function settingsView() {
+function systemHealthSummary() {
+    const checks = [
+      { label:'Supabase configuration', ok:configured, detail:configured ? 'Project URL and publishable key loaded.' : 'Connection settings are missing.' },
+      { label:'Signed-in office account', ok:Boolean(state.user), detail:state.user?.email || 'No signed-in user.' },
+      { label:'Customer data', ok:Array.isArray(state.customers), detail:`${state.customers.length} customer record${state.customers.length===1?'':'s'} loaded.` },
+      { label:'Jobs data', ok:Array.isArray(state.jobs), detail:`${state.jobs.length} job record${state.jobs.length===1?'':'s'} loaded.` },
+      { label:'Invoices data', ok:Array.isArray(state.invoices), detail:`${state.invoices.length} invoice record${state.invoices.length===1?'':'s'} loaded.` },
+      { label:'Driver data', ok:Array.isArray(state.drivers), detail:`${state.drivers.length} driver record${state.drivers.length===1?'':'s'} loaded.` },
+      { label:'Offline support', ok:'serviceWorker' in navigator, detail:'Browser service-worker support detected.' }
+    ];
+    return checks;
+  }
+
+  function createSystemBackup() {
+    const backup = {
+      product:'KLS SameDay Office',
+      version:'26.37',
+      exported_at:new Date().toISOString(),
+      account:state.user?.email || null,
+      business_settings:state.settings,
+      customers:state.customers,
+      drivers:state.drivers,
+      fleet:state.fleet,
+      fuel_logs:state.fuelLogs,
+      maintenance:state.maintenance,
+      recurring_jobs:state.recurringJobs,
+      quotes:state.quotes,
+      jobs:state.jobs,
+      invoices:state.invoices,
+      expenses:state.expenses,
+      portal_access_users:state.portalAccessUsers,
+      quote_requests:state.quoteRequests,
+      route_stops:state.routeStops,
+      local_device_data:{
+        sales_leads:state.leads,
+        fleet_defects:state.fleetDefects,
+        communications:state.communications,
+        communication_templates:state.communicationTemplates,
+        profit_settings:state.profitSettings
+      }
+    };
+    const blob = new Blob([JSON.stringify(backup,null,2)],{type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href=url;
+    link.download=`KLS-SameDay-Backup-${todayISO()}.json`;
+    document.body.appendChild(link); link.click(); link.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }
+
+  function copySystemDiagnostics() {
+    const diagnostics = [
+      'KLS SameDay Office v26.37',
+      `Generated: ${new Date().toLocaleString('en-GB')}`,
+      `Account: ${state.user?.email || 'Not signed in'}`,
+      `Supabase: ${configured ? 'Connected' : 'Not configured'}`,
+      `Customers: ${state.customers.length}`,
+      `Jobs: ${state.jobs.length}`,
+      `Quotes: ${state.quotes.length}`,
+      `Invoices: ${state.invoices.length}`,
+      `Drivers: ${state.drivers.length}`,
+      `Fleet vehicles: ${state.fleet.length}`,
+      `Browser: ${navigator.userAgent}`
+    ].join('\n');
+    navigator.clipboard?.writeText(diagnostics).then(()=>{showNotice('System diagnostics copied.','ok');render();}).catch(()=>{showNotice('Could not copy diagnostics in this browser.','error');render();});
+  }
+
+  function settingsView() {
     const fields = { trading_name:'Trading name',legal_name:'Legal company name',phone:'Telephone',whatsapp:'WhatsApp',email:'Email',website:'Website',address_line:'Business address',bank_name:'Bank name',sort_code:'Sort code',account_number:'Account number',default_terms:'Payment terms (days)' };
     const linked = state.portalAccessUsers.length ? `<div class="portal-access-list">${state.portalAccessUsers.map(u=>`<article><div><b>${esc(u.customers?.company||'Customer')}</b><small>${esc(u.email)}</small></div><span class="portal-status ${u.active?'approved':'cancelled'}">${u.active?'Active':'Disabled'}</span>${u.active?`<button class="danger" data-portal-revoke="${u.id}">Disable</button>`:''}</article>`).join('')}</div>` : '<div class="fleet-empty">No customer portal accounts linked yet.</div>';
-    return panel('Business settings', `<form id="settings-form"><div class="grid two">${Object.entries(fields).map(([key,label]) => `<label>${label}<input name="${key}" value="${esc(state.settings[key] ?? '')}" ${key === 'default_terms' ? 'type="number"' : ''}></label>`).join('')}</div><div class="actions"><button class="primary">Save Settings</button></div></form><p class="saved">✓ Saved securely in Supabase.</p><hr class="portal-divider"><div class="portal-section-head"><div><h2>Customer Portal Access</h2><p>Ask the customer to create an account using their email address, then link that login here.</p></div><span>${state.portalAccessUsers.filter(u=>u.active).length} active</span></div><form id="portal-access-form"><div class="grid two"><label>Customer<select name="customer_id" required><option value="">Choose customer</option>${state.customers.map(c=>`<option value="${c.id}">${esc(c.company)}</option>`).join('')}</select></label><label>Customer login email<input name="email" type="email" required></label></div><div class="actions"><button class="primary">Enable Customer Portal</button></div></form><h3 class="linked-title">Linked customer accounts</h3>${linked}`);
+    const health = systemHealthSummary();
+    const healthRows = health.map(item=>`<article class="system-check ${item.ok?'ok':'bad'}"><span>${item.ok?'✓':'!'}</span><div><b>${esc(item.label)}</b><small>${esc(item.detail)}</small></div></article>`).join('');
+    const settingsPanel = panel('Business settings', `<form id="settings-form"><div class="grid two">${Object.entries(fields).map(([key,label]) => `<label>${label}<input name="${key}" value="${esc(state.settings[key] ?? '')}" ${key === 'default_terms' ? 'type="number"' : ''}></label>`).join('')}</div><div class="actions"><button class="primary">Save Settings</button></div></form><p class="saved">✓ Saved securely in Supabase.</p><hr class="portal-divider"><div class="portal-section-head"><div><h2>Customer Portal Access</h2><p>Ask the customer to create an account using their email address, then link that login here.</p></div><span>${state.portalAccessUsers.filter(u=>u.active).length} active</span></div><form id="portal-access-form"><div class="grid two"><label>Customer<select name="customer_id" required><option value="">Choose customer</option>${state.customers.map(c=>`<option value="${c.id}">${esc(c.company)}</option>`).join('')}</select></label><label>Customer login email<input name="email" type="email" required></label></div><div class="actions"><button class="primary">Enable Customer Portal</button></div></form><h3 class="linked-title">Linked customer accounts</h3>${linked}`);
+    const healthPanel = panel('System health & backup', `<div class="system-version"><div><small>CURRENT RELEASE</small><b>v26.37</b><span>Completion, diagnostics and backup release</span></div><span class="system-live">${configured?'CONNECTED':'CHECK CONNECTION'}</span></div><div class="system-checks">${healthRows}</div><div class="system-backup-actions"><button class="primary" type="button" data-system-backup>Download full backup</button><button class="secondary" type="button" data-copy-diagnostics>Copy diagnostics</button></div><p class="system-help">The backup contains the records currently loaded in the office system plus device-only leads, defects, communications and profit assumptions. Keep it somewhere secure.</p>`, 'Use this section before major updates and when reporting a fault.');
+    return `<section class="settings-layout"><div>${settingsPanel}</div><aside>${healthPanel}</aside></section>`;
   }
 
   function render() {
@@ -1861,6 +1932,8 @@ function settingsView() {
     document.querySelectorAll('[data-lead-id]').forEach(c=>c.onclick=e=>{if(e.target.closest('button,select,a'))return;state.editLeadId=c.dataset.leadId;render();});
     document.querySelectorAll('[data-lead-quote]').forEach(b=>b.onclick=()=>{const l=state.leads.find(x=>x.id===b.dataset.leadQuote);if(!l)return;state.page='newquote';state.quoteCustomerId=null;showNotice(`Create a quote for ${l.company}. Add them as a customer first if needed.`,'ok');render();});
     document.getElementById('bi-months')?.addEventListener('change', event => { state.biMonths = Number(event.target.value || 6); render(); });
+    document.querySelector('[data-system-backup]')?.addEventListener('click',()=>{ createSystemBackup(); showNotice('Backup downloaded.','ok'); render(); });
+    document.querySelector('[data-copy-diagnostics]')?.addEventListener('click',copySystemDiagnostics);
     document.getElementById('profit-settings-form')?.addEventListener('submit', event => { event.preventDefault(); const values=Object.fromEntries(new FormData(event.currentTarget)); state.profitSettings={fuelPrice:Number(values.fuelPrice||0),mpg:Number(values.mpg||25),wearPerMile:Number(values.wearPerMile||0),hourlyCost:Number(values.hourlyCost||0),fixedJobCost:Number(values.fixedJobCost||0),targetMargin:Number(values.targetMargin||30)}; localStorage.setItem('kls_profit_settings',JSON.stringify(state.profitSettings)); showNotice('Profit assumptions saved.','ok'); render(); });
     document.getElementById('report-period')?.addEventListener('change', event => { state.reportPeriod = event.target.value || todayISO().slice(0,7); render(); });
     document.querySelector('[data-export-report]')?.addEventListener('click', exportBusinessReportCsv);

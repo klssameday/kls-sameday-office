@@ -1,19 +1,19 @@
-# KLS SameDay Office v26.36
+# KLS SameDay Office v26.37
 
-Complete GitHub-ready static web application for KLS SameDay.
+Complete GitHub-ready release built from the verified working v26.36 project.
 
-## v26.36 stability release
+## v26.37 completion release
 
-- Uses the exact working v26.35 project supplied by the owner as the base.
-- Keeps every existing office, dispatch, CRM, quoting, finance, fleet, driver, customer portal, BI and profit-control feature.
-- Includes the working `config.js` so the project can be uploaded directly to GitHub.
-- Aligns office app, driver app, manifest, package and service-worker versions to v26.36.
-- Fixes malformed historic CSS selectors affecting driver controls.
-- Refreshes the PWA cache name so browsers receive the corrected files.
-- Includes all icons and Vercel configuration in the correct folder structure.
+- Adds System Health inside Settings.
+- Shows connection, account and live-record checks.
+- Adds one-click full JSON backup of loaded Supabase and device-only records.
+- Adds copyable diagnostics for quicker fault finding.
+- Corrects a vehicle-margin formatting bug in Job Profit Control.
+- Keeps every existing office, CRM, quoting, dispatch, driver, fleet, finance, portal, BI and PWA feature.
+- Includes the already-working config.js supplied with the project.
 
-## Upload
+## GitHub
 
-Extract the ZIP, open the folder, select all files and folders inside it, and upload them over the existing GitHub repository. Vercel should deploy automatically.
+Upload everything inside this folder over the existing repository.
 
-Commit summary: `Stabilise KLS SameDay Office v26.36`
+Commit summary: `Complete KLS SameDay Office v26.37 with system backup`

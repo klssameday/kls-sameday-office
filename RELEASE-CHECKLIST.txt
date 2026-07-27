@@ -1,0 +1,7 @@
+KLS SameDay Office v26.36
+
+1. Upload every file and the icons folder to the existing GitHub repository.
+2. Summary required: Stabilise KLS SameDay Office v26.36
+3. Wait for the Vercel deployment to show Ready.
+4. Refresh the live app with Command + Shift + R.
+5. Confirm office login, Dashboard, Jobs, Quotes, CRM and Driver App open normally.

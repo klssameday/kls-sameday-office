@@ -1,9 +1,0 @@
-KLS SameDay Office v26.35
-
-Upload these files over your existing v26.34 GitHub project.
-
-IMPORTANT:
-- Keep your existing config.js file in GitHub.
-- This upgrade ZIP deliberately does not include config.js, so your private Supabase connection is not overwritten.
-- Replace the other existing files when GitHub asks.
-- Vercel should deploy automatically after the commit.

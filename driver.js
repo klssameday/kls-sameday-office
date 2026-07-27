@@ -1,4 +1,4 @@
-// KLS SameDay Driver v31.5 — new job alerts and courier-style quick actions
+// KLS SameDay Driver v32.0 — Professional Edition
 (() => {
   const raw = window.KLS_CONFIG || {};
   const root = document.getElementById('driver-app');
@@ -9,7 +9,7 @@
   })();
   const db = validUrl && key && window.supabase ? window.supabase.createClient(url, key) : null;
   const steps = ['Booked','En Route to Collection','Arrived at Collection','Collected','In Transit','Arrived at Delivery','Delivered'];
-  let state = { user:null, profile:null, jobs:[], loading:true, mode:'signin', notice:null, podJob:null, tab:'home', screen:'dashboard', detailJobId:null, networkJobs:[], myBids:[], online:navigator.onLine, lastUpdated:null, refreshing:false, jobAlerts:[], notificationsEnabled:typeof Notification!=='undefined'&&Notification.permission==='granted' };
+  let state = { user:null, profile:null, jobs:[], loading:true, mode:'signin', notice:null, podJob:null, tab:'home', screen:'dashboard', detailJobId:null, networkJobs:[], myBids:[], online:navigator.onLine, lastUpdated:null, refreshing:false, jobAlerts:[], notificationsEnabled:typeof Notification!=='undefined'&&Notification.permission==='granted', completionCelebration:null };
   let watchId = null;
   let activeJobId = null;
   let signatureCanvas = null;
@@ -213,21 +213,46 @@
       <footer><span>${esc(job.vehicle||job.vehicle_type||'Vehicle')}</span><button class="btn primary" data-open-job="${job.id}">Open job</button></footer>
     </article>`;
   }
+  function greeting(){
+    const hour=new Date().getHours();
+    if(hour<12)return 'Good morning';
+    if(hour<18)return 'Good afternoon';
+    return 'Good evening';
+  }
+  function currentJobHero(job){
+    if(!job)return '';
+    const action=nextAction(job);
+    const status=statusDisplay[job.job_status]?.[0]||job.job_status||'Booked';
+    const idx=Math.max(0,steps.indexOf(job.job_status));
+    const progress=Math.round((idx/(steps.length-1))*100);
+    return `<article class="pro-current-job" data-open-job="${job.id}" role="button" tabindex="0">
+      <div class="pro-current-top"><span>${activeStatuses.includes(job.job_status)?'CURRENT JOB':'NEXT JOB'}</span><b>${esc(job.job_number||'Job')}</b></div>
+      <div class="pro-route"><strong>${esc(shortPlace(job.collection_address))}</strong><i>→</i><strong>${esc(shortPlace(job.delivery_address))}</strong></div>
+      <div class="pro-time-grid"><span><small>COLLECTION</small>${jobTime(job)}</span><span><small>DELIVERY</small>${deliveryTime(job)}</span></div>
+      <div class="pro-progress"><div><span style="width:${progress}%"></span></div><small>${esc(status)}</small></div>
+      <button class="btn primary full pro-open-job" data-open-job="${job.id}">${action?'Continue job':'Open job'}</button>
+    </article>`;
+  }
   function dashboardView(){
     const open=state.jobs.filter(j=>j.job_status!=='Delivered');
     const current=open.find(j=>activeStatuses.includes(j.job_status))||open[0]||null;
     const upcoming=open.filter(j=>!current||j.id!==current.id);
     const completed=state.jobs.filter(j=>j.job_status==='Delivered'&&isToday(j.delivered_at||j.collection_date));
-    return `<section class="driver-dashboard">
-      <div class="dashboard-availability">
+    const firstName=String(state.profile?.driver_name||'Driver').split(' ')[0];
+    return `<section class="driver-dashboard pro-dashboard">
+      <section class="pro-home-head">
+        <div><small>${greeting().toUpperCase()}</small><h1>${esc(firstName)}</h1><p>${current?'Your work is ready below.':'You are clear and available for work.'}</p></div>
+        <span class="connection-pill ${state.online?'online':'offline'}">${state.online?'LIVE':'OFFLINE'}</span>
+      </section>
+      <div class="dashboard-availability pro-availability">
         <div><small>DRIVER STATUS</small><strong>${esc(state.profile?.availability_status||'Available')}</strong></div>
         <select data-own-availability aria-label="Driver availability">${['Available','On Job','Break','Offline'].map(x=>`<option ${String(state.profile?.availability_status||'Available')===x?'selected':''}>${x}</option>`).join('')}</select>
       </div>
-      <section class="driver-welcome dashboard-hero"><div class="hero-live-row"><small>KLS SAMEDAY DRIVER</small><span class="connection-pill ${state.online?'online':'offline'}">${state.online?'LIVE':'OFFLINE'}</span></div><h1>${current?'Your next job':'You are all clear'}</h1><p>${current?'Open the job below to begin or continue.':'New assigned jobs will appear here.'}</p><div class="dashboard-refresh-row"><span>${state.lastUpdated?`Updated ${fmtClock(state.lastUpdated)}`:'Waiting for first update'}</span><button class="refresh-jobs" data-refresh-jobs ${state.refreshing?'disabled':''}>${state.refreshing?'Refreshing…':'Refresh jobs'}</button></div></section>
-      ${current?`<div class="dashboard-section-title"><h2>${activeStatuses.includes(current.job_status)?'Current job':'Next job'}</h2><span>${esc(current.job_status||'Booked')}</span></div>${miniJobCard(current,activeStatuses.includes(current.job_status)?'CURRENT JOB':'NEXT JOB')}`:''}
+      ${state.jobAlerts.map(newJobAlertCard).join('')}
+      ${current?currentJobHero(current):`<section class="pro-no-job"><span>✓</span><h2>No active job</h2><p>The office will send assigned work automatically.</p></section>`}
+      <div class="pro-stats"><div><small>UPCOMING</small><strong>${upcoming.length}</strong></div><div><small>COMPLETED TODAY</small><strong>${completed.length}</strong></div><button data-refresh-jobs ${state.refreshing?'disabled':''}><small>LAST UPDATE</small><strong>${state.refreshing?'Refreshing…':state.lastUpdated?new Date(state.lastUpdated).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):'Refresh'}</strong></button></div>
       <div class="dashboard-section-title"><h2>Upcoming jobs</h2><span>${upcoming.length}</span></div>
       ${upcoming.length?`<div class="dashboard-job-list">${upcoming.map(j=>miniJobCard(j)).join('')}</div>`:'<div class="empty compact"><strong>No upcoming jobs</strong><p>Nothing else is currently assigned.</p></div>'}
-      <div class="completed-today"><span><small>COMPLETED TODAY</small><strong>${completed.length}</strong></span><span>${completed.length===1?'1 delivery completed':`${completed.length} deliveries completed`}</span></div>
     </section>`;
   }
   function jobsView(){
@@ -320,26 +345,27 @@
       : state.tab==='profile' ? profileView()
       : dashboardView();
     return `<div class="driver-shell">
-      <header class="driver-top">
-        <div><strong>KLS Driver</strong><small>${esc(driverName)} · ${esc(vehicle)}</small></div>
-        <button class="btn secondary small-signout" data-signout>Sign out</button>
+      <header class="driver-top pro-top">
+        <div class="pro-brand"><b>KLS</b><span>Driver<small>${esc(vehicle)}</small></span></div>
+        <div class="pro-top-status"><span class="connection-dot ${state.online?'online':'offline'}"></span><small>${esc(driverName)}</small></div>
       </header>
       <main class="driver-main">
         ${state.notice?`<div class="driver-msg ${state.notice.type}">${esc(state.notice.text)}</div>`:''}
         ${mainContent}
         ${state.podJob?podView(state.podJob):''}
+        ${state.completionCelebration?`<div class="completion-celebration"><section><div class="completion-tick">✓</div><small>DELIVERY COMPLETE</small><h2>${esc(state.completionCelebration.job_number||'Job')}</h2><p>Proof of delivery has been saved successfully.</p><button class="btn primary full" data-close-celebration>Back to home</button></section></div>`:''}
       </main>
       ${state.screen!=='detail'?`<nav class="bottom-nav" aria-label="Driver navigation">
         <button class="${state.tab==='home'?'active':''}" data-driver-tab="home"><i>⌂</i><span>Home</span></button>
         <button class="${state.tab==='jobs'?'active':''}" data-driver-tab="jobs"><i>▤</i><span>Jobs</span>${state.jobs.filter(j=>j.job_status!=='Delivered').length?`<em>${state.jobs.filter(j=>j.job_status!=='Delivered').length}</em>`:''}</button>
         <button class="${state.tab==='exchange'?'active':''}" data-driver-tab="exchange"><i>⇄</i><span>Exchange</span>${state.networkJobs.filter(j=>j.status==='open').length?`<em>${state.networkJobs.filter(j=>j.status==='open').length}</em>`:''}</button>
-        <button class="${state.tab==='profile'?'active':''}" data-driver-tab="profile"><i>●</i><span>Profile</span></button>
+        <button class="${state.tab==='profile'?'active':''}" data-driver-tab="profile"><i>◉</i><span>Profile</span></button>
       </nav>`:''}
     </div>`;
   }
 
   function render(){
-    if(state.loading){root.innerHTML='<div class="driver-loading">Loading KLS Driver…</div>';return;}
+    if(state.loading){root.innerHTML='<div class="driver-loading pro-loading"><div class="loader-mark">KLS</div><span></span><p>Loading Driver App…</p></div>';return;}
     if(!state.user){root.innerHTML=authView();bindAuth();return;}
     if(!state.profile){root.innerHTML=`<div class="driver-auth"><section class="driver-auth-card"><div class="driver-brand"><b>KLS</b><span>Driver</span></div><h1>Account not linked</h1>${state.notice?`<div class="driver-msg ${state.notice.type}">${esc(state.notice.text)}</div>`:`<p>Ask the KLS office to link this exact login email to your driver record:</p><div class="driver-msg error">${esc(state.user.email)}</div>`}<button class="btn secondary full" data-signout>Sign out</button></section></div>`;bindCommon();return;}
     root.innerHTML=appView();bindApp();
@@ -358,6 +384,7 @@
     document.querySelector('[data-back-dashboard]')?.addEventListener('click',()=>{state.screen='dashboard';state.detailJobId=null;state.notice=null;render();window.scrollTo({top:0,behavior:'smooth'});});
     document.querySelector('[data-refresh-jobs]')?.addEventListener('click',async()=>{state.refreshing=true;render();await refreshAssignedJobs(true);state.refreshing=false;state.lastUpdated=new Date().toISOString();render();});
     document.querySelector('[data-enable-notifications]')?.addEventListener('click',enableJobNotifications);
+    document.querySelector('[data-close-celebration]')?.addEventListener('click',()=>{state.completionCelebration=null;state.tab='home';state.screen='dashboard';render();});
     document.querySelectorAll('[data-dismiss-job-alert]').forEach(btn=>btn.onclick=()=>{dismissJobAlert(btn.dataset.dismissJobAlert);render();});
     document.querySelector('[data-own-availability]')?.addEventListener('change',async e=>{
       const select=e.currentTarget, previous=state.profile.availability_status||'Available';
@@ -386,7 +413,7 @@
 
   function loadingStage(text){
     state.loading=true;
-    root.innerHTML=`<div class="driver-loading">${esc(text)}</div>`;
+    root.innerHTML=`<div class="driver-loading pro-loading"><div class="loader-mark">KLS</div><span></span><p>${esc(text)}</p></div>`;
   }
 
   async function loadDriver(){
@@ -571,7 +598,8 @@
       if(verify.error)throw verify.error;
       Object.assign(job,verify.data||{job_status:'Delivered',delivered_at:new Date().toISOString(),recipient_name:recipient,pod_photo_url:photoUrl,pod_signature_url:signatureUrl});
       state.podJob=null;stopTracking(false);
-      state.notice={text:`${job.job_number||'Job'} delivered. POD saved successfully.`,type:'ok'};
+      state.completionCelebration={id:job.id,job_number:job.job_number};
+      state.notice=null;
       await refreshAssignedJobs();
       render();
     }catch(error){

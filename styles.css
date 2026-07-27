@@ -899,3 +899,116 @@ button:not(:disabled):active{transform:translateY(1px)}
   .hamb{border:1px solid #d0d5dd!important;background:#fff!important;color:#101828!important}
   .topbar,header{padding-left:0!important;padding-right:0!important}
 }
+
+/* =========================================================
+   KLS SameDay Office v27.5 — Typography & visual consistency
+   ========================================================= */
+:root{
+  --kls-text:#101828;
+  --kls-muted:#667085;
+  --kls-soft:#98a2b3;
+  --kls-border:#e4e7ec;
+  --kls-surface:#ffffff;
+  --kls-canvas:#f4f6f8;
+  --kls-dark:#111827;
+}
+
+html{font-size:16px}
+body{
+  color:var(--kls-text)!important;
+  background:var(--kls-canvas)!important;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+}
+
+h1,h2,h3,h4,h5,h6{
+  color:var(--kls-text)!important;
+  font-weight:800!important;
+  line-height:1.2;
+  letter-spacing:-.025em;
+}
+h1{font-size:clamp(1.65rem,2vw,2.15rem)}
+h2{font-size:clamp(1.2rem,1.5vw,1.5rem)}
+h3{font-size:1.05rem}
+p,li,td,th,label,input,select,textarea,button{line-height:1.45}
+small,.muted,.subtle,.hint,.help-text{color:var(--kls-muted)!important}
+
+/* Keep dark premium banners readable while all work areas stay light */
+.hero,.welcome-banner,.finance-strip,.dark-banner,.premium-banner,
+[class*="hero-"] ,[class*="dark-panel"]{
+  color:#fff!important;
+}
+.hero h1,.hero h2,.hero h3,.hero p,.hero small,
+.welcome-banner h1,.welcome-banner h2,.welcome-banner h3,.welcome-banner p,.welcome-banner small,
+.finance-strip h1,.finance-strip h2,.finance-strip h3,.finance-strip p,.finance-strip small,
+.dark-banner h1,.dark-banner h2,.dark-banner h3,.dark-banner p,.dark-banner small,
+.premium-banner h1,.premium-banner h2,.premium-banner h3,.premium-banner p,.premium-banner small,
+[class*="hero-"] h1,[class*="hero-"] h2,[class*="hero-"] h3,[class*="hero-"] p,[class*="hero-"] small,
+[class*="dark-panel"] h1,[class*="dark-panel"] h2,[class*="dark-panel"] h3,[class*="dark-panel"] p,[class*="dark-panel"] small{
+  color:#fff!important;
+}
+
+/* Consistent page headings */
+.page-title,.section-title,.module-title{
+  margin:0 0 6px!important;
+  color:var(--kls-text)!important;
+}
+.page-subtitle,.section-subtitle,.module-subtitle{
+  margin:0!important;
+  color:var(--kls-muted)!important;
+  font-size:.94rem;
+}
+
+/* Consistent controls */
+button,.btn,.primary,.secondary,.danger,.success{
+  font-size:.9rem!important;
+  font-weight:800!important;
+  letter-spacing:.005em;
+  border-radius:9px!important;
+}
+button svg,.btn svg{flex:0 0 auto}
+button:disabled,.btn:disabled{
+  opacity:1!important;
+  background:#f2f4f7!important;
+  border-color:#d0d5dd!important;
+  color:#98a2b3!important;
+  box-shadow:none!important;
+}
+
+/* Consistent cards, metrics and tables */
+.kpi,.metric,.stat-card,.summary-card{
+  background:var(--kls-surface)!important;
+  color:var(--kls-text)!important;
+  border:1px solid var(--kls-border)!important;
+}
+.kpi .value,.metric .value,.stat-card .value,.summary-card .value{
+  color:var(--kls-text)!important;
+  font-weight:850!important;
+  letter-spacing:-.03em;
+}
+.kpi .label,.metric .label,.stat-card .label,.summary-card .label{
+  color:var(--kls-muted)!important;
+  font-weight:700!important;
+}
+
+/* Prevent low-contrast inherited text in light surfaces */
+.card,.panel,.modal,.drawer,.tablewrap,.customergrid article,
+.card *, .panel *, .modal *, .drawer *, .tablewrap *, .customergrid article *{
+  --local-text:var(--kls-text);
+}
+.card p,.panel p,.modal p,.drawer p,.tablewrap p,.customergrid article p,
+.card span,.panel span,.modal span,.drawer span,.tablewrap span,.customergrid article span{
+  color:inherit;
+}
+
+/* More comfortable content width on very large screens */
+@media(min-width:1500px){
+  .page-content,.content,.main-content{max-width:1560px;margin-left:auto;margin-right:auto}
+}
+
+@media(max-width:700px){
+  html{font-size:15px}
+  h1{font-size:1.55rem}
+  h2{font-size:1.2rem}
+  button,.btn,.primary,.secondary,.danger,.success{min-height:44px}
+}

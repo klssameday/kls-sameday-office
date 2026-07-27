@@ -772,3 +772,130 @@ button{white-space:normal}
 @media(prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
 }
+
+/* ================================================================
+   KLS SameDay Office v27.4 — Navigation & usability refinement
+   ================================================================ */
+
+/* Premium navigation hierarchy */
+.side{
+  background:#ffffff!important;
+  color:#101828!important;
+  border-right:1px solid #e4e7ec!important;
+  box-shadow:8px 0 28px rgba(16,24,40,.04);
+}
+.logo b{border-color:#101828!important;color:#101828!important;background:#fff!important}
+.logo span{color:#101828!important}
+.account{
+  color:#475467!important;
+  border-color:#e4e7ec!important;
+  background:#f9fafb!important;
+}
+.side nav{gap:4px!important}
+.side nav button{
+  color:#475467!important;
+  background:transparent!important;
+  border:1px solid transparent!important;
+  font-weight:700!important;
+  min-height:42px!important;
+  transition:background .15s ease,border-color .15s ease,color .15s ease,transform .15s ease;
+}
+.side nav button:hover{
+  color:#101828!important;
+  background:#f2f4f7!important;
+  border-color:#eaecf0!important;
+  transform:translateX(2px);
+}
+.side nav button.active{
+  color:#fff!important;
+  background:#101828!important;
+  border-color:#101828!important;
+  box-shadow:0 5px 14px rgba(16,24,40,.16);
+}
+.sidefooter{color:#667085!important;border-top:1px solid #eaecf0;padding-top:14px}
+.sidefooter button{
+  color:#101828!important;
+  background:#fff!important;
+  border-color:#d0d5dd!important;
+}
+.sidefooter button:hover{background:#f9fafb!important;border-color:#98a2b3!important}
+.close{color:#101828!important}
+
+/* Stable top bar and clearer page hierarchy */
+.topbar,header{
+  position:sticky;
+  top:0;
+  z-index:8;
+  background:rgba(244,246,248,.94)!important;
+  backdrop-filter:blur(12px);
+  -webkit-backdrop-filter:blur(12px);
+}
+.topbar h1,header h1{color:#101828!important}
+.topbar p,header p{color:#667085!important}
+.page-content{animation:klsFadeIn .18s ease-out}
+@keyframes klsFadeIn{from{opacity:.35;transform:translateY(3px)}to{opacity:1;transform:none}}
+
+/* Refined cards and panels */
+.card,.panel,.customergrid article{
+  border-color:#eaecf0!important;
+  box-shadow:0 1px 2px rgba(16,24,40,.04),0 6px 18px rgba(16,24,40,.035)!important;
+}
+.card:hover,.customergrid article:hover{
+  border-color:#d0d5dd!important;
+  box-shadow:0 2px 4px rgba(16,24,40,.05),0 10px 26px rgba(16,24,40,.055)!important;
+}
+.panelhead{padding-bottom:14px;border-bottom:1px solid #f2f4f7}
+.panelhead h2,.panel h2{color:#101828!important;letter-spacing:-.02em}
+.panelhead p,.panel p{color:#667085!important}
+
+/* Cleaner fields and clearer interaction feedback */
+input,select,textarea,.search{
+  min-height:42px;
+  box-shadow:0 1px 2px rgba(16,24,40,.04);
+}
+input:hover,select:hover,textarea:hover,.search:hover{border-color:#98a2b3!important}
+input:focus,select:focus,textarea:focus,.search:focus-within{
+  border-color:#667085!important;
+  box-shadow:0 0 0 3px rgba(102,112,133,.12)!important;
+  outline:none!important;
+}
+label{letter-spacing:.005em}
+
+/* More polished data tables */
+.tablewrap{border:1px solid #eaecf0;background:#fff!important}
+table{background:#fff!important}
+th{
+  height:44px;
+  letter-spacing:.055em!important;
+  border-bottom:1px solid #e4e7ec!important;
+}
+td{height:52px;border-bottom-color:#f2f4f7!important}
+tbody tr:last-child td{border-bottom:0!important}
+tbody tr:hover td{background:#f9fafb!important}
+
+/* Consistent status pills */
+.badge,.status,.pill,[class*="-badge"]{
+  font-weight:800!important;
+  letter-spacing:.01em;
+}
+
+/* Empty and loading states */
+.empty,.loading,.dashboard-empty,.jobs-board-empty,.pipeline-empty,.dispatch-empty{
+  background:#f9fafb!important;
+  border:1px dashed #d0d5dd!important;
+  border-radius:12px!important;
+  color:#667085!important;
+}
+
+/* Button micro-interactions without sacrificing accessibility */
+button:not(:disabled){transition:background .15s ease,border-color .15s ease,box-shadow .15s ease,transform .15s ease}
+button:not(:disabled):active{transform:translateY(1px)}
+.primary:not(:disabled):hover{box-shadow:0 5px 14px rgba(16,24,40,.18)!important}
+.secondary:not(:disabled):hover{box-shadow:0 2px 6px rgba(16,24,40,.08)!important}
+
+/* Mobile navigation polish */
+@media(max-width:700px){
+  .side{box-shadow:18px 0 42px rgba(16,24,40,.18)!important}
+  .hamb{border:1px solid #d0d5dd!important;background:#fff!important;color:#101828!important}
+  .topbar,header{padding-left:0!important;padding-right:0!important}
+}

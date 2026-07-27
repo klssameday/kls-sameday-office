@@ -1,16 +1,16 @@
-# KLS SameDay Office v27.3
+# KLS SameDay Office v27.4
 
-Premium light UI with accessibility and responsive-layout improvements.
+Premium navigation and usability refinement release.
 
-## v27.3 improvements
+## v27.4 improvements
 
-- Strong, consistent button contrast and disabled states
-- Clear keyboard focus indicators
-- Improved form and placeholder readability
-- Sticky, readable table headings
-- Better tablet and mobile layouts
-- Larger touch targets and wrapped action buttons
-- Reduced-motion accessibility support
-- Existing v27.2 functionality preserved
+- White premium sidebar with clear active navigation
+- Sticky translucent top bar for easier movement through long pages
+- Stronger page hierarchy and card styling
+- Cleaner form focus and hover states
+- More polished tables and empty states
+- Consistent button feedback
+- Improved mobile navigation presentation
+- All v27.3 accessibility and responsive improvements retained
 
-Commit summary: `Improve accessibility and responsive layout in KLS SameDay Office v27.3`
+Commit summary: `Refine navigation and usability in KLS SameDay Office v27.4`

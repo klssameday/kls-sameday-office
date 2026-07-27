@@ -48,6 +48,8 @@
     page: 'dashboard',
     user: null,
     customers: [],
+    customerContacts: [],
+    customerFollowups: [],
     drivers: [],
     fleet: [],
     fuelLogs: [],
@@ -997,6 +999,8 @@
     const isNew = state.selectedCustomerId === 'new';
     const customer = c || { company:'', contact_name:'', phone:'', email:'', billing_address:'', payment_terms:7, notes:'' };
     const metrics = isNew ? {quotes:[],jobs:[],invoices:[],invoiced:0,paid:0,outstanding:0,lastJob:null,accepted:0,averageJob:0,health:'New',healthClass:'good',conversion:0,lastActivityDate:null} : customerMetrics(customer);
+    const contacts = isNew ? [] : state.customerContacts.filter(x => x.customer_id === customer.id);
+    const followups = isNew ? [] : state.customerFollowups.filter(x => x.customer_id === customer.id).sort((a,b)=>String(a.due_date||'').localeCompare(String(b.due_date||'')));
     const activity = [
       ...metrics.quotes.map(item => ({date:item.created_at, type:'Quote', title:item.quote_number, value:item.quoted_price, status:item.status})),
       ...metrics.jobs.map(item => ({date:item.collection_date || item.created_at, type:'Job', title:item.job_number || 'Job', value:item.total_price, status:item.job_status})),
@@ -1007,10 +1011,10 @@
     const invoiceRows=metrics.invoices.slice().sort((a,b)=>new Date(b.issue_date||b.created_at||0)-new Date(a.issue_date||a.created_at||0)).slice(0,8).map(i=>[esc(i.invoice_number||'Invoice'),fmtDate(i.issue_date||i.created_at),esc(i.status||'Draft'),money(i.total)]);
     return `<div class="modalback" data-action="customer-close"><section class="customermodal crm-modal crm-v24-modal" onclick="event.stopPropagation()"><div class="modalhead"><div><small>${isNew ? 'NEW CUSTOMER' : 'CUSTOMER 360° PROFILE'}</small><h2>${esc(customer.company || 'Add customer')}</h2>${!isNew ? `<p>${esc(customer.contact_name || '')}${customer.phone ? ` · ${esc(customer.phone)}` : ''} <span class="crm-health ${metrics.healthClass}">${esc(metrics.health)}</span></p>` : ''}</div><button data-action="customer-close">×</button></div>
       ${isNew ? '' : `<div class="crm-profile-actions"><button class="primary" data-new-quote-customer="${customer.id}">＋ New Quote</button>${metrics.lastJob?`<button class="secondary" data-repeat-customer-job="${metrics.lastJob.id}">Repeat Last Job</button>`:''}${customer.phone ? `<a class="secondary button-link" href="tel:${esc(customer.phone)}">Call</a><a class="secondary button-link" target="_blank" rel="noopener" href="https://wa.me/${esc(String(customer.phone).replace(/\D/g,'').replace(/^0/,'44'))}">WhatsApp</a>` : ''}${customer.email ? `<a class="secondary button-link" href="mailto:${esc(customer.email)}">Email</a>` : ''}</div>`}
-      <form id="customer-form"><div class="grid two"><label>Company *<input name="company" required value="${esc(customer.company)}"></label><label>Main contact<input name="contact_name" value="${esc(customer.contact_name || '')}"></label><label>Telephone<input name="phone" value="${esc(customer.phone || '')}"></label><label>Email<input name="email" type="email" value="${esc(customer.email || '')}"></label><label>Billing address<textarea name="billing_address">${esc(customer.billing_address || '')}</textarea></label><label>Payment terms (days)<input name="payment_terms" type="number" min="0" value="${Number(customer.payment_terms || 7)}"></label></div><label>Relationship notes<textarea name="notes" placeholder="Usual routes, buying preferences, site instructions, follow-ups or agreed rates">${esc(customer.notes || '')}</textarea></label><div class="actions"><button type="button" class="secondary" data-action="customer-close">Cancel</button><button class="primary">${isNew ? 'Save Customer' : 'Save Changes'}</button></div></form>
+      <form id="customer-form"><div class="grid two"><label>Company *<input name="company" required value="${esc(customer.company)}"></label><label>Main contact<input name="contact_name" value="${esc(customer.contact_name || '')}"></label><label>Telephone<input name="phone" value="${esc(customer.phone || '')}"></label><label>Email<input name="email" type="email" value="${esc(customer.email || '')}"></label><label>Billing address<textarea name="billing_address">${esc(customer.billing_address || '')}</textarea></label><label>Payment terms (days)<input name="payment_terms" type="number" min="0" value="${Number(customer.payment_terms || 7)}"></label><label>Account status<select name="account_status">${['Active','Prospect','On hold','Inactive'].map(x=>`<option ${customer.account_status===x?'selected':''}>${x}</option>`).join('')}</select></label><label>Preferred vehicle<select name="preferred_vehicle"><option value="">Not set</option>${Object.keys(vehicles).map(x=>`<option ${customer.preferred_vehicle===x?'selected':''}>${x}</option>`).join('')}</select></label></div><label>Customer tags<input name="tags" value="${esc(customer.tags || '')}" placeholder="Trade, Priority, Film & TV"></label><label>Relationship notes<textarea name="notes" placeholder="Usual routes, buying preferences, site instructions, follow-ups or agreed rates">${esc(customer.notes || '')}</textarea></label><div class="actions"><button type="button" class="secondary" data-action="customer-close">Cancel</button><button class="primary">${isNew ? 'Save Customer' : 'Save Changes'}</button></div></form>
       ${isNew ? '' : `<div class="customerstats crm-profile-stats"><div><small>Total invoiced</small><b>${money(metrics.invoiced)}</b></div><div><small>Paid</small><b>${money(metrics.paid)}</b></div><div><small>Outstanding</small><b>${money(metrics.outstanding)}</b></div><div><small>Jobs</small><b>${metrics.jobs.length}</b></div><div><small>Average job</small><b>${money(metrics.averageJob)}</b></div><div><small>Quote conversion</small><b>${metrics.conversion}%</b></div></div>
       <div class="crm-record-sections"><details open><summary>Activity timeline <span>${activity.length}</span></summary><div class="crm-timeline">${activity.map(item => `<div class="crm-event"><span>${esc(item.type)}</span><div><b>${esc(item.title || item.type)}</b><small>${fmtDate(item.date)} · ${esc(item.status || '')}</small></div><strong>${money(item.value)}</strong></div>`).join('') || '<p class="muted">No customer activity yet.</p>'}</div></details><details><summary>Jobs <span>${metrics.jobs.length}</span></summary>${table(['Job','Date','Collection','Delivery','Status','Value'],jobRows)}</details><details><summary>Quotes <span>${metrics.quotes.length}</span></summary>${table(['Quote','Date','Status','Value'],quoteRows)}</details><details><summary>Invoices <span>${metrics.invoices.length}</span></summary>${table(['Invoice','Date','Status','Value'],invoiceRows)}</details></div>
-      <div class="crm-account crm-account-wide"><h3>Account summary</h3><div class="crm-account-grid"><p><span>Payment terms</span><b>${Number(customer.payment_terms || 7)} days</b></p><p><span>Last activity</span><b>${metrics.lastActivityDate ? fmtDate(metrics.lastActivityDate) : '—'}</b></p><p><span>Last job status</span><b>${metrics.lastJob ? esc(metrics.lastJob.job_status || 'Booked') : '—'}</b></p><p><span>Outstanding balance</span><b>${money(metrics.outstanding)}</b></p></div><h3>Relationship notes</h3><div class="crm-notes">${esc(customer.notes || 'No relationship notes saved.')}</div></div>`}
+      <div class="crm-v35-grid"><section class="crm-v35-card"><div class="crm-v35-head"><h3>Contacts</h3><span>${contacts.length}</span></div><form id="customer-contact-form" class="crm-mini-form"><input name="name" placeholder="Contact name" required><input name="role" placeholder="Role / department"><input name="phone" placeholder="Phone"><input name="email" type="email" placeholder="Email"><button class="secondary">Add contact</button></form><div class="crm-v35-list">${contacts.map(x=>`<article><div><b>${esc(x.name)}</b><small>${esc(x.role||'Contact')}</small></div><div><span>${esc(x.phone||'')}</span><span>${esc(x.email||'')}</span></div><button class="danger" data-contact-delete="${x.id}">Remove</button></article>`).join('')||'<p class="muted">No additional contacts saved.</p>'}</div></section><section class="crm-v35-card"><div class="crm-v35-head"><h3>Follow-ups</h3><span>${followups.filter(x=>!x.completed_at).length} open</span></div><form id="customer-followup-form" class="crm-mini-form"><input name="title" placeholder="Call, email or chase quote" required><input name="due_date" type="date" value="${todayISO()}" required><textarea name="notes" placeholder="Follow-up notes"></textarea><button class="secondary">Add follow-up</button></form><div class="crm-v35-list">${followups.map(x=>`<article class="${x.completed_at?'done':''}"><div><b>${esc(x.title)}</b><small>${fmtDate(x.due_date)}${x.notes?` · ${esc(x.notes)}`:''}</small></div><button class="${x.completed_at?'secondary':'primary'}" data-followup-toggle="${x.id}">${x.completed_at?'Reopen':'Complete'}</button><button class="danger" data-followup-delete="${x.id}">Remove</button></article>`).join('')||'<p class="muted">No follow-ups scheduled.</p>'}</div></section></div><div class="crm-account crm-account-wide"><h3>Account summary</h3><div class="crm-account-grid"><p><span>Payment terms</span><b>${Number(customer.payment_terms || 7)} days</b></p><p><span>Last activity</span><b>${metrics.lastActivityDate ? fmtDate(metrics.lastActivityDate) : '—'}</b></p><p><span>Last job status</span><b>${metrics.lastJob ? esc(metrics.lastJob.job_status || 'Booked') : '—'}</b></p><p><span>Outstanding balance</span><b>${money(metrics.outstanding)}</b></p></div><h3>Relationship notes</h3><div class="crm-notes">${esc(customer.notes || 'No relationship notes saved.')}</div></div>`}
     </section></div>`;
   }
 
@@ -1832,6 +1836,8 @@ function systemHealthSummary() {
 
       const queries = {
         customers: db.from('customers').select('*').order('created_at', { ascending: false }),
+        customerContacts: db.from('customer_contacts').select('*').order('created_at', { ascending: false }),
+        customerFollowups: db.from('customer_followups').select('*').order('due_date', { ascending: true }),
         drivers: db.from('drivers').select('*').order('name', { ascending: true }),
         fleet: db.from('vehicles').select('*').order('created_at', { ascending: false }),
         fuelLogs: db.from('fuel_logs').select('*').order('log_date', { ascending: false }),
@@ -1857,8 +1863,10 @@ function systemHealthSummary() {
         if (!result) throw new Error(`No database response received for ${name}.`);
         if (result.error) throw new Error(`${name}: ${result.error.message}`);
       }
-      const { customers, drivers, fleet, fuelLogs, maintenance, recurringJobs, quotes, jobs, invoices, expenses, portalBookings, portalAccessUsers, routeStops, quoteRequests, driverAccounts, exchangeJobs, exchangeBids, settings } = loaded;
+      const { customers, customerContacts, customerFollowups, drivers, fleet, fuelLogs, maintenance, recurringJobs, quotes, jobs, invoices, expenses, portalBookings, portalAccessUsers, routeStops, quoteRequests, driverAccounts, exchangeJobs, exchangeBids, settings } = loaded;
       state.customers = customers.data || [];
+      state.customerContacts = customerContacts.data || [];
+      state.customerFollowups = customerFollowups.data || [];
       state.drivers = drivers.data || [];
       state.fleet = fleet.data || [];
       state.fuelLogs = fuelLogs.data || [];
@@ -2700,6 +2708,28 @@ function systemHealthSummary() {
         state.selectedCustomerId = null; render();
       } catch (error) { showNotice(error.message, 'error'); render(); }
     };
+
+    const customerContactForm = document.getElementById('customer-contact-form');
+    if (customerContactForm) customerContactForm.onsubmit = async e => {
+      e.preventDefault();
+      try {
+        const payload = Object.fromEntries(new FormData(customerContactForm));
+        payload.customer_id = state.selectedCustomerId; payload.user_id = state.user.id;
+        const {data,error}=await db.from('customer_contacts').insert(payload).select().single();
+        if(error) throw error; state.customerContacts.unshift(data); showNotice('Customer contact added.','ok'); render();
+      } catch(error){showNotice(error.message,'error');render();}
+    };
+    document.querySelectorAll('[data-contact-delete]').forEach(button=>button.onclick=async()=>{
+      if(!confirm('Remove this contact?')) return;
+      const {error}=await db.from('customer_contacts').delete().eq('id',button.dataset.contactDelete);
+      if(error) showNotice(error.message,'error'); else {state.customerContacts=state.customerContacts.filter(x=>x.id!==button.dataset.contactDelete);showNotice('Contact removed.','ok');} render();
+    });
+    const customerFollowupForm = document.getElementById('customer-followup-form');
+    if(customerFollowupForm) customerFollowupForm.onsubmit=async e=>{
+      e.preventDefault(); try {const payload=Object.fromEntries(new FormData(customerFollowupForm));payload.customer_id=state.selectedCustomerId;payload.user_id=state.user.id;const{data,error}=await db.from('customer_followups').insert(payload).select().single();if(error)throw error;state.customerFollowups.push(data);showNotice('Follow-up scheduled.','ok');render();}catch(error){showNotice(error.message,'error');render();}
+    };
+    document.querySelectorAll('[data-followup-toggle]').forEach(button=>button.onclick=async()=>{const item=state.customerFollowups.find(x=>x.id===button.dataset.followupToggle);if(!item)return;const completed_at=item.completed_at?null:new Date().toISOString();const{data,error}=await db.from('customer_followups').update({completed_at}).eq('id',item.id).select().single();if(error)showNotice(error.message,'error');else{Object.assign(item,data);showNotice(completed_at?'Follow-up completed.':'Follow-up reopened.','ok');}render();});
+    document.querySelectorAll('[data-followup-delete]').forEach(button=>button.onclick=async()=>{if(!confirm('Remove this follow-up?'))return;const{error}=await db.from('customer_followups').delete().eq('id',button.dataset.followupDelete);if(error)showNotice(error.message,'error');else{state.customerFollowups=state.customerFollowups.filter(x=>x.id!==button.dataset.followupDelete);showNotice('Follow-up removed.','ok');}render();});
 
     document.querySelectorAll('[data-new-quote-customer]').forEach(button => button.onclick = () => {
       state.quoteCustomerId = button.dataset.newQuoteCustomer;

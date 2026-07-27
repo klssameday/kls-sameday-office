@@ -1,3 +1,4 @@
+v35.0: Run SUPABASE-v35-CUSTOMER-MANAGEMENT.sql. Test adding/removing contacts, adding/completing follow-ups, and editing tags/status.
 KLS SameDay Office v33.1 – Release Checklist
 
 1. Run SUPABASE-v33-DISPATCH.sql if not already completed.

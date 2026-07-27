@@ -1,3 +1,15 @@
+# KLS SameDay Office v35.0
+
+## Customer Management (CRM)
+
+- Customer account status, tags and preferred vehicle
+- Multiple contacts for every customer
+- Follow-up reminders with due dates, completion and reopening
+- Existing 360° customer timeline, jobs, quotes, invoices and account metrics retained
+- One-click new quote and repeat-last-job actions retained
+
+Run `SUPABASE-v35-CUSTOMER-MANAGEMENT.sql` in Supabase before deployment.
+
 # KLS SameDay Office v34.3
 
 ## Driver App Pro

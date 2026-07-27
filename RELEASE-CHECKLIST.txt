@@ -1,7 +1,7 @@
-KLS SameDay Office v31.0.1 — Customer Portal Hotfix
+KLS SameDay Office v31.1 — Customer Portal Hotfix
 
 1. Upload all project files to GitHub/Vercel.
-2. Run HOTFIX-v31.0.1.sql in Supabase if v31.0 SQL was already installed.
+2. Run HOTFIX-v31.1.sql in Supabase if v31.0 SQL was already installed.
 3. Sign in with a linked customer test account.
 4. Confirm the customer name/profile loads.
 5. Submit a booking request.
@@ -9,4 +9,13 @@ KLS SameDay Office v31.0.1 — Customer Portal Hotfix
 7. Accept or decline a test quote.
 8. Confirm the office can see and approve the booking request.
 9. Confirm the approved booking creates a job.
-10. Confirm browser cache updates to v31.0.1.
+10. Confirm browser cache updates to v31.1.
+
+DRIVER APP v31.1
+[ ] Open Driver App on a phone-sized screen.
+[ ] Confirm current and upcoming jobs display correctly.
+[ ] Open a job and test Main screen button.
+[ ] Advance each status and test Previous step confirmation.
+[ ] Confirm collection and delivery telephone numbers display as text.
+[ ] Complete a POD and confirm the job returns as Delivered.
+[ ] Change driver availability and confirm Driver Control updates.

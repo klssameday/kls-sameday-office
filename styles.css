@@ -654,3 +654,121 @@ button.secondary:not(:disabled),.secondary:not(:disabled){color:#344054!importan
 article h1,article h2,article h3,article h4,section h1,section h2,section h3,section h4{
   color:#101828;
 }
+
+/* ================================================================
+   KLS SameDay Office v27.3 — Accessibility & responsive polish
+   ================================================================ */
+
+/* Clear keyboard focus across the whole application */
+:where(button,a,input,select,textarea,[tabindex]):focus-visible{
+  outline:3px solid rgba(37,99,235,.35)!important;
+  outline-offset:2px!important;
+  box-shadow:0 0 0 1px #2563eb!important;
+}
+
+/* Reliable button contrast and minimum touch targets */
+button,.primary,.secondary,.danger,.hero button,td button{
+  min-height:40px;
+  line-height:1.2;
+  letter-spacing:0;
+}
+.primary,button.primary{
+  background:#101828!important;
+  color:#fff!important;
+  border:1px solid #101828!important;
+}
+.primary:hover,button.primary:hover{background:#344054!important;border-color:#344054!important}
+.secondary,button.secondary,td button.alt{
+  background:#fff!important;
+  color:#101828!important;
+  border:1px solid #d0d5dd!important;
+}
+.secondary:hover,button.secondary:hover,td button.alt:hover{background:#f9fafb!important;border-color:#98a2b3!important}
+.danger,button.danger{background:#b42318!important;color:#fff!important;border:1px solid #b42318!important}
+button:disabled,.primary:disabled,.secondary:disabled,.danger:disabled{
+  background:#f2f4f7!important;
+  color:#98a2b3!important;
+  border-color:#e4e7ec!important;
+  opacity:1!important;
+  cursor:not-allowed!important;
+}
+
+/* Form readability */
+input,select,textarea,.search{
+  color:#101828!important;
+  background:#fff!important;
+  border-color:#d0d5dd!important;
+}
+input::placeholder,textarea::placeholder{color:#98a2b3!important;opacity:1}
+label{color:#344054!important}
+
+/* Tables remain usable on narrower screens */
+.tablewrap{
+  max-width:100%;
+  border-radius:12px;
+  -webkit-overflow-scrolling:touch;
+  scrollbar-width:thin;
+}
+th{color:#475467!important;background:#f9fafb!important;position:sticky;top:0;z-index:1}
+td{color:#101828!important;background:#fff}
+tr:hover td{background:#fcfcfd!important}
+
+/* Modal and long-form improvements */
+.modalback{overscroll-behavior:contain}
+.customermodal,.modal,.dialog,[role="dialog"]{
+  color:#101828!important;
+  background:#fff!important;
+}
+
+/* Avoid clipped controls and labels */
+.actions,.panelhead,.topbar-actions,.job-action-bar,.driver-control-card footer{
+  flex-wrap:wrap;
+}
+button{white-space:normal}
+
+/* Improved tablet layout */
+@media(max-width:1100px){
+  .cards,.dashboard-cards,.driver-control-kpis{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .customergrid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  main{padding-left:18px!important;padding-right:18px!important}
+}
+
+/* Premium mobile layout */
+@media(max-width:700px){
+  html{font-size:15px}
+  main{padding:0 12px 24px!important}
+  .topbar,header{min-height:68px;height:auto!important;padding:10px 0}
+  .topbar-actions{gap:7px}
+  .topbar-actions .primary,header .primary{font-size:12px!important;padding:10px 12px!important}
+  .cards,.dashboard-cards,.customergrid,.driver-control-kpis,.mini-metrics{
+    grid-template-columns:1fr!important;
+  }
+  .card,.panel{border-radius:14px!important}
+  .panel{padding:14px!important}
+  .hero,.command-hero,.ops-hero,.crm-hero,.fleet-hero,.schedule-hero,.accounts-hero,
+  .portal-hero,.tracking-hero,.smart-hero,.route-hero,.dispatch-v4-hero,.drivers-hero,
+  .jobs-command-hero,.billing-hero,.documents-hero,.reports-hero,.pipeline-hero,
+  .communications-hero,.ai-hero,.bi-hero,.profit-hero{
+    padding:20px!important;
+    border-radius:16px!important;
+  }
+  .hero h2,.command-hero h2,.drivers-hero h2{font-size:26px!important}
+  .actions>* ,.job-action-bar>* ,.driver-control-card footer>*{flex:1 1 145px}
+  .tablewrap{margin-left:-4px;margin-right:-4px}
+  table{min-width:760px}
+  .customermodal{max-height:calc(100vh - 16px);border-radius:16px;padding:14px!important}
+  .notice{align-items:flex-start}
+}
+
+/* Small phones */
+@media(max-width:420px){
+  .topbar-actions .secondary{display:none}
+  .hero h2,.command-hero h2,.drivers-hero h2{font-size:23px!important}
+  .card{padding:13px!important}
+  .actions>* ,.job-action-bar>* ,.driver-control-card footer>*{flex-basis:100%}
+}
+
+/* Respect reduced-motion preferences */
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
+}

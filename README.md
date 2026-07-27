@@ -1,15 +1,16 @@
-# KLS SameDay Office v27.2
+# KLS SameDay Office v27.3
 
-Complete GitHub-ready operations workflow release.
+Premium light UI with accessibility and responsive-layout improvements.
 
-## v27.2 additions
-- Unified seven-stage job workflow: quoted, booked, assigned, collected, delivered, invoiced and paid
-- Job action bar for driver assignment, status updates, navigation, ETA messages, invoicing and POD
-- Expanded job search across job number, customer, phone, email, address, postcode, vehicle and driver
-- Existing CRM customer activity timeline retained and integrated with job workflow
-- All v26.38 backup and data export tools retained
+## v27.3 improvements
 
-## Deployment
-Upload everything inside this folder over the existing GitHub repository.
+- Strong, consistent button contrast and disabled states
+- Clear keyboard focus indicators
+- Improved form and placeholder readability
+- Sticky, readable table headings
+- Better tablet and mobile layouts
+- Larger touch targets and wrapped action buttons
+- Reduced-motion accessibility support
+- Existing v27.2 functionality preserved
 
-Commit summary: `Upgrade KLS SameDay Office to v27.2 Operations Workflow`
+Commit summary: `Improve accessibility and responsive layout in KLS SameDay Office v27.3`

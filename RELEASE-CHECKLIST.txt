@@ -1,27 +1,18 @@
-KLS SameDay Office v27.2 — Premium Light UI
+KLS SameDay Office v27.3 — Accessibility & Responsive Polish
 
-Release focus
-- Complete premium light-theme redesign
-- White navigation, cards, forms, tables and modals
-- Light-grey workspace
-- Dark, high-contrast text
-- Black primary buttons with white text
-- White secondary buttons with dark text and visible borders
-- Clear disabled, success, warning and danger states
-- Matching light-theme refresh for the driver app
-- Existing v26.39 workflow functionality retained
-
-Checks completed
-- app.js syntax check
-- driver.js syntax check
-- sw.js syntax check
-- manifest.json validation
-- vercel.json validation
-- CSS brace validation
-- Version and service-worker cache updated to v27.2
+Before upload
+- Extract the ZIP
+- Upload all files over the current GitHub project
+- Keep config.js included
 
 After deployment
-1. Allow Vercel to finish deploying.
-2. Hard refresh the browser (Ctrl+Shift+R on Windows or Cmd+Shift+R on Mac).
-3. If the old dark theme remains, close the installed app/browser tab and reopen it.
-4. Test Dashboard, Jobs, CRM, Accounts, Settings and Driver App.
+- Hard refresh the browser
+- Check Dashboard, Jobs, CRM, Dispatch and Settings
+- Test at normal desktop width and a narrow browser width
+- Confirm primary, secondary and disabled buttons are readable
+- Confirm tables scroll horizontally on smaller screens
+
+Validation
+- JavaScript syntax checked
+- JSON checked
+- Version and service-worker cache updated to v27.3

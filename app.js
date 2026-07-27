@@ -1255,7 +1255,7 @@
   function portalRequestsView() {
     const pending=state.portalBookings.filter(b=>b.status==='Pending');
     const rows=state.portalBookings.length?`<div class="portal-admin-list">${state.portalBookings.map(b=>{const customer=state.customers.find(c=>c.id===b.customer_id);return `<article><div><span><b>${esc(customer?.company||'Customer')}</b><small>${fmtDate(b.collection_date)} ${esc(String(b.collection_time||'').slice(0,5))}</small></span>${portalStatusBadge(b.status)}</div><p><small>COLLECT</small>${esc(b.collection_address)}</p><p><small>DELIVER</small>${esc(b.delivery_address)}</p><p><small>VEHICLE</small>${esc(b.vehicle||'Not specified')}</p>${b.load_description?`<p><small>LOAD</small>${esc(b.load_description)}</p>`:''}<footer>${b.status==='Pending'?`<button class="primary" data-portal-approve="${b.id}">Approve & create job</button><button class="danger" data-portal-reject="${b.id}">Reject</button>`:''}</footer></article>`}).join('')}</div>`:'<div class="fleet-empty">No portal booking requests yet.</div>';
-    return `<section class="fleet-hero"><div><small>V26.32 CUSTOMER PORTAL</small><h2>Customer Portal</h2><p>Review requests sent directly by customer accounts.</p></div><strong>${pending.length} pending</strong></section>${panel('Customer requests',rows,'Approved requests create a confirmed job in your booking calendar.')}`;
+    return `<section class="fleet-hero"><div><small>V31.0 CUSTOMER PORTAL</small><h2>Customer Portal</h2><p>Review requests sent directly by customer accounts.</p></div><strong>${pending.length} pending</strong></section>${panel('Customer requests',rows,'Approved requests create a confirmed job in your booking calendar.')}`;
   }
 
   function driverExchangeView() {

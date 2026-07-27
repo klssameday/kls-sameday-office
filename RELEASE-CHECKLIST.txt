@@ -1,7 +1,7 @@
-KLS SameDay Office v31.2 — Driver App Courier Exchange-Style Upgrade
+KLS SameDay Office v31.3 — Driver Live Jobs & Activity
 
-1. Upload all v31.2 files to GitHub/Vercel.
-2. Confirm driver.html loads driver.css?v=31.2 and driver.js?v=31.2.
+1. Upload all v31.3 files to GitHub/Vercel.
+2. Confirm driver.html loads driver.css?v=31.3 and driver.js?v=31.3.
 3. Sign in with a linked driver account.
 4. Check Home, Jobs, Exchange and Profile bottom navigation.
 5. Open an assigned job and verify Main screen return button.
@@ -9,4 +9,9 @@ KLS SameDay Office v31.2 — Driver App Courier Exchange-Style Upgrade
 7. Test Previous step correction.
 8. Confirm collection and delivery telephone numbers display correctly.
 9. Test navigation, live location and POD completion.
-10. Confirm service worker cache updates to kls-v31-2.
+10. Confirm service worker cache updates to kls-v31-3.
+
+11. Open an assigned job and confirm the Job Activity timeline is visible.
+12. Turn the device connection off/on and confirm the LIVE/OFFLINE indicator changes.
+13. Tap Refresh jobs and confirm the last-updated time changes.
+14. Confirm active Jobs and Exchange badge counts display correctly.

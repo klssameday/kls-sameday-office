@@ -1,4 +1,4 @@
-// KLS SameDay Driver v31.2 — courier-exchange inspired workflow
+// KLS SameDay Driver v31.3 — live jobs and activity workflow
 (() => {
   const raw = window.KLS_CONFIG || {};
   const root = document.getElementById('driver-app');
@@ -9,7 +9,7 @@
   })();
   const db = validUrl && key && window.supabase ? window.supabase.createClient(url, key) : null;
   const steps = ['Booked','En Route to Collection','Arrived at Collection','Collected','In Transit','Arrived at Delivery','Delivered'];
-  let state = { user:null, profile:null, jobs:[], loading:true, mode:'signin', notice:null, podJob:null, tab:'home', screen:'dashboard', detailJobId:null, networkJobs:[], myBids:[] };
+  let state = { user:null, profile:null, jobs:[], loading:true, mode:'signin', notice:null, podJob:null, tab:'home', screen:'dashboard', detailJobId:null, networkJobs:[], myBids:[], online:navigator.onLine, lastUpdated:null, refreshing:false };
   let watchId = null;
   let activeJobId = null;
   let signatureCanvas = null;
@@ -21,6 +21,28 @@
   const nowPosition = () => new Promise((resolve,reject)=>navigator.geolocation.getCurrentPosition(resolve,reject,{enableHighAccuracy:true,timeout:15000,maximumAge:5000}));
   const notice = (text,type='ok') => { state.notice={text,type}; render(); };
   const mapsLink = address => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address || '')}`;
+  const fmtClock = value => value ? new Date(value).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : '';
+  const statusTimeFields = {
+    'Booked':['created_at','booked_at'],
+    'En Route to Collection':['en_route_collection_at','started_at'],
+    'Arrived at Collection':['arrived_collection_at','collection_arrived_at'],
+    'Collected':['collected_at','collection_completed_at'],
+    'In Transit':['in_transit_at','delivery_started_at'],
+    'Arrived at Delivery':['arrived_delivery_at','delivery_arrived_at'],
+    'Delivered':['delivered_at','completed_at']
+  };
+  function firstValue(object,keys){ return keys.map(key=>object?.[key]).find(Boolean)||null; }
+  function activityRows(job){
+    const currentIndex=Math.max(0,steps.indexOf(job.job_status));
+    return steps.map((step,index)=>{
+      const explicit=firstValue(job,statusTimeFields[step]||[]);
+      const current=index===currentIndex;
+      const complete=index<currentIndex||job.job_status==='Delivered';
+      if(!explicit&&!current&&!complete)return null;
+      const fallback=current ? (job.updated_at||job.created_at) : null;
+      return {step,time:explicit||fallback,current,complete};
+    }).filter(Boolean);
+  }
 
   function authView(){
     const signup=state.mode==='signup';
@@ -121,7 +143,7 @@
         <div><small>DRIVER STATUS</small><strong>${esc(state.profile?.availability_status||'Available')}</strong></div>
         <select data-own-availability aria-label="Driver availability">${['Available','On Job','Break','Offline'].map(x=>`<option ${String(state.profile?.availability_status||'Available')===x?'selected':''}>${x}</option>`).join('')}</select>
       </div>
-      <section class="driver-welcome dashboard-hero"><small>KLS SAMEDAY DRIVER</small><h1>${current?'Your next job':'You are all clear'}</h1><p>${current?'Open the job below to begin or continue.':'New assigned jobs will appear here.'}</p></section>
+      <section class="driver-welcome dashboard-hero"><div class="hero-live-row"><small>KLS SAMEDAY DRIVER</small><span class="connection-pill ${state.online?'online':'offline'}">${state.online?'LIVE':'OFFLINE'}</span></div><h1>${current?'Your next job':'You are all clear'}</h1><p>${current?'Open the job below to begin or continue.':'New assigned jobs will appear here.'}</p><div class="dashboard-refresh-row"><span>${state.lastUpdated?`Updated ${fmtClock(state.lastUpdated)}`:'Waiting for first update'}</span><button class="refresh-jobs" data-refresh-jobs ${state.refreshing?'disabled':''}>${state.refreshing?'Refreshing…':'Refresh jobs'}</button></div></section>
       ${current?`<div class="dashboard-section-title"><h2>${activeStatuses.includes(current.job_status)?'Current job':'Next job'}</h2><span>${esc(current.job_status||'Booked')}</span></div>${miniJobCard(current,activeStatuses.includes(current.job_status)?'CURRENT JOB':'NEXT JOB')}`:''}
       <div class="dashboard-section-title"><h2>Upcoming jobs</h2><span>${upcoming.length}</span></div>
       ${upcoming.length?`<div class="dashboard-job-list">${upcoming.map(j=>miniJobCard(j)).join('')}</div>`:'<div class="empty compact"><strong>No upcoming jobs</strong><p>Nothing else is currently assigned.</p></div>'}
@@ -164,6 +186,7 @@
       ${detailSection('COLLECTION',job.collection_address,contactValue(job,'collection'),phoneValue(job,'collection'),notesValue(job,'collection'))}
       ${detailSection('DELIVERY',job.delivery_address,contactValue(job,'delivery'),phoneValue(job,'delivery'),notesValue(job,'delivery'))}
       ${job.goods_description?`<section class="goods-card"><small>GOODS</small><p>${esc(job.goods_description)}</p></section>`:''}
+      <section class="job-activity-card"><div class="activity-heading"><div><small>JOB ACTIVITY</small><h2>Progress history</h2></div><span>${esc(statusDisplay[job.job_status]?.[0]||job.job_status||'Booked')}</span></div><div class="activity-list">${activityRows(job).map(row=>`<div class="activity-row ${row.current?'current':''}"><i></i><div><b>${esc(row.step)}</b><small>${row.time?fmtClock(row.time):(row.complete?'Completed':'Current step')}</small></div></div>`).join('')}</div></section>
       <div class="sticky-job-actions">
         ${job.job_status!=='Delivered'?`<a class="btn secondary navigate-btn" target="_blank" rel="noopener" href="${mapsLink(destination)}">Open navigation</a>`:''}
         ${action?`<button class="btn primary main-action" data-status-job="${job.id}" data-status="${esc(action[1])}">${esc(action[0])}</button>`:''}
@@ -221,8 +244,8 @@
       </main>
       ${state.screen!=='detail'?`<nav class="bottom-nav" aria-label="Driver navigation">
         <button class="${state.tab==='home'?'active':''}" data-driver-tab="home"><i>⌂</i><span>Home</span></button>
-        <button class="${state.tab==='jobs'?'active':''}" data-driver-tab="jobs"><i>▤</i><span>Jobs</span></button>
-        <button class="${state.tab==='exchange'?'active':''}" data-driver-tab="exchange"><i>⇄</i><span>Exchange</span></button>
+        <button class="${state.tab==='jobs'?'active':''}" data-driver-tab="jobs"><i>▤</i><span>Jobs</span>${state.jobs.filter(j=>j.job_status!=='Delivered').length?`<em>${state.jobs.filter(j=>j.job_status!=='Delivered').length}</em>`:''}</button>
+        <button class="${state.tab==='exchange'?'active':''}" data-driver-tab="exchange"><i>⇄</i><span>Exchange</span>${state.networkJobs.filter(j=>j.status==='open').length?`<em>${state.networkJobs.filter(j=>j.status==='open').length}</em>`:''}</button>
         <button class="${state.tab==='profile'?'active':''}" data-driver-tab="profile"><i>●</i><span>Profile</span></button>
       </nav>`:''}
     </div>`;
@@ -246,6 +269,7 @@
     document.querySelectorAll('[data-driver-tab]').forEach(btn=>btn.onclick=()=>{state.tab=btn.dataset.driverTab;state.screen='dashboard';state.detailJobId=null;render();});
     document.querySelectorAll('[data-open-job]').forEach(btn=>btn.onclick=e=>{e.stopPropagation();state.screen='detail';state.detailJobId=btn.dataset.openJob;state.notice=null;render();window.scrollTo({top:0,behavior:'smooth'});});
     document.querySelector('[data-back-dashboard]')?.addEventListener('click',()=>{state.screen='dashboard';state.detailJobId=null;state.notice=null;render();window.scrollTo({top:0,behavior:'smooth'});});
+    document.querySelector('[data-refresh-jobs]')?.addEventListener('click',async()=>{state.refreshing=true;render();await refreshAssignedJobs(true);state.refreshing=false;state.lastUpdated=new Date().toISOString();render();});
     document.querySelector('[data-own-availability]')?.addEventListener('change',async e=>{
       const select=e.currentTarget, previous=state.profile.availability_status||'Available';
       state.profile.availability_status=select.value;
@@ -329,6 +353,7 @@
       );
       if(jobsResult.error) throw jobsResult.error;
       state.jobs=jobsResult.data||[];
+      state.lastUpdated=new Date().toISOString();
 
       // Driver Exchange is deliberately loaded after the core app is visible.
       // Missing optional tables must never block the Driver App.
@@ -469,12 +494,13 @@
 
 
   let driverPollId=null;
-  async function refreshAssignedJobs(){
-    if(!db||!state.profile?.linked_driver_id||document.hidden)return;
+  async function refreshAssignedJobs(force=false){
+    if(!db||!state.profile?.linked_driver_id||(!force&&document.hidden))return;
     const {data,error}=await db.from('jobs').select('*').eq('assigned_driver_id',state.profile.linked_driver_id).order('collection_date',{ascending:true});
     if(error)return;
     const before=JSON.stringify(state.jobs.map(j=>[j.id,j.job_status,j.updated_at,j.delivered_at,j.pod_photo_url]));
     const after=JSON.stringify((data||[]).map(j=>[j.id,j.job_status,j.updated_at,j.delivered_at,j.pod_photo_url]));
+    state.lastUpdated=new Date().toISOString();
     if(before!==after){state.jobs=data||[];render();}
   }
   function startDriverPolling(){if(driverPollId)clearInterval(driverPollId);driverPollId=setInterval(refreshAssignedJobs,5000);}
@@ -524,5 +550,8 @@
     if(state.user)await loadDriver();
     else{state.loading=false;render();}
   }
+  window.addEventListener('online',()=>{state.online=true;refreshAssignedJobs(true);render();});
+  window.addEventListener('offline',()=>{state.online=false;render();});
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden&&state.user&&state.profile)refreshAssignedJobs(true);});
   init();
 })();

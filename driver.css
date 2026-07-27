@@ -27,3 +27,40 @@ button:not(:disabled):active,.btn:not(:disabled):active{transform:translateY(1px
   .driver-card,.job-card,.driver-panel{background:#fff!important;color:#000!important;border:1px solid #d0d5dd!important;box-shadow:none!important}
   *{color:#000!important}
 }
+
+/* =========================================================
+   KLS Driver v28.0 — Premium light design system
+   ========================================================= */
+:root{color:#111318!important;background:#f4f6f8!important}
+html,body{background:#f4f6f8!important;color:#111318!important}
+.driver-auth{background:linear-gradient(145deg,#eef1f4,#dfe3e8)!important}
+.driver-auth-card,.job-card,.pod-card,.driver-welcome{
+  background:#fff!important;color:#111318!important;border-color:#dfe3e8!important;
+  box-shadow:0 10px 30px rgba(16,24,40,.08)!important;
+}
+.driver-brand b{background:#111318!important;color:#fff!important;border-color:#111318!important}
+.driver-brand span,.driver-auth h1,.driver-welcome h1,.job-head h2,.job-customer{color:#111318!important}
+.driver-brand small,.driver-auth p,.driver-welcome p,.driver-welcome small,.job-head small,.job-route small,.driver-top small,.auth-switch{color:#667085!important}
+.driver-auth input,.pod-form input,.pod-form textarea{
+  background:#fff!important;color:#111318!important;border-color:#cfd5dd!important;
+}
+.driver-auth input:focus,.pod-form input:focus,.pod-form textarea:focus{outline:none!important;border-color:#111318!important;box-shadow:0 0 0 3px rgba(17,19,24,.1)!important}
+.driver-top{background:rgba(255,255,255,.94)!important;color:#111318!important;border-color:#dfe3e8!important;box-shadow:0 1px 10px rgba(16,24,40,.05)!important}
+.driver-main{color:#111318!important}
+.driver-welcome{background:linear-gradient(135deg,#111318,#24272d)!important;color:#fff!important}
+.driver-welcome h1{color:#fff!important}.driver-welcome p,.driver-welcome small{color:#d1d5db!important}
+.job-card.active{border-color:#111318!important;box-shadow:0 12px 34px rgba(16,24,40,.12)!important}
+.job-route{background:#f7f8fa!important;color:#344054!important}
+.job-route p{color:#344054!important}
+.status{background:#eef1f4!important;color:#344054!important}
+.progress span{background:#d0d5dd!important}.progress span.done{background:#111318!important}
+.btn.primary{background:#111318!important;color:#fff!important;border:1px solid #111318!important}
+.btn.secondary{background:#fff!important;color:#111318!important;border:1px solid #cfd5dd!important}
+.btn.danger{background:#b42318!important;color:#fff!important}
+.btn:disabled{background:#e7eaee!important;color:#98a2b3!important;border-color:#d7dce2!important;opacity:1!important}
+.driver-msg.ok,.active-banner{background:#ecfdf3!important;color:#067647!important;border-color:#abefc6!important}
+.driver-msg.error{background:#fef3f2!important;color:#b42318!important;border-color:#fecdca!important}
+.empty{background:#fafbfc!important;color:#667085!important;border-color:#d8dde4!important}
+.pod-overlay{background:rgba(17,24,39,.58)!important;backdrop-filter:blur(4px)}
+.signature-wrap{background:#fff!important;border-color:#dfe3e8!important}
+@media(max-width:600px){.driver-top{background:rgba(255,255,255,.97)!important}}

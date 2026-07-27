@@ -1,18 +1,19 @@
-KLS SameDay Office v27.3 — Accessibility & Responsive Polish
+KLS SameDay Office v28.0 — Premium SaaS Edition
 
 Before upload
 - Extract the ZIP
-- Upload all files over the current GitHub project
+- Upload all files and the icons folder over the current GitHub project
 - Keep config.js included
 
 After deployment
-- Hard refresh the browser
-- Check Dashboard, Jobs, CRM, Dispatch and Settings
-- Test at normal desktop width and a narrow browser width
-- Confirm primary, secondary and disabled buttons are readable
-- Confirm tables scroll horizontally on smaller screens
+- Wait for Vercel to finish deploying
+- Hard refresh with Command + Shift + R
+- Check Dashboard, Dispatch, CRM, Fleet, Calendar, Accounts and Driver App
+- Confirm working panels are white with dark readable text
+- Confirm only hero banners, active navigation and primary buttons remain black
 
 Validation
 - JavaScript syntax checked
 - JSON checked
-- Version and service-worker cache updated to v27.3
+- CSS brace balance checked
+- Service-worker cache updated to v28.0

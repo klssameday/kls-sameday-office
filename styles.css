@@ -1075,3 +1075,212 @@ button:not(:disabled):active,.btn:not(:disabled):active{transform:translateY(1px
     color:#000!important;
   }
 }
+
+/* =========================================================
+   KLS SameDay Office v28.0 — Premium SaaS design system
+   One consistent light workspace, dark text and black accents.
+   ========================================================= */
+:root{
+  --bg:#f4f6f8;
+  --surface:#ffffff;
+  --surface-soft:#f8fafc;
+  --surface-muted:#eef1f4;
+  --text:#111318;
+  --text-soft:#4b5563;
+  --muted:#667085;
+  --line:#dfe3e8;
+  --line-strong:#c8ced6;
+  --panel:#ffffff;
+  --shadow-sm:0 1px 2px rgba(16,24,40,.05),0 1px 3px rgba(16,24,40,.08);
+  --shadow-md:0 10px 30px rgba(16,24,40,.08);
+  color:var(--text);
+  background:var(--bg);
+}
+html,body{background:var(--bg)!important;color:var(--text)!important}
+body{min-height:100vh}
+main{background:var(--bg)!important;color:var(--text)!important}
+
+/* Main shell and navigation */
+.shell{background:var(--bg)!important}
+.side,.sidebar{
+  background:#fff!important;color:var(--text)!important;border-right:1px solid var(--line)!important;
+  box-shadow:4px 0 20px rgba(16,24,40,.03)!important;
+}
+.logo b,.authbrand b{background:#111318!important;color:#fff!important;border-color:#111318!important}
+.logo span,.side strong,.side b,.sidebar strong,.sidebar b{color:var(--text)!important}
+.account,.sidefooter,.sidefooter span,.sidefooter small{color:var(--muted)!important;border-color:var(--line)!important}
+.side nav button,.sidebar nav button{color:#4b5563!important;background:transparent!important;border:1px solid transparent!important}
+.side nav button:hover,.sidebar nav button:hover{background:#f3f4f6!important;color:#111318!important;border-color:#e5e7eb!important}
+.side nav button.active,.sidebar nav button.active{background:#111318!important;color:#fff!important;border-color:#111318!important;box-shadow:0 8px 18px rgba(17,19,24,.16)!important}
+.sidefooter button,.close{background:#fff!important;color:#111318!important;border-color:var(--line-strong)!important}
+header,.topbar{background:rgba(244,246,248,.92)!important;color:var(--text)!important;border-bottom:1px solid rgba(223,227,232,.75)!important;backdrop-filter:blur(16px)}
+header h1,header strong,.topbar h1,.topbar strong{color:var(--text)!important}
+header p,header small,.topbar p,.topbar small{color:var(--muted)!important}
+
+/* Universal surfaces */
+.card,.panel,.planner-panel,.customermodal,.modal,.drawer,.modal-card,
+.command-panel,.live-map-panel,.calendar-wrap,.quote-builder-head,.extras-box,
+.customergrid article,.historygrid>div,.crm-card,.crm-timeline,.crm-account,
+.driver-card,.driver-manager,.driver-dispatch-card,.fleet-card,.schedule-toolbar,
+.accounts-card,.report-card,.pipeline-card,.communication-card,.settings-card,
+[class$="-panel"],[class$="-card"]{
+  background:var(--surface)!important;color:var(--text)!important;border-color:var(--line)!important;
+  box-shadow:var(--shadow-sm)!important;
+}
+.card:hover,.panel:hover,.crm-card:hover,.fleet-card:hover,.driver-card:hover,[class$="-card"]:hover{
+  border-color:var(--line-strong)!important;box-shadow:var(--shadow-md)!important;
+}
+.card>span,.customerstats>div,.mini-metrics>div,.fleet-dates p,
+.crm-card-stats>div,.metric,.kpi,.stat-card,.summary-card{
+  background:var(--surface-soft)!important;color:var(--text)!important;border-color:var(--line)!important;
+}
+
+/* Dark premium accents only */
+.hero,.ops-hero,.crm-hero,.fleet-hero,.schedule-hero,.accounts-hero,
+.dispatch-toolbar,.finance-strip,.welcome-banner,.premium-banner,.dark-banner,
+.command-hero,[class*="hero-banner"]{
+  background:linear-gradient(135deg,#111318,#24272d)!important;color:#fff!important;
+  border-color:#2f333a!important;box-shadow:0 16px 38px rgba(17,19,24,.18)!important;
+}
+.hero *,.ops-hero *,.crm-hero *,.fleet-hero *,.schedule-hero *,.accounts-hero *,
+.dispatch-toolbar *,.finance-strip *,.welcome-banner *,.premium-banner *,.dark-banner *,
+.command-hero *,[class*="hero-banner"] *{color:#fff!important}
+.hero p,.ops-hero p,.crm-hero p,.fleet-hero p,.schedule-hero p,.accounts-hero p,
+.dispatch-toolbar p,.finance-strip p,.welcome-banner p,.premium-banner p,.dark-banner p,
+.hero small,.ops-hero small,.crm-hero small,.fleet-hero small,.schedule-hero small,
+.accounts-hero small,.dispatch-toolbar small,.finance-strip small{color:#d1d5db!important}
+.hero .secondary,.ops-hero .secondary,.crm-hero .secondary,.fleet-hero .secondary,
+.schedule-hero .secondary,.accounts-hero .secondary,.dispatch-toolbar .secondary{
+  background:#fff!important;color:#111318!important;border-color:#fff!important;
+}
+
+/* Text hierarchy — never inherit dark-on-dark colours */
+h1,h2,h3,h4,h5,h6,strong,b{color:var(--text)!important}
+p,span,small,em,i,.muted,label em{color:var(--text-soft)!important}
+.card small,.panel small,.card em,.panel em,.panel p,.card p{color:var(--muted)!important}
+.hero h1,.hero h2,.hero h3,.hero strong,.hero b,
+.ops-hero h1,.ops-hero h2,.ops-hero h3,.crm-hero h1,.crm-hero h2,.crm-hero h3,
+.fleet-hero h1,.fleet-hero h2,.schedule-hero h1,.schedule-hero h2,
+.accounts-hero h1,.accounts-hero h2,.dispatch-toolbar h1,.dispatch-toolbar h2,
+.finance-strip h1,.finance-strip h2,.welcome-banner h1,.welcome-banner h2,
+.premium-banner h1,.premium-banner h2,.dark-banner h1,.dark-banner h2{color:#fff!important}
+
+/* Forms */
+label{color:#344054!important}
+input,textarea,select,.search,.search input,
+label input,label textarea,label select,.driver-manager input,.driver-availability select,
+.dispatch-assignment select,.quote-total-card input{
+  background:#fff!important;color:#111318!important;border-color:#cfd5dd!important;
+}
+input::placeholder,textarea::placeholder{color:#98a2b3!important}
+input:focus,textarea:focus,select:focus,.search:focus-within,
+label input:focus,label textarea:focus,label select:focus{
+  outline:none!important;border-color:#111318!important;box-shadow:0 0 0 3px rgba(17,19,24,.1)!important;
+}
+
+/* Buttons */
+.primary,.btn.primary,td button:not(.alt),.button-primary{
+  background:#111318!important;color:#fff!important;border:1px solid #111318!important;
+}
+.primary:hover,.btn.primary:hover,td button:not(.alt):hover,.button-primary:hover{background:#292d34!important;border-color:#292d34!important}
+.secondary,.btn.secondary,td button.alt,.button-link,.hamb{
+  background:#fff!important;color:#111318!important;border:1px solid #cfd5dd!important;
+}
+.secondary:hover,.btn.secondary:hover,td button.alt:hover,.button-link:hover,.hamb:hover{background:#f4f6f8!important;border-color:#aeb6c1!important}
+.danger,.btn.danger{background:#b42318!important;color:#fff!important;border-color:#b42318!important}
+button:disabled,.btn:disabled{background:#e7eaee!important;color:#98a2b3!important;border-color:#d7dce2!important;opacity:1!important;cursor:not-allowed!important}
+
+/* Tables */
+.tablewrap,.table-wrap,.data-table-wrap{background:#fff!important;border:1px solid var(--line)!important;border-radius:16px!important;box-shadow:var(--shadow-sm)!important}
+table{background:#fff!important;color:var(--text)!important}
+th{background:#f7f8fa!important;color:#475467!important;border-color:var(--line)!important;font-weight:800!important}
+td{background:#fff!important;color:#1d2939!important;border-color:#edf0f3!important}
+tbody tr:nth-child(even) td{background:#fbfcfd!important}
+tbody tr:hover td{background:#f4f6f8!important}
+td i,td small{color:#667085!important}
+td select{background:#f2f4f7!important;color:#344054!important;border:1px solid #d0d5dd!important}
+
+/* Dashboard command centre */
+.command-kpis,.dashboard-cards,.ops-kpis,.crm-kpis,.fleet-kpis,.accounts-kpis,.dispatch-kpis{
+  gap:16px!important;
+}
+.dashboard-card,.command-kpis .card{
+  min-height:118px!important;padding:22px!important;border-radius:18px!important;
+}
+.dashboard-card>span,.command-kpis .card>span{background:#111318!important;color:#fff!important;border-radius:13px!important}
+.dashboard-card b,.command-kpis .card b{font-size:28px!important;letter-spacing:-.03em!important;color:#111318!important}
+.dashboard-card em,.command-kpis .card em{color:#667085!important}
+.dashboard-grid,.operations-layout,.fleet-layout,.accounts-layout,.schedule-lower{gap:20px!important}
+.attention-list button,.all-clear,.ops-list-row,.schedule-list button,.repeat-list p,
+.dispatch-assignment,.driver-assignment-strip,.track-stops,.eta-box{
+  background:#fff!important;color:#111318!important;border-color:var(--line)!important;
+}
+.attention-list button:hover,.ops-list-row:hover,.schedule-list button:hover{background:#f7f8fa!important;border-color:var(--line-strong)!important}
+.all-clear{background:#ecfdf3!important;color:#067647!important;border-color:#abefc6!important}
+.all-clear *{color:#067647!important}
+
+/* Dispatch, CRM, driver management, fleet and calendar */
+.dispatch-column,.dispatch-card,.dispatch-route,.planner-job,.crm-card,.crm-timeline,.crm-account,
+.driver-card,.driver-route p,.driver-dispatch-card,.driver-job-stack,.fleet-card,.fleet-dates p,
+.calendar-day,.calendar-job,.schedule-list button,.ops-list-row{
+  background:#fff!important;color:#111318!important;border-color:var(--line)!important;
+}
+.dispatch-column{background:#f7f8fa!important}
+.dispatch-column-head>span,.calendar-date span,.driver-card-head>span,.schedule-list em,.ops-list-row em,
+.crm-event>span,.planner-job-head span{background:#eef1f4!important;color:#344054!important}
+.dispatch-card-head b,.dispatch-card h3,.dispatch-route p,.planner-job h3,.planner-job p,
+.crm-card-head strong,.crm-contact,.crm-last span,.driver-card-head h3,.driver-route p,
+.fleet-card-head h3,.calendar-date b,.calendar-job b,.calendar-job span{color:#1d2939!important}
+.dispatch-card-head span,.dispatch-meta span,.dispatch-route small,.planner-job p small,
+.crm-card-head p,.crm-card-stats small,.crm-last small,.driver-card-head small,.driver-route small,
+.fleet-card-head small,.fleet-card-head p,.fleet-dates small,.calendar-job small,.schedule-list small{color:#667085!important}
+.dispatch-meta,.crm-contact,.crm-last,.fleet-cost,.fleet-log p,.repeat-list p{border-color:var(--line)!important}
+.live-map-panel,.map-empty{background:#fff!important;color:#111318!important;border-color:var(--line)!important}
+.dispatch-map{background:#eef1f4!important;border-color:var(--line)!important}
+.leaflet-popup-content-wrapper,.leaflet-popup-tip{background:#fff!important;color:#111318!important}
+.calendar-weekdays b{background:#f2f4f7!important;color:#475467!important}
+.calendar-day.today{box-shadow:inset 0 0 0 2px #111318!important}
+.calendar-day.outside{background:#f8fafc!important;opacity:.65!important}
+.calendar-job{background:#eef1f4!important;color:#111318!important;cursor:grab!important}
+
+/* Modals and overlays */
+.modalback,.modal-backdrop,.pod-overlay{background:rgba(17,24,39,.58)!important;backdrop-filter:blur(4px)}
+.customermodal,.modal,.drawer,.modal-card{background:#fff!important;color:#111318!important;border-color:var(--line)!important}
+.modalhead>button{background:#f2f4f7!important;color:#111318!important;border:1px solid var(--line)!important}
+.crm-notes{background:#f7f8fa!important;color:#344054!important}
+
+/* Notices and status states */
+.notice.ok,.driver-msg.ok,.delivered-box,.active-banner{background:#ecfdf3!important;color:#067647!important;border-color:#abefc6!important}
+.notice.error,.driver-msg.error{background:#fef3f2!important;color:#b42318!important;border-color:#fecdca!important}
+.notice.info,.eta-box{background:#eff8ff!important;color:#175cd3!important;border-color:#b2ddff!important}
+.notice.ok *,.driver-msg.ok *,.delivered-box *,.active-banner *{color:#067647!important}
+.notice.error *,.driver-msg.error *{color:#b42318!important}
+.notice.info *,.eta-box *{color:#175cd3!important}
+.fleet-alerts>div{background:#fffaeb!important;color:#b54708!important;border-color:#fedf89!important}
+.warning-text{color:#b54708!important}
+
+/* Authentication, public tracking and offline-style screens */
+.authwrap,.public-track{background:linear-gradient(135deg,#eef1f4,#dfe3e8)!important}
+.authcard,.track-card{background:#fff!important;color:#111318!important;border-color:var(--line)!important;box-shadow:0 24px 70px rgba(16,24,40,.15)!important}
+.authcard p,.track-card p,.track-card small,.track-card footer{color:#667085!important}
+.track-progress span{background:#d0d5dd!important}.track-progress span.done{background:#111318!important}
+.track-route p,.track-waiting,.track-update{background:#f7f8fa!important;color:#344054!important}
+.track-logo b,.track-logo span,.track-card h1{color:#111318!important}
+
+/* Empty/loading states */
+.empty,.loading,.dashboard-empty,.planner-empty,.fleet-empty,.ops-clear,.dispatch-empty,.map-empty{
+  color:#667085!important;background:#fafbfc!important;border-color:#d8dde4!important;
+}
+.dashboard-empty b,.planner-empty b,.fleet-empty b{color:#111318!important}
+
+/* Better content rhythm */
+.panel,.planner-panel,.live-map-panel{border-radius:18px!important}
+.panelhead{margin-bottom:18px!important}
+.panelhead h2{letter-spacing:-.02em!important}
+.actions{background:transparent!important}
+
+@media(max-width:700px){
+  .side,.sidebar{box-shadow:18px 0 40px rgba(16,24,40,.18)!important}
+  header,.topbar{background:rgba(244,246,248,.97)!important}
+  .dashboard-card,.command-kpis .card{min-height:104px!important;padding:18px!important}
+}

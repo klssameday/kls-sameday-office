@@ -1,18 +1,17 @@
-# KLS SameDay Office v28.1
+# KLS SameDay Office v29.0
 
-## Professional UX Polish
+## Operations Command Centre
 
-This release retains every working v28.0 feature and improves day-to-day interaction:
+This milestone upgrades the dashboard into a clearer commercial operations command centre while retaining every working v28.1 feature.
 
-- Quick page navigation with Ctrl/Command + K
-- Searchable command palette
-- Smoother page and notification transitions
-- Success messages dismiss automatically
-- Stronger keyboard focus indicators
-- Improved loading and empty states
-- Refined table hover feedback
-- Escape-key support for overlays
-- Matching driver-app interaction polish
-- Reduced-motion accessibility support
+- Live command-centre header and clock
+- Next collection visibility
+- Daily completion rate
+- Driver utilisation indicator
+- Clear system position and alerts
+- Stronger dashboard hierarchy and spacing
+- Refined live map, dispatch snapshot, activity and KPI panels
+- Responsive desktop, tablet and mobile layouts
+- Updated PWA cache and asset versions
 
-Commit summary: `Add professional UX polish and quick navigation in KLS SameDay Office v28.1`
+Commit summary: `Launch KLS SameDay Office v29.0 Operations Command Centre`

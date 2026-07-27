@@ -1,19 +1,19 @@
-KLS SameDay Office v28.1 — Professional UX Polish
+KLS SameDay Office v29.0 — Operations Command Centre
 
 Before upload
 - Extract the ZIP
-- Upload every file and the icons folder over the current GitHub project
-- Keep your working config.js included
+- Upload all files over the current GitHub project
+- Keep config.js included
+- Include the icons folder
 
 After deployment
-- Hard refresh with Command + Shift + R
-- Press Command + K and test quick navigation
-- Check Dashboard, Jobs, Dispatch, CRM and Settings
-- Confirm success notifications close after a few seconds
-- Confirm Escape closes the command palette and open overlays
-- Test the Driver App
+- Hard refresh the browser
+- Open Dashboard and confirm the command-centre header appears
+- Confirm Next Collection, Completion Rate and Driver Utilisation display
+- Test Dashboard, Dispatch, Jobs, CRM and Driver App
+- Test desktop and narrow browser widths
 
 Validation
 - JavaScript syntax checked
 - JSON checked
-- Service-worker cache updated to v28.1
+- Version and service-worker cache updated to v29.0

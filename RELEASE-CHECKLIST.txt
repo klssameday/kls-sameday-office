@@ -1,7 +1,7 @@
-KLS SameDay Office v26.38
+KLS SameDay Office v26.39
 
 1. Upload every file and the icons folder to the existing GitHub repository.
-2. Summary required: Add KLS SameDay Office v26.38 Data Export Centre
-3. Commit changes and wait for Vercel deployment.
-4. Sign in, open Settings and test one CSV export.
-5. Confirm the System Health panel still shows CONNECTED.
+2. Summary required: Upgrade KLS SameDay Office to v26.39 Operations Workflow
+3. Commit changes and allow Vercel to deploy.
+4. Hard refresh the live app.
+5. Open Jobs, search by phone/postcode, open a job and test the workflow action bar.

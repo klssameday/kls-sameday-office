@@ -72,6 +72,7 @@
     notice: null,
     loading: true,
     jobEditorId: null,
+    jobSearch: '',
     authMode: 'signin',
     selectedCustomerId: null,
     quoteCustomerId: null,
@@ -410,37 +411,78 @@
     </article>`;
   }
 
+  function jobWorkflow(job) {
+    const quote = state.quotes.find(item => item.job_id === job.id || (job.quote_id && item.id === job.quote_id));
+    const invoice = state.invoices.find(item => item.job_id === job.id);
+    const paid = invoice && invoiceBalance(invoice) <= 0;
+    return [
+      {label:'Quoted', done:Boolean(quote || job.quote_status), date:quote?.created_at || job.created_at},
+      {label:'Booked', done:true, date:job.created_at || job.collection_date},
+      {label:'Assigned', done:Boolean(job.assigned_driver_id), date:job.assigned_at || job.updated_at},
+      {label:'Collected', done:Boolean(job.collected_at || ['Collected','In Transit','Arrived at Delivery','Delivered'].includes(job.job_status)), date:job.collected_at},
+      {label:'Delivered', done:Boolean(job.delivered_at || job.job_status === 'Delivered'), date:job.delivered_at},
+      {label:'Invoiced', done:Boolean(invoice || job.invoice_status === 'Invoiced'), date:invoice?.issue_date || job.invoice_date},
+      {label:'Paid', done:Boolean(paid), date:paid ? (invoice.paid_date || invoice.updated_at) : null}
+    ];
+  }
+
+  function jobNavigationUrl(address) {
+    return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address || '')}`;
+  }
+
+  function jobCustomer(job) {
+    return state.customers.find(customer => customer.id === job.customer_id) || {};
+  }
+
   function jobEditorModal() {
     const job = state.jobs.find(j => j.id === state.jobEditorId);
     if (!job) return '';
     const driver = state.drivers.find(d => d.id === job.assigned_driver_id);
-    const timeline = [
-      ['Created', job.created_at],
-      ['Assigned', job.assigned_at || (job.assigned_driver_id ? job.updated_at : null)],
-      ['Collected', job.collected_at],
-      ['Delivered', job.delivered_at]
-    ].filter(([,value])=>value);
+    const customer = jobCustomer(job);
+    const workflow = jobWorkflow(job);
+    const invoice = state.invoices.find(item => item.job_id === job.id);
     const pod = job.pod_photo_url || job.pod_signature_url || job.recipient_name;
+    const nextStatus = ({'Booked':'En Route to Collection','En Route to Collection':'Arrived at Collection','Arrived at Collection':'Collected','Collected':'In Transit','In Transit':'Arrived at Delivery','Arrived at Delivery':'Delivered'})[job.job_status];
+    const etaText = `${state.settings.trading_name}: ${job.job_number || 'Your delivery'} is ${job.job_status || 'booked'}${job.eta_at ? `. ETA ${new Date(job.eta_at).toLocaleString('en-GB')}` : ''}. ${job.tracking_token ? `Track: ${trackingUrl(job)}` : ''}`;
     return `<div class="modalback" data-action="job-close"><section class="customermodal job-editor-modal job-command-drawer" onclick="event.stopPropagation()">
-      <div class="modalhead"><div><small>LIVE JOB CONTROL</small><h2>${esc(job.job_number || 'Job')}</h2><p>${esc(job.customer_name || job.contact_name || '')}</p></div><button type="button" data-action="job-close">×</button></div>
+      <div class="modalhead"><div><small>OPERATIONS WORKFLOW</small><h2>${esc(job.job_number || 'Job')}</h2><p>${esc(job.customer_name || job.contact_name || '')}</p></div><button type="button" data-action="job-close">×</button></div>
+      <div class="job-workflow">${workflow.map(step=>`<div class="${step.done?'done':''}"><span>${step.done?'✓':''}</span><b>${step.label}</b><small>${step.date?fmtDate(step.date):'Pending'}</small></div>`).join('')}</div>
+      <div class="job-action-bar">
+        <button class="secondary" type="button" data-focus-driver>Assign driver</button>
+        ${nextStatus?`<button class="primary" type="button" data-job-next-status="${esc(nextStatus)}">Mark ${esc(nextStatus)}</button>`:''}
+        <a class="secondary button-link" target="_blank" rel="noopener" href="${jobNavigationUrl(job.collection_address)}">Navigate collection</a>
+        <a class="secondary button-link" target="_blank" rel="noopener" href="${jobNavigationUrl(job.delivery_address)}">Navigate delivery</a>
+        <button class="secondary" type="button" data-send-job-eta data-message="${esc(etaText)}">Send ETA</button>
+        ${job.job_status==='Delivered'&&!invoice?`<button class="primary" type="button" data-invoice="${job.id}">Create invoice</button>`:''}
+        ${invoice?`<button class="secondary" type="button" data-page="invoices">Open invoice</button>`:''}
+        ${pod?`<button class="secondary" type="button" data-print-pod="${job.id}">Open POD</button>`:''}
+      </div>
       <div class="job-command-summary"><div><small>STATUS</small><b>${esc(job.job_status || 'Booked')}</b></div><div><small>DRIVER</small><b>${esc(driver?.name || 'Unassigned')}</b></div><div><small>VEHICLE</small><b>${esc(job.vehicle || 'TBC')}</b></div><div><small>VALUE</small><b>${money(job.total_price)}</b></div></div>
-      <div class="job-command-layout"><form id="job-editor-form" class="job-command-form"><div class="grid two"><label>Collection date<input name="collection_date" type="date" value="${esc(String(job.collection_date||'').slice(0,10))}"></label><label>Collection time<input name="collection_time" type="time" value="${esc(String(job.collection_time||'').slice(0,5))}"></label><label>Vehicle<select name="vehicle">${Object.keys(vehicles).map(v=>`<option ${job.vehicle===v?'selected':''}>${v}</option>`).join('')}</select></label><label>Status<select name="job_status">${['Booked','En Route to Collection','Arrived at Collection','Collected','In Transit','Arrived at Delivery','Delivered','Cancelled'].map(v=>`<option ${job.job_status===v?'selected':''}>${v}</option>`).join('')}</select></label><label>Assigned driver<select name="assigned_driver_id"><option value="">Unassigned</option>${state.drivers.map(d=>`<option value="${d.id}" ${job.assigned_driver_id===d.id?'selected':''}>${esc(d.name)} · ${esc(d.vehicle||'Vehicle TBC')}</option>`).join('')}</select></label><label>Job price (£)<input name="total_price" type="number" min="0" step="0.01" value="${Number(job.total_price||0)}"></label></div><label>Collection address<textarea name="collection_address" required>${esc(job.collection_address||'')}</textarea></label><label>Delivery address<textarea name="delivery_address" required>${esc(job.delivery_address||'')}</textarea></label><label>Goods / job details<textarea name="goods_description">${esc(job.goods_description||'')}</textarea></label><div class="actions"><button type="button" class="secondary" data-action="job-close">Cancel</button><button class="primary">Save job</button></div></form>
-      <aside class="job-command-side"><section><h3>Live timeline</h3>${timeline.length ? `<div class="job-timeline">${timeline.map(([label,value])=>`<p><span></span><b>${label}</b><small>${new Date(value).toLocaleString('en-GB')}</small></p>`).join('')}</div>` : '<p class="muted">Timeline starts when the driver updates this job.</p>'}</section><section><h3>Proof of delivery</h3>${pod ? `<div class="job-pod-preview">${job.pod_photo_url?`<a href="${esc(job.pod_photo_url)}" target="_blank" rel="noopener">View delivery photo</a>`:''}${job.pod_signature_url?`<a href="${esc(job.pod_signature_url)}" target="_blank" rel="noopener">View signature</a>`:''}${job.recipient_name?`<p><small>RECEIVED BY</small><b>${esc(job.recipient_name)}</b></p>`:''}${job.pod_notes?`<p>${esc(job.pod_notes)}</p>`:''}</div>`:'<p class="muted">POD will appear here after delivery.</p>'}</section></aside></div>
+      <div class="job-command-layout"><form id="job-editor-form" class="job-command-form"><div class="grid two"><label>Collection date<input name="collection_date" type="date" value="${esc(String(job.collection_date||'').slice(0,10))}"></label><label>Collection time<input name="collection_time" type="time" value="${esc(String(job.collection_time||'').slice(0,5))}"></label><label>Vehicle<select name="vehicle">${Object.keys(vehicles).map(v=>`<option ${job.vehicle===v?'selected':''}>${v}</option>`).join('')}</select></label><label>Status<select name="job_status">${['Booked','En Route to Collection','Arrived at Collection','Collected','In Transit','Arrived at Delivery','Delivered','Cancelled'].map(v=>`<option ${job.job_status===v?'selected':''}>${v}</option>`).join('')}</select></label><label id="job-driver-field">Assigned driver<select name="assigned_driver_id"><option value="">Unassigned</option>${state.drivers.map(d=>`<option value="${d.id}" ${job.assigned_driver_id===d.id?'selected':''}>${esc(d.name)} · ${esc(d.vehicle||'Vehicle TBC')}</option>`).join('')}</select></label><label>Job price (£)<input name="total_price" type="number" min="0" step="0.01" value="${Number(job.total_price||0)}"></label></div><label>Collection address<textarea name="collection_address" required>${esc(job.collection_address||'')}</textarea></label><label>Delivery address<textarea name="delivery_address" required>${esc(job.delivery_address||'')}</textarea></label><label>Goods / job details<textarea name="goods_description">${esc(job.goods_description||'')}</textarea></label><div class="actions"><button type="button" class="secondary" data-action="job-close">Cancel</button><button class="primary">Save job</button></div></form>
+      <aside class="job-command-side"><section><h3>Customer contact</h3><div class="job-contact-card"><b>${esc(customer.contact_name || job.contact_name || job.customer_name || 'Customer')}</b><span>${esc(customer.phone || job.contact_phone || 'No phone saved')}</span><span>${esc(customer.email || job.contact_email || 'No email saved')}</span>${customer.phone?`<a class="secondary button-link" href="tel:${esc(customer.phone)}">Call customer</a>`:''}</div></section><section><h3>Proof of delivery</h3>${pod ? `<div class="job-pod-preview">${job.pod_photo_url?`<a href="${esc(job.pod_photo_url)}" target="_blank" rel="noopener">View delivery photo</a>`:''}${job.pod_signature_url?`<a href="${esc(job.pod_signature_url)}" target="_blank" rel="noopener">View signature</a>`:''}${job.recipient_name?`<p><small>RECEIVED BY</small><b>${esc(job.recipient_name)}</b></p>`:''}${job.pod_notes?`<p>${esc(job.pod_notes)}</p>`:''}</div>`:'<p class="muted">POD will appear here after delivery.</p>'}</section></aside></div>
     </section></div>`;
   }
 
   function jobsView() {
+    const term = String(state.jobSearch || '').trim().toLowerCase();
+    const visibleJobs = state.jobs.filter(job => {
+      if (!term) return true;
+      const customer = jobCustomer(job);
+      const driver = state.drivers.find(item => item.id === job.assigned_driver_id);
+      const haystack = [job.job_number,job.customer_name,job.contact_name,job.collection_address,job.delivery_address,job.vehicle,job.job_status,driver?.name,customer.phone,customer.email].join(' ').toLowerCase();
+      return haystack.includes(term);
+    });
     const columns = [
-      ['waiting','Waiting',state.jobs.filter(j=>jobStatusGroup(j.job_status)==='waiting')],
-      ['active','In progress',state.jobs.filter(j=>jobStatusGroup(j.job_status)==='active')],
-      ['delivered','Delivered',state.jobs.filter(j=>jobStatusGroup(j.job_status)==='delivered')],
-      ['cancelled','Cancelled',state.jobs.filter(j=>jobStatusGroup(j.job_status)==='cancelled')]
+      ['waiting','Waiting',visibleJobs.filter(j=>jobStatusGroup(j.job_status)==='waiting')],
+      ['active','In progress',visibleJobs.filter(j=>jobStatusGroup(j.job_status)==='active')],
+      ['delivered','Delivered',visibleJobs.filter(j=>jobStatusGroup(j.job_status)==='delivered')],
+      ['cancelled','Cancelled',visibleJobs.filter(j=>jobStatusGroup(j.job_status)==='cancelled')]
     ];
-    const activeCount = columns[1][2].length;
+    const activeCount = state.jobs.filter(j=>jobStatusGroup(j.job_status)==='active').length;
     const unassigned = state.jobs.filter(j=>!j.assigned_driver_id && !['Delivered','Cancelled'].includes(j.job_status)).length;
-    return `<section class="jobs-command-hero"><div><small>LIVE OPERATIONS</small><h2>Jobs Control Centre</h2><p>Assign drivers, follow every stage and open POD from one screen.</p></div><div class="jobs-live-mark"><span class="dot"></span> Live updates</div></section>
-      <div class="jobs-command-kpis"><div><small>ALL JOBS</small><b>${state.jobs.length}</b></div><div><small>IN PROGRESS</small><b>${activeCount}</b></div><div><small>UNASSIGNED</small><b>${unassigned}</b></div><div><small>DELIVERED</small><b>${columns[2][2].length}</b></div></div>
-      <div class="jobs-board-toolbar"><label class="search">Search jobs <input id="job-search" placeholder="Job, customer, address or driver"></label><button class="primary" data-page="newquote">+ New quote</button></div>
+    return `<section class="jobs-command-hero"><div><small>V26.39 OPERATIONS WORKFLOW</small><h2>Jobs Control Centre</h2><p>Search, assign, navigate, update, invoice and open POD without leaving the job.</p></div><div class="jobs-live-mark"><span class="dot"></span> Live updates</div></section>
+      <div class="jobs-command-kpis"><div><small>ALL JOBS</small><b>${state.jobs.length}</b></div><div><small>IN PROGRESS</small><b>${activeCount}</b></div><div><small>UNASSIGNED</small><b>${unassigned}</b></div><div><small>DELIVERED</small><b>${state.jobs.filter(j=>jobStatusGroup(j.job_status)==='delivered').length}</b></div></div>
+      <div class="jobs-board-toolbar"><label class="search">Search every job field <input id="job-search" value="${esc(state.jobSearch||'')}" placeholder="Job, customer, phone, postcode, vehicle or driver"></label><span class="jobs-search-count">${visibleJobs.length} shown</span><button class="primary" data-page="newquote">+ New quote</button></div>
       <div class="jobs-kanban">${columns.map(([key,title,jobs])=>`<section class="jobs-board-column column-${key}"><header><div><h3>${title}</h3><small>${jobs.length} job${jobs.length===1?'':'s'}</small></div><span>${jobs.length}</span></header><div class="jobs-board-list">${jobs.length?jobs.map(jobBoardCard).join(''):`<div class="jobs-board-empty">No ${title.toLowerCase()} jobs</div>`}</div></section>`).join('')}</div>${jobEditorModal()}`;
   }
 
@@ -1495,7 +1537,7 @@ function systemHealthSummary() {
   function createSystemBackup() {
     const backup = {
       product:'KLS SameDay Office',
-      version:'26.38',
+      version:'26.39',
       exported_at:new Date().toISOString(),
       account:state.user?.email || null,
       business_settings:state.settings,
@@ -1531,7 +1573,7 @@ function systemHealthSummary() {
 
   function copySystemDiagnostics() {
     const diagnostics = [
-      'KLS SameDay Office v26.38',
+      'KLS SameDay Office v26.39',
       `Generated: ${new Date().toLocaleString('en-GB')}`,
       `Account: ${state.user?.email || 'Not signed in'}`,
       `Supabase: ${configured ? 'Connected' : 'Not configured'}`,
@@ -1600,7 +1642,7 @@ function systemHealthSummary() {
     const health = systemHealthSummary();
     const healthRows = health.map(item=>`<article class="system-check ${item.ok?'ok':'bad'}"><span>${item.ok?'✓':'!'}</span><div><b>${esc(item.label)}</b><small>${esc(item.detail)}</small></div></article>`).join('');
     const settingsPanel = panel('Business settings', `<form id="settings-form"><div class="grid two">${Object.entries(fields).map(([key,label]) => `<label>${label}<input name="${key}" value="${esc(state.settings[key] ?? '')}" ${key === 'default_terms' ? 'type="number"' : ''}></label>`).join('')}</div><div class="actions"><button class="primary">Save Settings</button></div></form><p class="saved">✓ Saved securely in Supabase.</p><hr class="portal-divider"><div class="portal-section-head"><div><h2>Customer Portal Access</h2><p>Ask the customer to create an account using their email address, then link that login here.</p></div><span>${state.portalAccessUsers.filter(u=>u.active).length} active</span></div><form id="portal-access-form"><div class="grid two"><label>Customer<select name="customer_id" required><option value="">Choose customer</option>${state.customers.map(c=>`<option value="${c.id}">${esc(c.company)}</option>`).join('')}</select></label><label>Customer login email<input name="email" type="email" required></label></div><div class="actions"><button class="primary">Enable Customer Portal</button></div></form><h3 class="linked-title">Linked customer accounts</h3>${linked}`);
-    const healthPanel = panel('System health & backup', `<div class="system-version"><div><small>CURRENT RELEASE</small><b>v26.38</b><span>Data export and release-safety upgrade</span></div><span class="system-live">${configured?'CONNECTED':'CHECK CONNECTION'}</span></div><div class="system-checks">${healthRows}</div><div class="system-backup-actions"><button class="primary" type="button" data-system-backup>Download full backup</button><button class="secondary" type="button" data-copy-diagnostics>Copy diagnostics</button></div><p class="system-help">The backup contains the records currently loaded in the office system plus device-only leads, defects, communications and profit assumptions. Keep it somewhere secure.</p>`, 'Use this section before major updates and when reporting a fault.');
+    const healthPanel = panel('System health & backup', `<div class="system-version"><div><small>CURRENT RELEASE</small><b>v26.39</b><span>Operations workflow and job action upgrade</span></div><span class="system-live">${configured?'CONNECTED':'CHECK CONNECTION'}</span></div><div class="system-checks">${healthRows}</div><div class="system-backup-actions"><button class="primary" type="button" data-system-backup>Download full backup</button><button class="secondary" type="button" data-copy-diagnostics>Copy diagnostics</button></div><p class="system-help">The backup contains the records currently loaded in the office system plus device-only leads, defects, communications and profit assumptions. Keep it somewhere secure.</p>`, 'Use this section before major updates and when reporting a fault.');
     const exportItems = [
       ['customers','Customers',state.customers.length],['quotes','Quotes',state.quotes.length],['jobs','Jobs',state.jobs.length],['invoices','Invoices',state.invoices.length],['expenses','Expenses',state.expenses.length],['drivers','Drivers',state.drivers.length],['fleet','Fleet',state.fleet.length],['communications','Communications',state.communications.length],['leads','Sales leads',state.leads.length]
     ];
@@ -2257,6 +2299,23 @@ function systemHealthSummary() {
     });
 
     document.querySelectorAll('[data-open-job]').forEach(button => button.onclick = () => { state.jobEditorId = button.dataset.openJob; render(); });
+    document.querySelector('[data-focus-driver]')?.addEventListener('click', () => { const field=document.getElementById('job-driver-field'); field?.scrollIntoView({behavior:'smooth',block:'center'}); field?.querySelector('select')?.focus(); });
+    document.querySelector('[data-send-job-eta]')?.addEventListener('click', async event => {
+      const job=state.jobs.find(item=>item.id===state.jobEditorId); if(!job)return;
+      const customer=jobCustomer(job); const message=event.currentTarget.dataset.message || '';
+      if(customer.phone){const phone=String(customer.phone).replace(/\D/g,'').replace(/^0/,'44');window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`,'_blank');}
+      else if(customer.email){location.href=`mailto:${encodeURIComponent(customer.email)}?subject=${encodeURIComponent(`Delivery update - ${job.job_number||'KLS SameDay'}`)}&body=${encodeURIComponent(message)}`;}
+      else{await navigator.clipboard?.writeText(message);showNotice('No customer phone or email saved. ETA message copied.','ok');render();}
+    });
+    document.querySelector('[data-job-next-status]')?.addEventListener('click', async event => {
+      const job=state.jobs.find(item=>item.id===state.jobEditorId); if(!job)return;
+      const status=event.currentTarget.dataset.jobNextStatus; const payload={job_status:status};
+      if(status==='Collected') payload.collected_at=new Date().toISOString();
+      if(status==='Delivered') payload.delivered_at=new Date().toISOString();
+      event.currentTarget.disabled=true;
+      const {data,error}=await db.from('jobs').update(payload).eq('id',job.id).select().single();
+      if(error){showNotice(error.message,'error');}else{Object.assign(job,data||payload);showNotice(`${job.job_number||'Job'} marked ${status}.`,'ok');}render();
+    });
     document.querySelectorAll('[data-action="job-close"]').forEach(button => button.onclick = () => { state.jobEditorId = null; render(); });
     document.getElementById('job-editor-form')?.addEventListener('submit', async event => {
       event.preventDefault();
@@ -2542,7 +2601,7 @@ function systemHealthSummary() {
     if(podForm) podForm.onsubmit=async e=>{e.preventDefault();const job=state.jobs.find(j=>j.id===state.selectedDriverJobId);const btn=podForm.querySelector('button.primary');btn.disabled=true;btn.textContent='Saving POD…';try{const fd=new FormData(podForm);let photoUrl=job.pod_photo_url||null;let signatureUrl=job.pod_signature_url||null;const photo=fd.get('pod_photo');if(photo&&photo.size){photoUrl=await uploadPodFile(job,photo,'photo');}if(canvas){const blank=document.createElement('canvas');blank.width=canvas.width;blank.height=canvas.height;if(canvas.toDataURL()!==blank.toDataURL()){const blob=await new Promise(r=>canvas.toBlob(r,'image/png'));signatureUrl=await uploadPodFile(job,blob,'signature');}}const position=await getOnePosition().catch(()=>null);const payload={recipient_name:fd.get('recipient_name'),pod_notes:fd.get('pod_notes')||null,pod_photo_url:photoUrl,pod_signature_url:signatureUrl,job_status:'Delivered',delivered_at:new Date().toISOString(),pod_latitude:position?.coords.latitude||job.last_latitude||null,pod_longitude:position?.coords.longitude||job.last_longitude||null};const{data,error}=await db.from('jobs').update(payload).eq('id',job.id).select().single();if(error)throw error;Object.assign(job,data);state.selectedDriverJobId=null;showNotice(`${job.job_number} POD saved and job delivered.`,'ok');render();}catch(error){showNotice(error.message,'error');render();}};
 
     const jobSearch = document.getElementById('job-search');
-    if (jobSearch) jobSearch.oninput = () => { const term=jobSearch.value.toLowerCase(); document.querySelectorAll('[data-job-card]').forEach(card=>card.style.display=card.textContent.toLowerCase().includes(term)?'':'none'); filterRows(jobSearch.value); };
+    if (jobSearch) jobSearch.oninput = event => { state.jobSearch = event.target.value; render(); requestAnimationFrame(()=>{const input=document.getElementById('job-search');if(input){input.focus();input.setSelectionRange(input.value.length,input.value.length);}}); };
     const customerSearch = document.getElementById('customer-search');
     const customerHealthFilter = document.getElementById('customer-health-filter');
     const filterCustomerRows = () => {

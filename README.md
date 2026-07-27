@@ -1,17 +1,15 @@
-# KLS SameDay Office v26.38
+# KLS SameDay Office v26.39
 
-Complete static web application for GitHub and Vercel deployment.
+Complete GitHub-ready operations workflow release.
 
-## v26.38 data export release
+## v26.39 additions
+- Unified seven-stage job workflow: quoted, booked, assigned, collected, delivered, invoiced and paid
+- Job action bar for driver assignment, status updates, navigation, ETA messages, invoicing and POD
+- Expanded job search across job number, customer, phone, email, address, postcode, vehicle and driver
+- Existing CRM customer activity timeline retained and integrated with job workflow
+- All v26.38 backup and data export tools retained
 
-- New Data Export Centre inside Settings
-- CSV downloads for customers, quotes, jobs, invoices, expenses, drivers, fleet, communications and sales leads
-- Spreadsheet-compatible UTF-8 exports
-- Existing full-system JSON backup and diagnostics retained
-- Supabase configuration and all existing modules preserved
+## Deployment
+Upload everything inside this folder over the existing GitHub repository.
 
-## Deploy
-
-Upload all files and the `icons` folder over the existing GitHub repository. Vercel should deploy automatically.
-
-Commit summary: `Add KLS SameDay Office v26.38 Data Export Centre`
+Commit summary: `Upgrade KLS SameDay Office to v26.39 Operations Workflow`

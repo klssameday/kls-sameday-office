@@ -103,7 +103,8 @@
     communicationSearch: '',
     financeTab: 'overview',
     financeForecastDays: 30,
-    biMonths: 6
+    biMonths: 6,
+    profitSettings: JSON.parse(localStorage.getItem('kls_profit_settings') || 'null') || { fuelPrice: 1.48, mpg: 25, wearPerMile: 0.22, hourlyCost: 18, fixedJobCost: 12, targetMargin: 30 }
   };
 
   let locationWatchId = null;
@@ -168,6 +169,7 @@
       ['documents','Delivery Documents'],
       ['accounts','Finance Centre'],
       ['businessintel','BI Dashboard'],
+      ['profitcentre','Job Profit Control'],
       ['reports','Business Reports']
     ]],
     ['System', [
@@ -180,13 +182,13 @@
     dispatch:'Live Dispatch', drivers:'Driver Control', exchange:'Driver Exchange', driver:'Driver App', tracking:'Live Tracking',
     fleet:'Fleet Management', fleetcentre:'Driver & Fleet Centre', schedule:'Booking Calendar', portalrequests:'Customer Portal',
     quoterequests:'Online Requests', pipeline:'Sales Pipeline', newquote:'New Quote', quotes:'Quotes', jobs:'Jobs',
-    invoices:'Invoices', documents:'Delivery Documents', accounts:'Finance Centre', businessintel:'Business Intelligence Dashboard', reports:'Business Reports', customers:'Customers', communications:'Automated Communications', settings:'Settings'
+    invoices:'Invoices', documents:'Delivery Documents', accounts:'Finance Centre', businessintel:'Business Intelligence Dashboard', profitcentre:'Job Profit Control', reports:'Business Reports', customers:'Customers', communications:'Automated Communications', settings:'Settings'
   };
 
   const navIcons = {
     dashboard:'⌂', aiassistant:'✦', operations:'◷', dispatch:'⇄', jobs:'▤', newquote:'＋', quotes:'◫',
     quoterequests:'↧', pipeline:'◆', customers:'◎', portalrequests:'◉', drivers:'♙', fleetcentre:'▣', driver:'♙', tracking:'⌖',
-    exchange:'⇆', routes:'◇', schedule:'□', invoices:'£', documents:'▧', accounts:'◌', businessintel:'◈', reports:'▥', communications:'✉', settings:'⚙'
+    exchange:'⇆', routes:'◇', schedule:'□', invoices:'£', documents:'▧', accounts:'◌', businessintel:'◈', profitcentre:'%', reports:'▥', communications:'✉', settings:'⚙'
   };
 
   function layout(content) {
@@ -771,6 +773,42 @@
       <section class="bi-grid"><div class="panel bi-trend"><div class="panelhead"><div><h2>Commercial trend</h2><p>Booked revenue, cash received and operating costs.</p></div><div class="bi-legend"><span><i class="booked"></i>Booked</span><span><i class="received"></i>Received</span><span><i class="cost"></i>Costs</span></div></div><div class="bi-trend-chart">${trendChart}</div></div><div class="panel"><div class="panelhead"><div><h2>Decision alerts</h2><p>Automatically identified priorities.</p></div></div><div class="bi-insights">${insights.map(x=>`<button class="${x.tone}" data-page="${x.page}"><span>!</span><div><b>${esc(x.title)}</b><small>${esc(x.text)}</small></div><strong>→</strong></button>`).join('')}</div></div></section>
       <section class="bi-summary"><article><small>REPEAT CUSTOMER RATE</small><b>${repeatRate.toFixed(0)}%</b><p>${repeatCustomers} of ${customers.length} customers booked more than once.</p></article><article><small>TOP CUSTOMER SHARE</small><b>${topCustomerShare.toFixed(0)}%</b><p>${esc(customers[0]?.name||'No customer data')} concentration across selected months.</p></article><article><small>NEXT MONTH OUTLOOK</small><b>${money(forecastWithPipeline)}</b><p>Three-month run rate plus 25% of open sales pipeline.</p></article><article><small>OPEN PIPELINE</small><b>${money(openPipeline)}</b><p>Current value of active sales opportunities.</p></article></section>
       <section class="bi-grid lower"><div class="panel"><div class="panelhead"><div><h2>Customer value concentration</h2><p>Top customers ranked by booked revenue.</p></div><button class="secondary" data-page="customers">Open CRM</button></div><div class="bi-rank">${customerRows}</div></div><div>${panel('Vehicle performance',table(['Vehicle','Jobs','Revenue','Average'],vehicleRows),'Use this to identify the vehicle types producing the strongest returns.')}</div></section>`;
+  }
+
+  function profitCentreView() {
+    const cfg = state.profitSettings || {};
+    const fuelPrice = Number(cfg.fuelPrice || 0);
+    const mpg = Math.max(1, Number(cfg.mpg || 25));
+    const wearPerMile = Number(cfg.wearPerMile || 0);
+    const hourlyCost = Number(cfg.hourlyCost || 0);
+    const fixedJobCost = Number(cfg.fixedJobCost || 0);
+    const targetMargin = Math.min(90, Math.max(1, Number(cfg.targetMargin || 30)));
+    const getMiles = j => Number(j.distance_miles || j.route_miles || j.mileage || j.miles || 0);
+    const getRevenue = j => Number(j.total_price || j.quoted_price || j.price || 0);
+    const estimate = j => {
+      const miles = getMiles(j), revenue = getRevenue(j);
+      const hours = Math.max(.75, Number(j.duration_hours || j.estimated_hours || 0) || (miles / 35 + .75));
+      const fuel = miles / mpg * 4.54609 * fuelPrice;
+      const wear = miles * wearPerMile;
+      const labour = hours * hourlyCost;
+      const cost = fuel + wear + labour + fixedJobCost;
+      const profit = revenue - cost;
+      const margin = revenue > 0 ? profit / revenue * 100 : 0;
+      const recommended = cost / (1 - targetMargin / 100);
+      return { ...j, miles, revenue, hours, fuel, wear, labour, cost, profit, margin, recommended };
+    };
+    const jobs = state.jobs.filter(j => j.job_status !== 'Cancelled' && getRevenue(j) > 0).map(estimate).sort((a,b)=>String(b.collection_date||b.created_at||'').localeCompare(String(a.collection_date||a.created_at||'')));
+    const totalRevenue = jobs.reduce((s,j)=>s+j.revenue,0), totalCost=jobs.reduce((s,j)=>s+j.cost,0), totalProfit=jobs.reduce((s,j)=>s+j.profit,0);
+    const avgMargin = totalRevenue ? totalProfit/totalRevenue*100 : 0;
+    const weak = jobs.filter(j=>j.margin<targetMargin), loss = jobs.filter(j=>j.profit<0);
+    const vehicleMap = new Map();
+    jobs.forEach(j=>{const key=j.vehicle_required||j.vehicle_type||j.vehicle||'Not specified';const row=vehicleMap.get(key)||{jobs:0,revenue:0,cost:0,profit:0};row.jobs++;row.revenue+=j.revenue;row.cost+=j.cost;row.profit+=j.profit;vehicleMap.set(key,row)});
+    const vehicleRows=[...vehicleMap.entries()].map(([name,v])=>[esc(name),v.jobs,money(v.revenue),money(v.profit),`${v.revenue?v.profit/v.revenue*100:0 .toFixed?.(1)}%`]);
+    const jobRows=jobs.slice(0,30).map(j=>{const tone=j.profit<0?'loss':j.margin<targetMargin?'warn':'good';return [esc(j.job_number||'Job'),fmtDate(j.collection_date||j.created_at),esc(j.customer_name||'Customer'),`${j.miles.toFixed(0)} mi`,money(j.revenue),money(j.cost),`<span class="profit-pill ${tone}">${money(j.profit)} · ${j.margin.toFixed(0)}%</span>`,j.revenue<j.recommended?`<b>${money(j.recommended)}</b>`:'On target'];});
+    return `<section class="profit-hero"><div><small>V26.35 JOB PROFIT CONTROL</small><h2>Know the true profit before accepting the price</h2><p>Estimated fuel, vehicle wear, labour and fixed costs are measured against every priced job.</p></div><button class="primary" data-page="newquote">Create profitable quote</button></section>
+      <section class="profit-kpis">${card('Estimated revenue',money(totalRevenue),`${jobs.length} priced jobs`,'jobs')}${card('Estimated operating cost',money(totalCost),'Fuel, wear, labour and fixed cost','accounts')}${card('Estimated profit',money(totalProfit),avgMargin>=targetMargin?'On target':'Below target','profitcentre')}${card('Average margin',`${avgMargin.toFixed(1)}%`,`Target ${targetMargin}%`,'profitcentre')}${card('Weak-margin jobs',weak.length,'Below your target','profitcentre')}${card('Loss-making jobs',loss.length,loss.length?'Immediate review needed':'None detected','profitcentre')}</section>
+      <section class="profit-layout"><div>${panel('Recent job profitability',table(['Job','Date','Customer','Miles','Revenue','Est. cost','Profit / margin','Safer minimum'],jobRows),'Costs are estimates based on the assumptions shown. Update them to match your actual operation.')}</div><aside>${panel('Cost assumptions',`<form id="profit-settings-form"><div class="grid two"><label>Fuel price per litre (£)<input name="fuelPrice" type="number" min="0" step="0.01" value="${fuelPrice}"></label><label>Vehicle MPG<input name="mpg" type="number" min="1" step="0.1" value="${mpg}"></label><label>Wear per mile (£)<input name="wearPerMile" type="number" min="0" step="0.01" value="${wearPerMile}"></label><label>Driver cost per hour (£)<input name="hourlyCost" type="number" min="0" step="0.01" value="${hourlyCost}"></label><label>Fixed cost per job (£)<input name="fixedJobCost" type="number" min="0" step="0.01" value="${fixedJobCost}"></label><label>Target margin (%)<input name="targetMargin" type="number" min="1" max="90" step="1" value="${targetMargin}"></label></div><button class="primary full-width">Save assumptions</button></form>`,'These settings are saved on this device and do not change customer prices automatically.')}${panel('Pricing warning',weak.length?`<div class="profit-warning"><b>${weak.length} job${weak.length===1?'':'s'} below target</b><p>${money(weak.reduce((s,j)=>s+Math.max(0,j.recommended-j.revenue),0))} extra revenue would have brought them up to the selected target margin.</p></div>`:'<div class="all-clear"><b>Prices are on target</b><span>No priced jobs fall below your selected margin.</span></div>')}</aside></section>
+      ${panel('Vehicle profitability',table(['Vehicle','Jobs','Revenue','Estimated profit','Margin'],[...vehicleMap.entries()].map(([name,v])=>[esc(name),v.jobs,money(v.revenue),money(v.profit),`${(v.revenue?v.profit/v.revenue*100:0).toFixed(1)}%`])),'Use this to compare the commercial return from each vehicle type.')}`;
   }
 
   function businessReportsView() {
@@ -1457,7 +1495,7 @@ function settingsView() {
     if (state.loading) { document.getElementById('app').innerHTML = '<div class="loading">Loading KLS SameDay Office…</div>'; return; }
     if (!state.user) { document.getElementById('app').innerHTML = authView(); bindAuth(); return; }
     if (state.portalUser) { document.getElementById('app').innerHTML = customerPortalView(); bindCustomerPortal(); return; }
-    const views = { dashboard, businessintel: businessIntelligenceView, aiassistant: aiDispatchAssistantView, smart: smartDispatchView, routes: routePlannerView, operations: operationsView, dispatch: dispatchView, drivers: driversManagementView, exchange: driverExchangeView, driver: driverView, tracking: liveTrackingView, fleet: fleetView, schedule: scheduleView, newquote: newQuote, quotes: quotesView, jobs: jobsView, invoices: invoicesView, documents: deliveryDocumentsView, accounts: accountsView, reports: businessReportsView, portalrequests: portalRequestsView, quoterequests: quoteRequestsView, customers: customersView, pipeline: salesPipelineView, fleetcentre: fleetCentreView, communications: communicationView, settings: settingsView };
+    const views = { dashboard, businessintel: businessIntelligenceView, profitcentre: profitCentreView, aiassistant: aiDispatchAssistantView, smart: smartDispatchView, routes: routePlannerView, operations: operationsView, dispatch: dispatchView, drivers: driversManagementView, exchange: driverExchangeView, driver: driverView, tracking: liveTrackingView, fleet: fleetView, schedule: scheduleView, newquote: newQuote, quotes: quotesView, jobs: jobsView, invoices: invoicesView, documents: deliveryDocumentsView, accounts: accountsView, reports: businessReportsView, portalrequests: portalRequestsView, quoterequests: quoteRequestsView, customers: customersView, pipeline: salesPipelineView, fleetcentre: fleetCentreView, communications: communicationView, settings: settingsView };
     document.getElementById('app').innerHTML = layout(views[state.page]());
     bindApp();
     if (state.page === 'dashboard') initialiseCommandMap();
@@ -1823,6 +1861,7 @@ function settingsView() {
     document.querySelectorAll('[data-lead-id]').forEach(c=>c.onclick=e=>{if(e.target.closest('button,select,a'))return;state.editLeadId=c.dataset.leadId;render();});
     document.querySelectorAll('[data-lead-quote]').forEach(b=>b.onclick=()=>{const l=state.leads.find(x=>x.id===b.dataset.leadQuote);if(!l)return;state.page='newquote';state.quoteCustomerId=null;showNotice(`Create a quote for ${l.company}. Add them as a customer first if needed.`,'ok');render();});
     document.getElementById('bi-months')?.addEventListener('change', event => { state.biMonths = Number(event.target.value || 6); render(); });
+    document.getElementById('profit-settings-form')?.addEventListener('submit', event => { event.preventDefault(); const values=Object.fromEntries(new FormData(event.currentTarget)); state.profitSettings={fuelPrice:Number(values.fuelPrice||0),mpg:Number(values.mpg||25),wearPerMile:Number(values.wearPerMile||0),hourlyCost:Number(values.hourlyCost||0),fixedJobCost:Number(values.fixedJobCost||0),targetMargin:Number(values.targetMargin||30)}; localStorage.setItem('kls_profit_settings',JSON.stringify(state.profitSettings)); showNotice('Profit assumptions saved.','ok'); render(); });
     document.getElementById('report-period')?.addEventListener('change', event => { state.reportPeriod = event.target.value || todayISO().slice(0,7); render(); });
     document.querySelector('[data-export-report]')?.addEventListener('click', exportBusinessReportCsv);
     document.querySelectorAll('[data-ai-assign]').forEach(button => button.onclick = async () => {

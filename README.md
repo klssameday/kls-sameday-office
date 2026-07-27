@@ -1,8 +1,8 @@
-# KLS SameDay Office v26.34
+# KLS SameDay Office v26.35
 
 Complete static web application for GitHub and Vercel deployment.
 
-## v26.34 addition
+## v26.35 addition
 
 A new **Business Intelligence Dashboard** has been added without removing the existing Dashboard or Business Reports. It includes:
 
@@ -31,3 +31,10 @@ Open `http://localhost:8080`.
 ## Deploy to Vercel
 
 Import this folder/repository as a Vercel project. No build command or output directory is required because this is a static application.
+
+## v26.35 addition
+- Job Profit Control dashboard
+- Estimated fuel, wear, labour and fixed costs per job
+- Target-margin warnings and safer minimum-price guidance
+- Vehicle profitability comparison
+- Adjustable assumptions saved locally per device

@@ -1,19 +1,17 @@
-# KLS SameDay Office v26.37
+# KLS SameDay Office v26.38
 
-Complete GitHub-ready release built from the verified working v26.36 project.
+Complete static web application for GitHub and Vercel deployment.
 
-## v26.37 completion release
+## v26.38 data export release
 
-- Adds System Health inside Settings.
-- Shows connection, account and live-record checks.
-- Adds one-click full JSON backup of loaded Supabase and device-only records.
-- Adds copyable diagnostics for quicker fault finding.
-- Corrects a vehicle-margin formatting bug in Job Profit Control.
-- Keeps every existing office, CRM, quoting, dispatch, driver, fleet, finance, portal, BI and PWA feature.
-- Includes the already-working config.js supplied with the project.
+- New Data Export Centre inside Settings
+- CSV downloads for customers, quotes, jobs, invoices, expenses, drivers, fleet, communications and sales leads
+- Spreadsheet-compatible UTF-8 exports
+- Existing full-system JSON backup and diagnostics retained
+- Supabase configuration and all existing modules preserved
 
-## GitHub
+## Deploy
 
-Upload everything inside this folder over the existing repository.
+Upload all files and the `icons` folder over the existing GitHub repository. Vercel should deploy automatically.
 
-Commit summary: `Complete KLS SameDay Office v26.37 with system backup`
+Commit summary: `Add KLS SameDay Office v26.38 Data Export Centre`

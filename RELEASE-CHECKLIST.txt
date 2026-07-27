@@ -1,8 +1,7 @@
-KLS SameDay Office v26.37
+KLS SameDay Office v26.38
 
 1. Upload every file and the icons folder to the existing GitHub repository.
-2. Summary required: Complete KLS SameDay Office v26.37 with system backup
-3. Commit changes.
-4. Wait for the Vercel deployment to turn green.
-5. Sign in, open Settings, and confirm System Health shows Connected.
-6. Click Download full backup once to confirm backup generation.
+2. Summary required: Add KLS SameDay Office v26.38 Data Export Centre
+3. Commit changes and wait for Vercel deployment.
+4. Sign in, open Settings and test one CSV export.
+5. Confirm the System Health panel still shows CONNECTED.

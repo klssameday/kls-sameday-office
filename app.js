@@ -607,12 +607,14 @@
       const time = job.collection_time ? String(job.collection_time).slice(0,5) : 'TBC';
       const driver = job.assigned_driver_name || 'Unassigned';
       const liveAge = job.location_updated_at ? Math.max(0, Math.round((Date.now()-new Date(job.location_updated_at).getTime())/60000)) : null;
+      const assignOptions = state.drivers.map(d=>`<option value="${d.id}" ${job.assigned_driver_id===d.id?'selected':''}>${esc(d.name)} · ${esc(d.availability_status||'Available')}</option>`).join('');
       return `<article class="dispatch-board-card" draggable="true" data-dispatch-job="${job.id}">
         <header><div><small>${esc(time)}</small><b>${esc(job.job_number || 'Job')}</b></div><span class="dispatch-status-pill">${esc(job.job_status || 'Booked')}</span></header>
         <h3>${esc(job.customer_name || job.contact_name || 'Customer')}</h3>
         <div class="dispatch-board-route"><p><small>COLLECT</small>${esc(job.collection_address || 'Not set')}</p><i>↓</i><p><small>DELIVER</small>${esc(job.delivery_address || 'Not set')}</p></div>
         <div class="dispatch-board-meta"><span>🚚 ${esc(job.vehicle || 'Vehicle TBC')}</span><span>👤 ${esc(driver)}</span>${liveAge !== null ? `<span class="live-chip">● GPS ${liveAge < 1 ? 'now' : `${liveAge}m`}</span>` : ''}</div>
-        <footer><strong>${money(job.total_price)}</strong><div><button class="secondary" data-driver-open="${job.id}">Open</button></div></footer>
+        <label class="dispatch-quick-assign"><span>ASSIGN DRIVER</span><select data-assign-job="${job.id}"><option value="">Unassigned</option>${assignOptions}</select></label>
+        <footer><strong>${money(job.total_price)}</strong><div><button class="secondary" data-driver-open="${job.id}">Open job</button></div></footer>
       </article>`;
     };
 
@@ -638,10 +640,18 @@
       ...active.filter(job=>job.collection_date && `${job.collection_date}T${String(job.collection_time||'23:59').slice(0,5)}` < new Date().toISOString().slice(0,16) && ['Booked','En Route to Collection'].includes(job.job_status)).map(job=>({level:'late',title:`${job.job_number || 'Job'} collection alert`,detail:`${job.collection_time ? String(job.collection_time).slice(0,5) : 'Time TBC'} · ${job.collection_address || 'Address TBC'}`,job}))
     ].slice(0,8);
     const alertsHtml = alertRows.length ? alertRows.map(item=>`<button type="button" class="dispatch-alert-row ${item.level}" data-driver-open="${item.job.id}"><span>!</span><div><b>${esc(item.title)}</b><small>${esc(item.detail)}</small></div></button>`).join('') : '<div class="dispatch-all-clear"><span>✓</span><div><b>All clear</b><small>No unassigned or late collections.</small></div></div>';
+    const driverLiveCards = state.drivers.map(driver => {
+      const jobs = active.filter(j=>j.assigned_driver_id===driver.id);
+      const current = jobs[0];
+      const gpsAge = current?.location_updated_at ? Math.max(0,Math.round((Date.now()-new Date(current.location_updated_at).getTime())/60000)) : null;
+      const availability = driver.active===false ? 'Offline' : (driver.availability_status||'Available');
+      return `<article class="dispatch-live-driver ${String(availability).toLowerCase().replace(/\s+/g,'-')}"><div class="dispatch-live-driver-head"><span class="driver-status-dot ${availability==='Offline'?'off':''}"></span><div><b>${esc(driver.name||'Driver')}</b><small>${esc(driver.vehicle||'Vehicle TBC')}</small></div><strong>${esc(availability)}</strong></div>${current?`<button type="button" data-driver-open="${current.id}"><small>CURRENT JOB</small><b>${esc(current.job_number||'Job')} · ${esc(current.job_status||'Booked')}</b><span>${gpsAge===null?'GPS not started':`GPS ${gpsAge<1?'live':`${gpsAge}m ago`}`}</span></button>`:'<p>No active job</p>'}</article>`;
+    }).join('') || '<div class="dispatch-board-empty">No drivers added.</div>';
 
     return `<section class="dispatch-v4-hero"><div><small>KLS LIVE CONTROL</small><h2>Dispatch Centre</h2><p>Live jobs, drivers, GPS, alerts and POD from one control screen.</p></div><div><button class="secondary" data-action="refresh-dispatch">↻ Refresh</button><button class="primary" data-page="newquote">＋ New Job</button></div></section>
       <section class="dispatch-v4-kpis">${card('Active jobs',active.length,'Currently moving','jobs')}${card('Unassigned',unassigned.length,'Needs a driver','dispatch')}${card('Live GPS',liveCount,'Reporting now','tracking')}${card('Collection alerts',lateCount,lateCount ? 'Check immediately' : 'No late collections','dispatch')}</section>
-      <section class="dispatch-v4-tools"><label>Search<input id="dispatch-search" value="${esc(state.dispatchSearch||'')}" placeholder="Job, customer, postcode or driver"></label><label>Driver<select id="dispatch-driver-filter"><option value="all">All drivers</option><option value="unassigned" ${driverFilter==='unassigned'?'selected':''}>Unassigned only</option>${driverOptions}</select></label><div class="realtime-indicator"><span></span> Live updates on</div></section>
+      <section class="dispatch-v4-tools"><label>Search<input id="dispatch-search" value="${esc(state.dispatchSearch||'')}" placeholder="Job, customer, postcode or driver"></label><label>Driver<select id="dispatch-driver-filter"><option value="all">All drivers</option><option value="unassigned" ${driverFilter==='unassigned'?'selected':''}>Unassigned only</option>${driverOptions}</select></label><div class="realtime-indicator"><span></span> Driver App connected</div><div class="dispatch-last-sync">Updated ${new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}</div></section>
+      <section class="dispatch-live-drivers"><header><div><small>LIVE DRIVER APP STATUS</small><h2>Your drivers now</h2></div><button class="secondary" data-page="drivers">Manage drivers</button></header><div>${driverLiveCards}</div></section>
       <section class="dispatch-board">
         ${column('unassigned','Unassigned','WAITING FOR DRIVER',unassigned,'Booked')}
         ${column('assigned','Assigned','HEADING TO COLLECTION',assigned,'En Route to Collection')}

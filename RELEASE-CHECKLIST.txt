@@ -1,15 +1,15 @@
-KLS SameDay Office v32.0 – Release Checklist
+KLS SameDay Office v32.1 – Release Checklist
 
-[ ] Upload the complete v32.0 project to GitHub/Vercel
-[ ] Confirm driver.html loads driver.css?v=32.0 and driver.js?v=32.0
-[ ] Confirm the Driver home screen shows the new professional layout
-[ ] Test availability status changes
-[ ] Open an assigned job and test Main screen and Previous step
-[ ] Test navigation links
-[ ] Complete a test POD and confirm the success animation
-[ ] Confirm job alerts and device notifications still work
-[ ] Test Home, Jobs, Exchange and Profile tabs on a phone
-[ ] Confirm the app works after a service-worker refresh
+[ ] Upload the complete v32.1 project to GitHub/Vercel
+[ ] Confirm the office app opens normally
+[ ] Open Dispatch Centre
+[ ] Confirm live driver status cards appear
+[ ] Assign a job using the quick driver selector
+[ ] Confirm the assigned job appears in the Driver App
+[ ] Change a job status in the Driver App and confirm Dispatch updates
+[ ] Confirm GPS freshness appears when tracking is active
+[ ] Test drag-and-drop dispatch columns
+[ ] Test on desktop and mobile
 
 GitHub Summary:
-Release v32.0 – Driver App Professional Edition
+Release v32.1 – Live Driver Dispatch Integration

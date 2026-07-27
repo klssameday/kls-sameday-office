@@ -1,23 +1,18 @@
-# KLS SameDay Office v32.0
+# KLS SameDay Office v32.1
 
-## Driver App Professional Edition
+## Live Driver Dispatch Integration
 
-Major mobile-first redesign of the KLS Driver App.
+This release connects the redesigned Driver App more clearly with the office Dispatch Centre.
 
-### Driver improvements
+### What is new
 
-- New professional app header and branded loading screen.
-- Personalised home screen with driver greeting and live connection state.
-- Premium current-job card showing route, times, progress and one clear action.
-- Cleaner availability control, upcoming work and daily completion figures.
-- Smoother screen transitions and touch feedback.
-- Sticky status and job controls for easier one-handed use.
-- Animated successful-delivery confirmation after POD upload.
-- Existing job alerts, navigation, previous-step correction, tracking, photos and signatures retained.
-- Improved responsive layout and reduced-motion accessibility support.
+- Live driver status cards in Dispatch
+- Current job and GPS freshness shown for each driver
+- Quick driver assignment directly on every dispatch card
+- Driver availability shown inside assignment choices
+- Clear Driver App connected indicator and last-updated time
+- Existing drag-and-drop dispatch, live map, alerts and POD workflow retained
 
-## GitHub release
+### GitHub Summary
 
-Summary: `Release v32.0 – Driver App Professional Edition`
-
-Description: Major redesign of the KLS Driver App with a modern mobile-first interface, personalised driver dashboard, premium current-job cards, guided job progress, smoother navigation, professional loading and completion animations, and improved responsive performance. Existing live jobs, job alerts, navigation, tracking, correction controls and proof-of-delivery features remain included.
+`Release v32.1 – Live Driver Dispatch Integration`

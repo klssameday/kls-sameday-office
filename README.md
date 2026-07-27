@@ -28,10 +28,17 @@ Smart Driver Assistant upgrade.
 No new Supabase SQL migration is required for v34.2.
 
 
-## v34.4 – Smart Route Assistant
+## v34.5 – Smart Route Assistant
 
 - Highlights timed collection and delivery risks.
 - Suggests the next job based on current status and deadlines.
 - Lets drivers optimise or manually reorder the route.
 - Provides one-tap delay alerts to dispatch using the existing incident table.
 - No additional Supabase migration is required.
+
+
+## v34.5 – Driver App Pro+
+- Professional Job Pack
+- Job document attachments
+- Searchable completed-job history
+- Enhanced POD confirmation

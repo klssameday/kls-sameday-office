@@ -9,7 +9,7 @@
   })();
   const db = validUrl && key && window.supabase ? window.supabase.createClient(url, key) : null;
   const steps = ['Booked','En Route to Collection','Arrived at Collection','Collected','In Transit','Arrived at Delivery','Delivered'];
-  let state = { user:null, profile:null, jobs:[], loading:true, mode:'signin', notice:null, podJob:null, workflowJob:null, workflowType:null, tab:'home', screen:'dashboard', detailJobId:null, networkJobs:[], myBids:[], messages:[], incidents:[], online:navigator.onLine, lastUpdated:null, refreshing:false, jobAlerts:[], notificationsEnabled:typeof Notification!=='undefined'&&Notification.permission==='granted', completionCelebration:null, darkMode:localStorage.getItem('kls-driver-dark')==='1', assistantHelp:false, arrivalPrompt:null, fuelDismissed:localStorage.getItem('kls-fuel-dismissed')===new Date().toISOString().slice(0,10), navAddress:null, jobMessages:[], offlineQueue:JSON.parse(localStorage.getItem('kls-driver-offline-queue')||'[]'), routeOrder:JSON.parse(localStorage.getItem('kls-driver-route-order')||'[]') };
+  let state = { user:null, profile:null, jobs:[], loading:true, mode:'signin', notice:null, podJob:null, workflowJob:null, workflowType:null, tab:'home', screen:'dashboard', detailJobId:null, networkJobs:[], myBids:[], messages:[], incidents:[], online:navigator.onLine, lastUpdated:null, refreshing:false, jobAlerts:[], notificationsEnabled:typeof Notification!=='undefined'&&Notification.permission==='granted', completionCelebration:null, darkMode:localStorage.getItem('kls-driver-dark')==='1', assistantHelp:false, arrivalPrompt:null, fuelDismissed:localStorage.getItem('kls-fuel-dismissed')===new Date().toISOString().slice(0,10), navAddress:null, jobMessages:[], offlineQueue:JSON.parse(localStorage.getItem('kls-driver-offline-queue')||'[]'), routeOrder:JSON.parse(localStorage.getItem('kls-driver-route-order')||'[]'), jobDocuments:[], historySearch:'' };
   let watchId = null;
   let activeJobId = null;
   let signatureCanvas = null;
@@ -326,12 +326,14 @@
   }
   function jobsView(){
     const active=state.jobs.filter(j=>j.job_status!=='Delivered');
-    const completed=state.jobs.filter(j=>j.job_status==='Delivered').slice().reverse();
+    const q=state.historySearch.trim().toLowerCase();
+    const completed=state.jobs.filter(j=>j.job_status==='Delivered').slice().reverse().filter(j=>!q||[j.job_number,j.customer_name,j.collection_address,j.delivery_address,j.collection_company,j.delivery_company].some(v=>String(v||'').toLowerCase().includes(q)));
     return `<section class="jobs-screen">
       <div class="screen-heading"><small>MY WORK</small><h1>Jobs</h1><p>Active and completed KLS jobs.</p></div>
       <div class="dashboard-section-title"><h2>Active</h2><span>${active.length}</span></div>
       ${active.length?`<div class="dashboard-job-list">${active.map(j=>miniJobCard(j,activeStatuses.includes(j.job_status)?'ACTIVE':'ASSIGNED')).join('')}</div>`:'<div class="empty compact"><strong>No active jobs</strong><p>Your assigned work will appear here.</p></div>'}
-      <div class="dashboard-section-title history-title"><h2>Completed</h2><span>${completed.length}</span></div>
+      <div class="dashboard-section-title history-title"><h2>Completed history</h2><span>${completed.length}</span></div>
+      <label class="history-search"><span>Search completed jobs</span><input data-history-search value="${esc(state.historySearch)}" placeholder="Job number, customer or address"></label>
       ${completed.length?`<div class="dashboard-job-list completed-list">${completed.map(j=>miniJobCard(j,'COMPLETED')).join('')}</div>`:'<div class="empty compact"><strong>No completed jobs</strong></div>'}
     </section>`;
   }
@@ -345,6 +347,14 @@
   }
   function detailSection(title,address,contact,phone,notes,company,timeLabel,timeValue){
     return `<section class="location-card detailed-location"><div class="location-title"><small>${esc(title)}</small>${timeValue?`<b>${esc(timeLabel)}: ${esc(timeValue)}</b>`:''}</div>${company?`<h3>${esc(company)}</h3>`:''}<h2>${esc(address||'Address not supplied')}</h2><div class="location-tools"><button type="button" data-nav-address="${esc(address||'')}">Navigate</button><button type="button" data-favourite-address="${esc(address||'')}">${isFavourite(address)?'★ Favourite':'☆ Save location'}</button></div>${contact?`<div class="location-line"><span>Contact</span><b>${esc(contact)}</b></div>`:''}${phone?`<div class="location-line"><span>Telephone</span><b class="phone-number">${esc(phone)}</b></div>`:''}${notes?`<div class="job-instructions priority-instructions"><span>IMPORTANT INSTRUCTIONS</span><p>${esc(notes)}</p></div>`:''}</section>`;
+  }
+  function jobPack(job){
+    const rows=[['Goods',displayValue(job,['goods_description','goods','load_description'],'Not supplied')],['Items',displayValue(job,['item_count','items','quantity'],'Not supplied')],['Weight',displayValue(job,['weight','goods_weight'],'Not supplied')],['Dimensions',displayValue(job,['dimensions','goods_dimensions'],'Not supplied')],['Vehicle',displayValue(job,['vehicle_required','vehicle_type'],'Not supplied')],['Priority',displayValue(job,['priority'],'Normal')],['Customer notes',displayValue(job,['customer_notes','notes'],'None')]];
+    return `<section class="job-pack-card"><div class="activity-heading"><div><small>JOB PACK</small><h2>Everything for this job</h2></div><span>${esc(job.job_number||'Job')}</span></div><div class="job-pack-grid">${rows.map(([k,v])=>`<div><span>${esc(k)}</span><b>${esc(String(v))}</b></div>`).join('')}</div></section>`;
+  }
+  function jobDocumentsPanel(job){
+    const docs=state.jobDocuments.filter(d=>d.job_id===job.id);
+    return `<section class="job-documents-card"><div class="activity-heading"><div><small>JOB DOCUMENTS</small><h2>Paperwork & attachments</h2></div><span>${docs.length}</span></div>${docs.length?`<div class="job-document-list">${docs.map(doc=>`<a href="${esc(doc.file_url)}" target="_blank" rel="noopener"><div><b>${esc(doc.file_name||'Document')}</b><small>${esc(doc.description||doc.file_type||'Open attachment')}</small></div><span>Open ↗</span></a>`).join('')}</div>`:'<p class="empty-documents">No documents attached to this job.</p>'}</section>`;
   }
   function jobDetailView(job){
     const action=nextAction(job);
@@ -367,6 +377,8 @@
       ${detailSection('COLLECTION',job.collection_address,contactValue(job,'collection'),phoneValue(job,'collection'),notesValue(job,'collection'),collectCompany,'Ready',collectionClock)}
       ${detailSection('DELIVERY',job.delivery_address,contactValue(job,'delivery'),phoneValue(job,'delivery'),notesValue(job,'delivery'),deliveryCompany,'Deadline',deliveryClock)}
       ${goodsDetails(job)}
+      ${jobPack(job)}
+      ${jobDocumentsPanel(job)}
       ${jobInfoPanel(job)}
       ${jobChat(job)}
       <section class="job-activity-card"><div class="activity-heading"><div><small>JOB ACTIVITY</small><h2>Progress history</h2></div><span>${esc(statusDisplay[job.job_status]?.[0]||job.job_status||'Booked')}</span></div><div class="activity-list">${activityRows(job).map(row=>`<div class="activity-row ${row.current?'current':''}"><i></i><div><b>${esc(row.step)}</b><small>${row.time?fmtClock(row.time):(row.complete?'Completed':'Current step')}</small></div></div>`).join('')}</div></section>
@@ -535,6 +547,7 @@
     document.querySelector('[data-back-dashboard]')?.addEventListener('click',()=>{state.screen='dashboard';state.detailJobId=null;state.notice=null;render();window.scrollTo({top:0,behavior:'smooth'});});
     document.querySelector('[data-refresh-jobs]')?.addEventListener('click',async()=>{state.refreshing=true;render();await refreshAssignedJobs(true);state.refreshing=false;state.lastUpdated=new Date().toISOString();render();});
     document.querySelector('[data-enable-notifications]')?.addEventListener('click',enableJobNotifications);
+    document.querySelector('[data-history-search]')?.addEventListener('input',e=>{state.historySearch=e.currentTarget.value;render();const input=document.querySelector('[data-history-search]');if(input){input.focus();input.setSelectionRange(input.value.length,input.value.length);}});
     document.querySelector('[data-close-celebration]')?.addEventListener('click',()=>{state.completionCelebration=null;state.tab='home';state.screen='dashboard';render();});
     document.querySelectorAll('[data-dismiss-job-alert]').forEach(btn=>btn.onclick=()=>{dismissJobAlert(btn.dataset.dismissJobAlert);render();});
     document.querySelector('[data-own-availability]')?.addEventListener('change',async e=>{
@@ -664,6 +677,8 @@
       state.messages=messagesResult.error?[]:(messagesResult.data||[]);
       const jobMessagesResult=await db.from('driver_job_messages').select('*').eq('driver_id',driver.id).order('created_at',{ascending:true}).limit(200);
       state.jobMessages=jobMessagesResult.error?[]:(jobMessagesResult.data||[]);
+      const documentsResult=state.jobs.length?await db.from('job_documents').select('*').in('job_id',state.jobs.map(j=>j.id)).order('created_at',{ascending:false}):{data:[],error:null};
+      state.jobDocuments=documentsResult.error?[]:(documentsResult.data||[]);
       state.lastUpdated=new Date().toISOString();
 
       // Driver Exchange is deliberately loaded after the core app is visible.

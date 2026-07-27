@@ -9,7 +9,7 @@
   })();
   const db = validUrl && key && window.supabase ? window.supabase.createClient(url, key) : null;
   const steps = ['Booked','En Route to Collection','Arrived at Collection','Collected','In Transit','Arrived at Delivery','Delivered'];
-  let state = { user:null, profile:null, jobs:[], loading:true, mode:'signin', notice:null, podJob:null, workflowJob:null, workflowType:null, tab:'home', screen:'dashboard', detailJobId:null, networkJobs:[], myBids:[], messages:[], incidents:[], online:navigator.onLine, lastUpdated:null, refreshing:false, jobAlerts:[], notificationsEnabled:typeof Notification!=='undefined'&&Notification.permission==='granted', completionCelebration:null, darkMode:localStorage.getItem('kls-driver-dark')==='1' };
+  let state = { user:null, profile:null, jobs:[], loading:true, mode:'signin', notice:null, podJob:null, workflowJob:null, workflowType:null, tab:'home', screen:'dashboard', detailJobId:null, networkJobs:[], myBids:[], messages:[], incidents:[], online:navigator.onLine, lastUpdated:null, refreshing:false, jobAlerts:[], notificationsEnabled:typeof Notification!=='undefined'&&Notification.permission==='granted', completionCelebration:null, darkMode:localStorage.getItem('kls-driver-dark')==='1', assistantHelp:false, arrivalPrompt:null, fuelDismissed:localStorage.getItem('kls-fuel-dismissed')===new Date().toISOString().slice(0,10) };
   let watchId = null;
   let activeJobId = null;
   let signatureCanvas = null;
@@ -233,6 +233,34 @@
       <button class="btn primary full pro-open-job" data-open-job="${job.id}">${action?'Continue job':'Open job'}</button>
     </article>`;
   }
+
+  function minutesUntilJob(job){
+    if(!job?.collection_date)return null;
+    const time=String(job.collection_time||'09:00').slice(0,5);
+    const target=new Date(`${job.collection_date}T${time}:00`);
+    if(Number.isNaN(target.getTime()))return null;
+    return Math.round((target-Date.now())/60000);
+  }
+  function smartAssistantCard(job){
+    if(!job)return '';
+    const mins=minutesUntilJob(job);
+    let headline='Next job ready'; let tone='ok'; let detail='Open the job when you are ready to begin.';
+    if(mins!==null){
+      if(mins<0){headline=`Running ${Math.abs(mins)} minutes behind`;tone='danger';detail='Open the job and update dispatch if the collection time cannot be met.';}
+      else if(mins<=20){headline=`Leave in ${mins} minutes`;tone='warning';detail='Check the route and collection instructions now.';}
+      else {headline=`Collection in ${mins} minutes`;detail='You have time to prepare before leaving.';}
+    }
+    return `<section class="smart-assistant ${tone}"><div><small>SMART DRIVER ASSISTANT</small><h2>${esc(headline)}</h2><p>${esc(detail)}</p></div><button class="btn secondary" data-driver-help>Need help</button></section>`;
+  }
+  function helpOverlay(){
+    if(!state.assistantHelp)return '';
+    return `<div class="pod-overlay"><section class="pod-sheet help-sheet"><div class="pod-head"><div><small>DRIVER SUPPORT</small><h2>How can dispatch help?</h2></div><button data-close-help>×</button></div><div class="help-grid"><button data-help-type="Running late">Running late</button><button data-help-type="Vehicle issue">Vehicle issue</button><button data-help-type="Customer problem">Customer problem</button><button data-help-type="Need route help">Need route help</button></div><button class="btn secondary full" data-driver-tab="messages">Open messages</button><button class="btn secondary full" data-driver-tab="incident">Report an incident</button></section></div>`;
+  }
+  function arrivalOverlay(){
+    const a=state.arrivalPrompt;if(!a)return '';
+    return `<div class="arrival-prompt"><section><small>LOCATION CHECK</small><h2>Have you arrived?</h2><p>${esc(a.label)}</p><div><button class="btn primary" data-confirm-arrival>Yes, I have arrived</button><button class="btn secondary" data-dismiss-arrival>Not yet</button></div></section></div>`;
+  }
+
   function dashboardView(){
     const open=state.jobs.filter(j=>j.job_status!=='Delivered');
     const current=open.find(j=>activeStatuses.includes(j.job_status))||open[0]||null;
@@ -249,6 +277,7 @@
         <select data-own-availability aria-label="Driver availability">${['Available','On Job','Break','Offline'].map(x=>`<option ${String(state.profile?.availability_status||'Available')===x?'selected':''}>${x}</option>`).join('')}</select>
       </div>
       ${state.jobAlerts.map(newJobAlertCard).join('')}
+      ${current?smartAssistantCard(current):''}
       ${current?currentJobHero(current):`<section class="pro-no-job"><span>✓</span><h2>No active job</h2><p>The office will send assigned work automatically.</p></section>`}
       <div class="pro-stats"><div><small>UPCOMING</small><strong>${upcoming.length}</strong></div><div><small>COMPLETED TODAY</small><strong>${completed.length}</strong></div><button data-refresh-jobs ${state.refreshing?'disabled':''}><small>LAST UPDATE</small><strong>${state.refreshing?'Refreshing…':state.lastUpdated?new Date(state.lastUpdated).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):'Refresh'}</strong></button></div>
       <div class="dashboard-section-title"><h2>Upcoming jobs</h2><span>${upcoming.length}</span></div>
@@ -375,7 +404,7 @@
       <main class="driver-main">
         ${state.notice?`<div class="driver-msg ${state.notice.type}">${esc(state.notice.text)}</div>`:''}
         ${mainContent}
-        ${state.workflowJob?workflowView(state.workflowJob,state.workflowType):''}${state.podJob?podView(state.podJob):''}
+        ${state.workflowJob?workflowView(state.workflowJob,state.workflowType):''}${state.podJob?podView(state.podJob):''}${helpOverlay()}${arrivalOverlay()}
         ${state.completionCelebration?`<div class="completion-celebration"><section><div class="completion-tick">✓</div><small>DELIVERY COMPLETE</small><h2>${esc(state.completionCelebration.job_number||'Job')}</h2><p>Proof of delivery has been saved successfully.</p><button class="btn primary full" data-close-celebration>Back to home</button></section></div>`:''}
       </main>
       ${state.screen!=='detail'?`<nav class="bottom-nav" aria-label="Driver navigation">
@@ -393,7 +422,7 @@
     if(state.loading){root.innerHTML='<div class="driver-loading pro-loading"><div class="loader-mark">KLS</div><span></span><p>Loading Driver App…</p></div>';return;}
     if(!state.user){root.innerHTML=authView();bindAuth();return;}
     if(!state.profile){root.innerHTML=`<div class="driver-auth"><section class="driver-auth-card"><div class="driver-brand"><b>KLS</b><span>Driver</span></div><h1>Account not linked</h1>${state.notice?`<div class="driver-msg ${state.notice.type}">${esc(state.notice.text)}</div>`:`<p>Ask the KLS office to link this exact login email to your driver record:</p><div class="driver-msg error">${esc(state.user.email)}</div>`}<button class="btn secondary full" data-signout>Sign out</button></section></div>`;bindCommon();return;}
-    root.innerHTML=appView();bindApp();
+    applyAutomaticNightMode();root.innerHTML=appView();bindApp();startArrivalAssistant();
   }
 
   function bindCommon(){document.querySelectorAll('[data-signout]').forEach(b=>b.onclick=async()=>{stopTracking(false);await db.auth.signOut();});}
@@ -427,6 +456,11 @@
     document.querySelectorAll('[data-previous-job]').forEach(btn=>btn.onclick=()=>moveToPreviousStep(btn.dataset.previousJob,btn.dataset.status));
     document.querySelectorAll('[data-workflow-job]').forEach(btn=>btn.onclick=()=>{state.workflowJob=state.jobs.find(j=>j.id===btn.dataset.workflowJob);state.workflowType=btn.dataset.workflow;render();});
     document.querySelectorAll('[data-close-workflow]').forEach(btn=>btn.onclick=()=>{state.workflowJob=null;state.workflowType=null;render();});
+    document.querySelector('[data-driver-help]')?.addEventListener('click',()=>{state.assistantHelp=true;render();});
+    document.querySelector('[data-close-help]')?.addEventListener('click',()=>{state.assistantHelp=false;render();});
+    document.querySelectorAll('[data-help-type]').forEach(btn=>btn.onclick=()=>{state.assistantHelp=false;state.tab='incident';state.screen='dashboard';render();setTimeout(()=>{const sel=document.querySelector('#incident-form select[name=type]');if(sel)sel.value=btn.dataset.helpType==='Running late'?'Traffic delay':btn.dataset.helpType;},0);});
+    document.querySelector('[data-dismiss-arrival]')?.addEventListener('click',()=>{state.arrivalPrompt=null;render();});
+    document.querySelector('[data-confirm-arrival]')?.addEventListener('click',()=>{const a=state.arrivalPrompt;state.arrivalPrompt=null;if(a)confirmAndAdvance(a.jobId,a.status,'Confirm arrival');});
     document.querySelector('[data-toggle-dark]')?.addEventListener('click',()=>{state.darkMode=!state.darkMode;localStorage.setItem('kls-driver-dark',state.darkMode?'1':'0');document.body.classList.toggle('dark',state.darkMode);render();});
     document.getElementById('driver-workflow-form')?.addEventListener('submit',completeWorkflow);
     document.getElementById('incident-form')?.addEventListener('submit',submitIncident);
@@ -434,6 +468,26 @@
     document.querySelectorAll('[data-close-pod]').forEach(btn=>btn.onclick=()=>{state.podJob=null;render();});
     setupSignature();
     document.getElementById('pod-submit-button')?.addEventListener('click',completePod);
+  }
+
+
+  function applyAutomaticNightMode(){
+    if(localStorage.getItem('kls-driver-dark')!==null)return;
+    const h=new Date().getHours();state.darkMode=h>=19||h<7;
+  }
+  function startArrivalAssistant(){
+    if(!navigator.geolocation||window.__klsArrivalWatch)return;
+    window.__klsArrivalWatch=navigator.geolocation.watchPosition(pos=>{
+      const job=state.jobs.find(j=>['En Route to Collection','In Transit'].includes(j.job_status));
+      if(!job||state.arrivalPrompt)return;
+      const lat=Number(job.job_status==='In Transit'?job.delivery_latitude:job.collection_latitude);
+      const lng=Number(job.job_status==='In Transit'?job.delivery_longitude:job.collection_longitude);
+      if(!Number.isFinite(lat)||!Number.isFinite(lng))return;
+      const rad=Math.PI/180, dlat=(pos.coords.latitude-lat)*rad, dlng=(pos.coords.longitude-lng)*rad;
+      const a=Math.sin(dlat/2)**2+Math.cos(lat*rad)*Math.cos(pos.coords.latitude*rad)*Math.sin(dlng/2)**2;
+      const metres=6371000*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+      if(metres<=150){state.arrivalPrompt={jobId:job.id,status:job.job_status==='In Transit'?'Arrived at Delivery':'Arrived at Collection',label:job.job_status==='In Transit'?'Delivery location':'Collection location'};render();}
+    },()=>{}, {enableHighAccuracy:false,maximumAge:60000,timeout:10000});
   }
 
   const withTimeout = (promise, ms, label) => Promise.race([

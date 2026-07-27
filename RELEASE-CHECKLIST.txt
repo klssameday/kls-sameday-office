@@ -14,3 +14,8 @@ V34.3: Run SUPABASE-v34.3-DRIVER-APP-PRO.sql and test job chat policies.
 
 
 v34.5: Test route optimisation, manual up/down ordering, deadline risk badges and Alert office. No new SQL required.
+
+V35.0.1 OWNER NAVIGATION HOTFIX
+- Office owner sees Back to KLS Office in Driver Profile
+- Ordinary drivers do not see the office link
+- No Supabase SQL required

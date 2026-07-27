@@ -9,7 +9,7 @@
   })();
   const db = validUrl && key && window.supabase ? window.supabase.createClient(url, key) : null;
   const steps = ['Booked','En Route to Collection','Arrived at Collection','Collected','In Transit','Arrived at Delivery','Delivered'];
-  let state = { user:null, profile:null, jobs:[], loading:true, mode:'signin', notice:null, podJob:null, workflowJob:null, workflowType:null, tab:'home', screen:'dashboard', detailJobId:null, networkJobs:[], myBids:[], messages:[], incidents:[], online:navigator.onLine, lastUpdated:null, refreshing:false, jobAlerts:[], notificationsEnabled:typeof Notification!=='undefined'&&Notification.permission==='granted', completionCelebration:null, darkMode:localStorage.getItem('kls-driver-dark')==='1', assistantHelp:false, arrivalPrompt:null, fuelDismissed:localStorage.getItem('kls-fuel-dismissed')===new Date().toISOString().slice(0,10), navAddress:null, jobMessages:[], offlineQueue:JSON.parse(localStorage.getItem('kls-driver-offline-queue')||'[]'), routeOrder:JSON.parse(localStorage.getItem('kls-driver-route-order')||'[]'), jobDocuments:[], historySearch:'' };
+  let state = { user:null, profile:null, jobs:[], loading:true, mode:'signin', notice:null, podJob:null, workflowJob:null, workflowType:null, tab:'home', screen:'dashboard', detailJobId:null, networkJobs:[], myBids:[], messages:[], incidents:[], online:navigator.onLine, lastUpdated:null, refreshing:false, jobAlerts:[], notificationsEnabled:typeof Notification!=='undefined'&&Notification.permission==='granted', completionCelebration:null, darkMode:localStorage.getItem('kls-driver-dark')==='1', assistantHelp:false, arrivalPrompt:null, fuelDismissed:localStorage.getItem('kls-fuel-dismissed')===new Date().toISOString().slice(0,10), navAddress:null, jobMessages:[], offlineQueue:JSON.parse(localStorage.getItem('kls-driver-offline-queue')||'[]'), routeOrder:JSON.parse(localStorage.getItem('kls-driver-route-order')||'[]'), jobDocuments:[], historySearch:'', isOfficeOwner:false };
   let watchId = null;
   let activeJobId = null;
   let signatureCanvas = null;
@@ -342,7 +342,7 @@
       <div class="screen-heading"><small>DRIVER PROFILE</small><h1>${esc(state.profile?.driver_name||'Driver')}</h1><p>${esc(state.profile?.driver_vehicle||'Vehicle not set')}</p></div>
       <div class="profile-card"><div><span>Login</span><b>${esc(state.user?.email||'')}</b></div><div><span>Telephone</span><b>${esc(state.profile?.driver_phone||'Not set')}</b></div><div><span>Availability</span><b>${esc(state.profile?.availability_status||'Available')}</b></div></div>
       <section class="profile-notification-card"><div><span>New job alerts</span><b>${state.notificationsEnabled?'Enabled':'Not enabled'}</b></div><button class="btn secondary" data-enable-notifications>${state.notificationsEnabled?'Enabled ✓':'Enable alerts'}</button></section>
-      <button class="btn secondary full" data-driver-tab="incident">Report an incident</button><button class="btn secondary full" data-toggle-dark>${state.darkMode?'Use light mode':'Use dark mode'}</button><button class="btn secondary full profile-signout" data-signout>Sign out</button>
+      <button class="btn secondary full" data-driver-tab="incident">Report an incident</button><button class="btn secondary full" data-toggle-dark>${state.darkMode?'Use light mode':'Use dark mode'}</button>${state.isOfficeOwner?'<a class="btn primary full owner-office-link" href="/">Back to KLS Office</a>':''}<button class="btn secondary full profile-signout" data-signout>Sign out</button>
     </section>`;
   }
   function detailSection(title,address,contact,phone,notes,company,timeLabel,timeValue){
@@ -651,6 +651,9 @@
         return;
       }
 
+      const ownerCheck = await db.from('business_settings').select('user_id').eq('user_id',state.user.id).maybeSingle();
+      state.isOfficeOwner = !ownerCheck.error && !!ownerCheck.data;
+
       state.profile={
         account_id:null,
         owner_id:driver.user_id,
@@ -902,7 +905,7 @@
       if(!state.user){
         authLoadToken++;
         stopTracking(false);
-        state.profile=null;state.jobs=[];state.loading=false;render();
+        state.profile=null;state.jobs=[];state.isOfficeOwner=false;state.loading=false;render();
       }else if(changed){
         queueDriverLoad();
       }

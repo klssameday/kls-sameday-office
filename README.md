@@ -1,4 +1,4 @@
-# KLS SameDay Office v35.0
+# KLS SameDay Office v35.0.1
 
 ## Customer Management (CRM)
 
@@ -54,3 +54,7 @@ No new Supabase SQL migration is required for v34.2.
 - Job document attachments
 - Searchable completed-job history
 - Enhanced POD confirmation
+
+## v35.0.1 owner navigation hotfix
+
+The signed-in KLS office owner now sees a **Back to KLS Office** button in the Driver App profile. Ordinary driver accounts do not see this button. No Supabase migration is required.

@@ -1,4 +1,4 @@
-// KLS SameDay Driver v32.0 — Professional Edition
+// KLS SameDay Driver v34.1 — Professional Workflow
 (() => {
   const raw = window.KLS_CONFIG || {};
   const root = document.getElementById('driver-app');
@@ -9,7 +9,7 @@
   })();
   const db = validUrl && key && window.supabase ? window.supabase.createClient(url, key) : null;
   const steps = ['Booked','En Route to Collection','Arrived at Collection','Collected','In Transit','Arrived at Delivery','Delivered'];
-  let state = { user:null, profile:null, jobs:[], loading:true, mode:'signin', notice:null, podJob:null, tab:'home', screen:'dashboard', detailJobId:null, networkJobs:[], myBids:[], online:navigator.onLine, lastUpdated:null, refreshing:false, jobAlerts:[], notificationsEnabled:typeof Notification!=='undefined'&&Notification.permission==='granted', completionCelebration:null };
+  let state = { user:null, profile:null, jobs:[], loading:true, mode:'signin', notice:null, podJob:null, workflowJob:null, workflowType:null, tab:'home', screen:'dashboard', detailJobId:null, networkJobs:[], myBids:[], messages:[], incidents:[], online:navigator.onLine, lastUpdated:null, refreshing:false, jobAlerts:[], notificationsEnabled:typeof Notification!=='undefined'&&Notification.permission==='granted', completionCelebration:null, darkMode:localStorage.getItem('kls-driver-dark')==='1' };
   let watchId = null;
   let activeJobId = null;
   let signatureCanvas = null;
@@ -271,7 +271,7 @@
       <div class="screen-heading"><small>DRIVER PROFILE</small><h1>${esc(state.profile?.driver_name||'Driver')}</h1><p>${esc(state.profile?.driver_vehicle||'Vehicle not set')}</p></div>
       <div class="profile-card"><div><span>Login</span><b>${esc(state.user?.email||'')}</b></div><div><span>Telephone</span><b>${esc(state.profile?.driver_phone||'Not set')}</b></div><div><span>Availability</span><b>${esc(state.profile?.availability_status||'Available')}</b></div></div>
       <section class="profile-notification-card"><div><span>New job alerts</span><b>${state.notificationsEnabled?'Enabled':'Not enabled'}</b></div><button class="btn secondary" data-enable-notifications>${state.notificationsEnabled?'Enabled ✓':'Enable alerts'}</button></section>
-      <button class="btn secondary full profile-signout" data-signout>Sign out</button>
+      <button class="btn secondary full" data-driver-tab="incident">Report an incident</button><button class="btn secondary full" data-toggle-dark>${state.darkMode?'Use light mode':'Use dark mode'}</button><button class="btn secondary full profile-signout" data-signout>Sign out</button>
     </section>`;
   }
   function detailSection(title,address,contact,phone,notes,company,timeLabel,timeValue){
@@ -301,8 +301,8 @@
       <section class="job-activity-card"><div class="activity-heading"><div><small>JOB ACTIVITY</small><h2>Progress history</h2></div><span>${esc(statusDisplay[job.job_status]?.[0]||job.job_status||'Booked')}</span></div><div class="activity-list">${activityRows(job).map(row=>`<div class="activity-row ${row.current?'current':''}"><i></i><div><b>${esc(row.step)}</b><small>${row.time?fmtClock(row.time):(row.complete?'Completed':'Current step')}</small></div></div>`).join('')}</div></section>
       <div class="sticky-job-actions">
         ${job.job_status!=='Delivered'?`<a class="btn secondary navigate-btn" target="_blank" rel="noopener" href="${mapsLink(destination)}">Open navigation</a>`:''}
-        ${action?`<button class="btn primary main-action" data-status-job="${job.id}" data-status="${esc(action[1])}">${esc(action[0])}</button>`:''}
-        ${job.job_status==='Arrived at Delivery'?`<button class="btn primary main-action" data-pod="${job.id}">Photo, signature & complete</button>`:''}
+        ${job.job_status==='Arrived at Collection'?`<button class="btn primary main-action" data-workflow-job="${job.id}" data-workflow="collection">Collection checks</button>`:action?`<button class="btn primary main-action" data-status-job="${job.id}" data-status="${esc(action[1])}">${esc(action[0])}</button>`:''}
+        ${job.job_status==='Arrived at Delivery'?`<button class="btn primary main-action" data-workflow-job="${job.id}" data-workflow="delivery">Delivery checks & POD</button>`:''}
         ${job.job_status==='Delivered'?`<button class="btn delivered-button" disabled>Delivery completed ✓</button>`:''}
         ${prev?`<button class="previous-step" data-previous-job="${job.id}" data-status="${esc(prev)}">← Previous step</button>`:''}
       </div>
@@ -334,6 +334,26 @@
   }
 
 
+
+  function routeView(){
+    const jobs=state.jobs.slice().sort((a,b)=>String(a.collection_date||'').localeCompare(String(b.collection_date||''))||String(a.collection_time||'').localeCompare(String(b.collection_time||'')));
+    return `<section class="route-screen"><div class="screen-heading"><small>TODAY'S ROUTE</small><h1>Your running order</h1><p>Completed, current and upcoming jobs in one view.</p></div>${jobs.length?`<div class="route-list">${jobs.map((job,i)=>{const done=job.job_status==='Delivered';const current=activeStatuses.includes(job.job_status);return `<article class="route-stop ${done?'done':current?'current':''}" data-open-job="${job.id}"><div class="route-number">${done?'✓':i+1}</div><div><small>${done?'COMPLETED':current?'CURRENT JOB':'UPCOMING'}</small><h3>${esc(shortPlace(job.collection_address))} → ${esc(shortPlace(job.delivery_address))}</h3><p>${jobTime(job)} · ${esc(job.job_number||'Job')}</p></div><span>›</span></article>`}).join('')}</div>`:'<div class="empty"><strong>No route assigned</strong></div>'}</section>`;
+  }
+
+  function messagesView(){
+    return `<section class="messages-screen"><div class="screen-heading"><small>DISPATCH</small><h1>Messages</h1><p>Updates from the KLS office.</p></div>${state.messages.length?`<div class="message-list">${state.messages.map(m=>`<article class="message-card"><div><b>${esc(m.subject||'Dispatch message')}</b><small>${fmtClock(m.created_at)}</small></div><p>${esc(m.message||'')}</p></article>`).join('')}</div>`:'<div class="empty compact"><strong>No messages</strong><p>New dispatch messages will appear here.</p></div>'}</section>`;
+  }
+
+  function incidentView(){
+    const job=state.jobs.find(j=>activeStatuses.includes(j.job_status))||state.jobs.find(j=>j.job_status!=='Delivered');
+    return `<section class="incident-screen"><div class="screen-heading"><small>DRIVER SUPPORT</small><h1>Report an incident</h1><p>Send the office the details immediately.</p></div><form id="incident-form" class="incident-form"><label>Incident type<select name="type" required><option value="">Choose one</option><option>Traffic delay</option><option>Customer unavailable</option><option>Damaged goods</option><option>Vehicle issue</option><option>Accident</option><option>Other</option></select></label><label>Related job<select name="job_id"><option value="">No job selected</option>${state.jobs.filter(j=>j.job_status!=='Delivered').map(j=>`<option value="${j.id}" ${job?.id===j.id?'selected':''}>${esc(j.job_number||'Job')} · ${esc(shortPlace(j.delivery_address))}</option>`).join('')}</select></label><label>Details<textarea name="notes" rows="5" required placeholder="Tell dispatch what has happened"></textarea></label><label>Photo (optional)<input name="photo" type="file" accept="image/*"></label><button class="btn primary full">Send incident report</button></form></section>`;
+  }
+
+  function workflowView(job,type){
+    const collection=type==='collection';
+    return `<div class="workflow-overlay"><section class="workflow-sheet"><div class="pod-head"><div><small>${collection?'COLLECTION CHECK':'DELIVERY CHECK'}</small><h2>${esc(job.job_number||'Job')}</h2></div><button data-close-workflow>×</button></div><form id="driver-workflow-form" class="workflow-form"><label class="check-row"><input type="checkbox" name="confirmed" required><span>${collection?'I am at the correct collection address':'I am at the correct delivery address'}</span></label>${collection?`<label class="check-row"><input type="checkbox" name="goods_ok" required><span>Goods checked and match the booking</span></label><label>Condition<select name="condition"><option>Goods in good condition</option><option>Damage found</option><option>Items missing</option></select></label>`:''}<label>${collection?'Collection photo':'Delivery photo'}<input name="photo" type="file" accept="image/*" ${collection?'':'required'}></label><label>Notes<textarea name="notes" rows="3" placeholder="Optional notes for the office"></textarea></label><button class="btn primary full" type="submit">${collection?'Confirm loaded & begin delivery':'Continue to signature & POD'}</button><button class="btn secondary full" type="button" data-close-workflow>Cancel</button></form></section></div>`;
+  }
+
   function appView(){
     const driverName=state.profile?.driver_name || 'Driver';
     const vehicle=state.profile?.driver_vehicle || 'Vehicle not set';
@@ -342,6 +362,9 @@
       ? jobDetailView(detailJob)
       : state.tab==='exchange' ? exchangeView()
       : state.tab==='jobs' ? jobsView()
+      : state.tab==='route' ? routeView()
+      : state.tab==='messages' ? messagesView()
+      : state.tab==='incident' ? incidentView()
       : state.tab==='profile' ? profileView()
       : dashboardView();
     return `<div class="driver-shell">
@@ -352,19 +375,21 @@
       <main class="driver-main">
         ${state.notice?`<div class="driver-msg ${state.notice.type}">${esc(state.notice.text)}</div>`:''}
         ${mainContent}
-        ${state.podJob?podView(state.podJob):''}
+        ${state.workflowJob?workflowView(state.workflowJob,state.workflowType):''}${state.podJob?podView(state.podJob):''}
         ${state.completionCelebration?`<div class="completion-celebration"><section><div class="completion-tick">✓</div><small>DELIVERY COMPLETE</small><h2>${esc(state.completionCelebration.job_number||'Job')}</h2><p>Proof of delivery has been saved successfully.</p><button class="btn primary full" data-close-celebration>Back to home</button></section></div>`:''}
       </main>
       ${state.screen!=='detail'?`<nav class="bottom-nav" aria-label="Driver navigation">
         <button class="${state.tab==='home'?'active':''}" data-driver-tab="home"><i>⌂</i><span>Home</span></button>
         <button class="${state.tab==='jobs'?'active':''}" data-driver-tab="jobs"><i>▤</i><span>Jobs</span>${state.jobs.filter(j=>j.job_status!=='Delivered').length?`<em>${state.jobs.filter(j=>j.job_status!=='Delivered').length}</em>`:''}</button>
-        <button class="${state.tab==='exchange'?'active':''}" data-driver-tab="exchange"><i>⇄</i><span>Exchange</span>${state.networkJobs.filter(j=>j.status==='open').length?`<em>${state.networkJobs.filter(j=>j.status==='open').length}</em>`:''}</button>
+        <button class="${state.tab==='route'?'active':''}" data-driver-tab="route"><i>↟</i><span>Route</span></button>
+        <button class="${state.tab==='messages'?'active':''}" data-driver-tab="messages"><i>✉</i><span>Messages</span>${state.messages.length?`<em>${state.messages.length}</em>`:''}</button>
         <button class="${state.tab==='profile'?'active':''}" data-driver-tab="profile"><i>◉</i><span>Profile</span></button>
       </nav>`:''}
     </div>`;
   }
 
   function render(){
+    document.body.classList.toggle('dark',state.darkMode);
     if(state.loading){root.innerHTML='<div class="driver-loading pro-loading"><div class="loader-mark">KLS</div><span></span><p>Loading Driver App…</p></div>';return;}
     if(!state.user){root.innerHTML=authView();bindAuth();return;}
     if(!state.profile){root.innerHTML=`<div class="driver-auth"><section class="driver-auth-card"><div class="driver-brand"><b>KLS</b><span>Driver</span></div><h1>Account not linked</h1>${state.notice?`<div class="driver-msg ${state.notice.type}">${esc(state.notice.text)}</div>`:`<p>Ask the KLS office to link this exact login email to your driver record:</p><div class="driver-msg error">${esc(state.user.email)}</div>`}<button class="btn secondary full" data-signout>Sign out</button></section></div>`;bindCommon();return;}
@@ -400,6 +425,11 @@
     document.querySelectorAll('[data-decline-award]').forEach(btn=>btn.onclick=async()=>{const reason=prompt('Reason for declining (optional):')||null;const{error}=await db.rpc('driver_decline_network_award',{p_network_job_id:btn.dataset.declineAward,p_reason:reason});if(error){notice(error.message,'error');return;}await loadDriver();notice('Job declined and returned to the network.','ok');});
     document.querySelectorAll('[data-status-job]').forEach(btn=>btn.onclick=()=>confirmAndAdvance(btn.dataset.statusJob,btn.dataset.status,btn.textContent.trim()));
     document.querySelectorAll('[data-previous-job]').forEach(btn=>btn.onclick=()=>moveToPreviousStep(btn.dataset.previousJob,btn.dataset.status));
+    document.querySelectorAll('[data-workflow-job]').forEach(btn=>btn.onclick=()=>{state.workflowJob=state.jobs.find(j=>j.id===btn.dataset.workflowJob);state.workflowType=btn.dataset.workflow;render();});
+    document.querySelectorAll('[data-close-workflow]').forEach(btn=>btn.onclick=()=>{state.workflowJob=null;state.workflowType=null;render();});
+    document.querySelector('[data-toggle-dark]')?.addEventListener('click',()=>{state.darkMode=!state.darkMode;localStorage.setItem('kls-driver-dark',state.darkMode?'1':'0');document.body.classList.toggle('dark',state.darkMode);render();});
+    document.getElementById('driver-workflow-form')?.addEventListener('submit',completeWorkflow);
+    document.getElementById('incident-form')?.addEventListener('submit',submitIncident);
     document.querySelectorAll('[data-pod]').forEach(btn=>{btn.onclick=()=>{state.podJob=state.jobs.find(j=>j.id===btn.dataset.pod);render();};});
     document.querySelectorAll('[data-close-pod]').forEach(btn=>btn.onclick=()=>{state.podJob=null;render();});
     setupSignature();
@@ -469,6 +499,8 @@
       );
       if(jobsResult.error) throw jobsResult.error;
       state.jobs=jobsResult.data||[];
+      const messagesResult=await db.from('driver_messages').select('*').eq('driver_id',driver.id).order('created_at',{ascending:false}).limit(50);
+      state.messages=messagesResult.error?[]:(messagesResult.data||[]);
       state.lastUpdated=new Date().toISOString();
 
       // Driver Exchange is deliberately loaded after the core app is visible.
@@ -550,6 +582,34 @@
 
   function signatureIsBlank(){if(!signatureCanvas)return true;const blank=document.createElement('canvas');blank.width=signatureCanvas.width;blank.height=signatureCanvas.height;return signatureCanvas.toDataURL()===blank.toDataURL();}
   async function upload(job,file,type){const ext=type==='signature'?'png':((file.name||'photo.jpg').split('.').pop()||'jpg');const path=`${state.user.id}/${job.id}/${type}-${Date.now()}.${ext}`;const{error}=await db.storage.from('pod').upload(path,file,{contentType:file.type||'image/jpeg'});if(error)throw error;return db.storage.from('pod').getPublicUrl(path).data.publicUrl;}
+
+
+  async function completeWorkflow(e){
+    e.preventDefault();
+    const job=state.workflowJob, type=state.workflowType, form=e.currentTarget, button=form.querySelector('button[type="submit"]');
+    try{
+      button.disabled=true;button.textContent='Saving…';
+      const fd=new FormData(form);
+      const photo=fd.get('photo');
+      let photoUrl=null;
+      if(photo?.size)photoUrl=await upload(job,photo,type==='collection'?'collection':'delivery');
+      if(type==='collection'){
+        const {error}=await db.from('driver_job_checks').insert({job_id:job.id,driver_id:state.profile.linked_driver_id,check_type:'collection',condition:String(fd.get('condition')||''),notes:String(fd.get('notes')||'')||null,photo_url:photoUrl});
+        if(error)throw error;
+        state.workflowJob=null;state.workflowType=null;
+        await advanceStatus(job.id,'Collected',false);
+        await advanceStatus(job.id,'In Transit',false);
+      }else{
+        if(photoUrl)job._workflowDeliveryPhoto=photoUrl;
+        state.workflowJob=null;state.workflowType=null;state.podJob=job;render();
+      }
+    }catch(error){button.disabled=false;button.textContent=type==='collection'?'Confirm loaded & begin delivery':'Continue to signature & POD';notice(error.message,'error');}
+  }
+
+  async function submitIncident(e){
+    e.preventDefault();const form=e.currentTarget,fd=new FormData(form),button=form.querySelector('button');
+    try{button.disabled=true;button.textContent='Sending…';let photoUrl=null;const photo=fd.get('photo');const job=state.jobs.find(j=>j.id===fd.get('job_id'));if(photo?.size)photoUrl=await upload(job||{id:'incident'},photo,'incident');const pos=await nowPosition().catch(()=>null);const {error}=await db.from('driver_incidents').insert({driver_id:state.profile.linked_driver_id,job_id:fd.get('job_id')||null,incident_type:fd.get('type'),notes:fd.get('notes'),photo_url:photoUrl,latitude:pos?.coords.latitude??null,longitude:pos?.coords.longitude??null});if(error)throw error;state.tab='home';notice('Incident report sent to dispatch.','ok');}catch(error){button.disabled=false;button.textContent='Send incident report';notice(error.message,'error');}
+  }
 
   async function completePod(e){
     e?.preventDefault?.();

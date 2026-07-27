@@ -8,3 +8,5 @@ KLS SameDay Office v33.1 – Release Checklist
 6. Confirm jobs due within 45 minutes appear in Needs attention.
 7. Test drag-and-drop and Driver App updates.
 8. Deploy to GitHub/Vercel.
+
+V34.3: Run SUPABASE-v34.3-DRIVER-APP-PRO.sql and test job chat policies.

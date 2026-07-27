@@ -1,3 +1,19 @@
+# KLS SameDay Office v34.3
+
+## Driver App Pro
+
+- Map app chooser: Google Maps, Apple Maps or Waze
+- Favourite collection and delivery locations stored on the driver's device
+- Photo preview before collection, incident and POD uploads
+- Live timer for the current job
+- Important site instructions displayed prominently
+- Job-specific driver-to-dispatch chat
+- Messages queued automatically if the mobile signal drops
+- Larger, cleaner driver job cards
+- No swipe controls and no shift clock features
+
+Run `SUPABASE-v34.3-DRIVER-APP-PRO.sql` in Supabase before deployment.
+
 # KLS SameDay Office v34.2
 
 Smart Driver Assistant upgrade.

@@ -1,4 +1,4 @@
-// KLS SameDay Driver v34.1 — Professional Workflow
+// KLS SameDay Driver v34.3 — Driver App Pro
 (() => {
   const raw = window.KLS_CONFIG || {};
   const root = document.getElementById('driver-app');
@@ -9,7 +9,7 @@
   })();
   const db = validUrl && key && window.supabase ? window.supabase.createClient(url, key) : null;
   const steps = ['Booked','En Route to Collection','Arrived at Collection','Collected','In Transit','Arrived at Delivery','Delivered'];
-  let state = { user:null, profile:null, jobs:[], loading:true, mode:'signin', notice:null, podJob:null, workflowJob:null, workflowType:null, tab:'home', screen:'dashboard', detailJobId:null, networkJobs:[], myBids:[], messages:[], incidents:[], online:navigator.onLine, lastUpdated:null, refreshing:false, jobAlerts:[], notificationsEnabled:typeof Notification!=='undefined'&&Notification.permission==='granted', completionCelebration:null, darkMode:localStorage.getItem('kls-driver-dark')==='1', assistantHelp:false, arrivalPrompt:null, fuelDismissed:localStorage.getItem('kls-fuel-dismissed')===new Date().toISOString().slice(0,10) };
+  let state = { user:null, profile:null, jobs:[], loading:true, mode:'signin', notice:null, podJob:null, workflowJob:null, workflowType:null, tab:'home', screen:'dashboard', detailJobId:null, networkJobs:[], myBids:[], messages:[], incidents:[], online:navigator.onLine, lastUpdated:null, refreshing:false, jobAlerts:[], notificationsEnabled:typeof Notification!=='undefined'&&Notification.permission==='granted', completionCelebration:null, darkMode:localStorage.getItem('kls-driver-dark')==='1', assistantHelp:false, arrivalPrompt:null, fuelDismissed:localStorage.getItem('kls-fuel-dismissed')===new Date().toISOString().slice(0,10), navAddress:null, jobMessages:[], offlineQueue:JSON.parse(localStorage.getItem('kls-driver-offline-queue')||'[]') };
   let watchId = null;
   let activeJobId = null;
   let signatureCanvas = null;
@@ -21,6 +21,8 @@
   const nowPosition = () => new Promise((resolve,reject)=>navigator.geolocation.getCurrentPosition(resolve,reject,{enableHighAccuracy:true,timeout:15000,maximumAge:5000}));
   const notice = (text,type='ok') => { state.notice={text,type}; render(); };
   const mapsLink = address => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address || '')}`;
+  const favouriteKey=address=>`kls-favourite-${String(address||'').trim().toLowerCase()}`;
+  const isFavourite=address=>localStorage.getItem(favouriteKey(address))==='1';
   const fmtClock = value => value ? new Date(value).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : '';
   const statusTimeFields = {
     'Booked':['created_at','booked_at'],
@@ -118,6 +120,44 @@
     ].filter(([,value])=>value);
     if(!rows.length)return '';
     return `<section class="goods-card detailed-goods"><small>GOODS</small>${rows.map(([label,value])=>`<div><span>${esc(label)}</span><b>${esc(value)}</b></div>`).join('')}</section>`;
+  }
+
+  function jobTimer(job){
+    if(!job||job.job_status==='Delivered')return '';
+    const started=firstValue(job,['started_at','en_route_collection_at','updated_at','created_at']);
+    if(!started)return '';
+    return `<div class="live-job-timer" data-job-start="${esc(started)}"><small>LIVE JOB TIME</small><b>Calculating…</b></div>`;
+  }
+  function navigationOverlay(){
+    if(!state.navAddress)return '';
+    const q=encodeURIComponent(state.navAddress);
+    return `<div class="pod-overlay"><section class="pod-sheet nav-choice-sheet"><div class="pod-head"><div><small>NAVIGATION</small><h2>Choose your map app</h2></div><button data-close-nav>×</button></div><p>${esc(state.navAddress)}</p><div class="nav-choice-grid"><a target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${q}">Google Maps</a><a target="_blank" rel="noopener" href="https://maps.apple.com/?q=${q}">Apple Maps</a><a target="_blank" rel="noopener" href="https://waze.com/ul?q=${q}&navigate=yes">Waze</a></div></section></div>`;
+  }
+  function jobChat(job){
+    const rows=state.jobMessages.filter(m=>m.job_id===job.id);
+    return `<section class="job-chat-card"><div class="panel-title"><small>JOB CHAT</small><h2>Message dispatch</h2></div><div class="job-chat-list">${rows.length?rows.map(m=>`<div class="job-chat-message ${m.sender_type==='driver'?'mine':''}"><b>${m.sender_type==='driver'?'You':'Dispatch'}</b><p>${esc(m.message)}</p><small>${fmtClock(m.created_at)}${m._queued?' · Waiting for signal':''}</small></div>`).join(''):'<p class="chat-empty">No messages on this job yet.</p>'}</div><form class="job-chat-form" data-job-chat="${job.id}"><textarea name="message" rows="2" required placeholder="Type a quick update for dispatch"></textarea><button class="btn primary" type="submit">Send</button></form></section>`;
+  }
+  function setupPhotoPreviews(){
+    document.querySelectorAll('input[type=file][accept*="image"]').forEach(input=>{
+      if(input.dataset.previewBound)return; input.dataset.previewBound='1';
+      const preview=document.createElement('div'); preview.className='photo-preview'; input.insertAdjacentElement('afterend',preview);
+      input.addEventListener('change',()=>{const file=input.files?.[0];if(!file){preview.innerHTML='';return;}const url=URL.createObjectURL(file);preview.innerHTML=`<img src="${url}" alt="Photo preview"><span>${esc(file.name||'Photo ready')}</span>`;});
+    });
+  }
+  function updateJobTimers(){
+    document.querySelectorAll('[data-job-start]').forEach(el=>{const start=new Date(el.dataset.jobStart);if(Number.isNaN(start.getTime()))return;const mins=Math.max(0,Math.floor((Date.now()-start.getTime())/60000));const h=Math.floor(mins/60),m=mins%60;const b=el.querySelector('b');if(b)b.textContent=h?`${h}h ${m}m`:`${m} min`;});
+  }
+  function saveOfflineQueue(){localStorage.setItem('kls-driver-offline-queue',JSON.stringify(state.offlineQueue));}
+  async function flushOfflineQueue(){
+    if(!navigator.onLine||!db||!state.offlineQueue.length)return;
+    const pending=[...state.offlineQueue];
+    for(const item of pending){
+      if(item.type==='job_message'){
+        const {error}=await db.from('driver_job_messages').insert(item.payload);
+        if(!error)state.offlineQueue=state.offlineQueue.filter(q=>q.id!==item.id);
+      }
+    }
+    saveOfflineQueue();
   }
 
   function authView(){
@@ -304,7 +344,7 @@
     </section>`;
   }
   function detailSection(title,address,contact,phone,notes,company,timeLabel,timeValue){
-    return `<section class="location-card detailed-location"><div class="location-title"><small>${esc(title)}</small>${timeValue?`<b>${esc(timeLabel)}: ${esc(timeValue)}</b>`:''}</div>${company?`<h3>${esc(company)}</h3>`:''}<h2>${esc(address||'Address not supplied')}</h2>${contact?`<div class="location-line"><span>Contact</span><b>${esc(contact)}</b></div>`:''}${phone?`<div class="location-line"><span>Telephone</span><b class="phone-number">${esc(phone)}</b></div>`:''}${notes?`<div class="job-instructions"><span>Instructions</span><p>${esc(notes)}</p></div>`:''}</section>`;
+    return `<section class="location-card detailed-location"><div class="location-title"><small>${esc(title)}</small>${timeValue?`<b>${esc(timeLabel)}: ${esc(timeValue)}</b>`:''}</div>${company?`<h3>${esc(company)}</h3>`:''}<h2>${esc(address||'Address not supplied')}</h2><div class="location-tools"><button type="button" data-nav-address="${esc(address||'')}">Navigate</button><button type="button" data-favourite-address="${esc(address||'')}">${isFavourite(address)?'★ Favourite':'☆ Save location'}</button></div>${contact?`<div class="location-line"><span>Contact</span><b>${esc(contact)}</b></div>`:''}${phone?`<div class="location-line"><span>Telephone</span><b class="phone-number">${esc(phone)}</b></div>`:''}${notes?`<div class="job-instructions priority-instructions"><span>IMPORTANT INSTRUCTIONS</span><p>${esc(notes)}</p></div>`:''}</section>`;
   }
   function jobDetailView(job){
     const action=nextAction(job);
@@ -321,15 +361,17 @@
       ${routeHeader(job)}
       ${statusBanner(job)}
       ${routeInfoPanel(job)}
+      ${jobTimer(job)}
       ${importantNotes(job)}
       <div class="workflow-progress">${steps.map((step,i)=>`<span class="${i<idx?'complete':i===idx?'current':''}"><i></i><small>${esc(step)}</small></span>`).join('')}</div>
       ${detailSection('COLLECTION',job.collection_address,contactValue(job,'collection'),phoneValue(job,'collection'),notesValue(job,'collection'),collectCompany,'Ready',collectionClock)}
       ${detailSection('DELIVERY',job.delivery_address,contactValue(job,'delivery'),phoneValue(job,'delivery'),notesValue(job,'delivery'),deliveryCompany,'Deadline',deliveryClock)}
       ${goodsDetails(job)}
       ${jobInfoPanel(job)}
+      ${jobChat(job)}
       <section class="job-activity-card"><div class="activity-heading"><div><small>JOB ACTIVITY</small><h2>Progress history</h2></div><span>${esc(statusDisplay[job.job_status]?.[0]||job.job_status||'Booked')}</span></div><div class="activity-list">${activityRows(job).map(row=>`<div class="activity-row ${row.current?'current':''}"><i></i><div><b>${esc(row.step)}</b><small>${row.time?fmtClock(row.time):(row.complete?'Completed':'Current step')}</small></div></div>`).join('')}</div></section>
       <div class="sticky-job-actions">
-        ${job.job_status!=='Delivered'?`<a class="btn secondary navigate-btn" target="_blank" rel="noopener" href="${mapsLink(destination)}">Open navigation</a>`:''}
+        ${job.job_status!=='Delivered'?`<button class="btn secondary navigate-btn" type="button" data-nav-address="${esc(destination||'')}">Open navigation</button>`:''}
         ${job.job_status==='Arrived at Collection'?`<button class="btn primary main-action" data-workflow-job="${job.id}" data-workflow="collection">Collection checks</button>`:action?`<button class="btn primary main-action" data-status-job="${job.id}" data-status="${esc(action[1])}">${esc(action[0])}</button>`:''}
         ${job.job_status==='Arrived at Delivery'?`<button class="btn primary main-action" data-workflow-job="${job.id}" data-workflow="delivery">Delivery checks & POD</button>`:''}
         ${job.job_status==='Delivered'?`<button class="btn delivered-button" disabled>Delivery completed ✓</button>`:''}
@@ -404,7 +446,7 @@
       <main class="driver-main">
         ${state.notice?`<div class="driver-msg ${state.notice.type}">${esc(state.notice.text)}</div>`:''}
         ${mainContent}
-        ${state.workflowJob?workflowView(state.workflowJob,state.workflowType):''}${state.podJob?podView(state.podJob):''}${helpOverlay()}${arrivalOverlay()}
+        ${state.workflowJob?workflowView(state.workflowJob,state.workflowType):''}${state.podJob?podView(state.podJob):''}${helpOverlay()}${arrivalOverlay()}${navigationOverlay()}
         ${state.completionCelebration?`<div class="completion-celebration"><section><div class="completion-tick">✓</div><small>DELIVERY COMPLETE</small><h2>${esc(state.completionCelebration.job_number||'Job')}</h2><p>Proof of delivery has been saved successfully.</p><button class="btn primary full" data-close-celebration>Back to home</button></section></div>`:''}
       </main>
       ${state.screen!=='detail'?`<nav class="bottom-nav" aria-label="Driver navigation">
@@ -462,12 +504,17 @@
     document.querySelector('[data-dismiss-arrival]')?.addEventListener('click',()=>{state.arrivalPrompt=null;render();});
     document.querySelector('[data-confirm-arrival]')?.addEventListener('click',()=>{const a=state.arrivalPrompt;state.arrivalPrompt=null;if(a)confirmAndAdvance(a.jobId,a.status,'Confirm arrival');});
     document.querySelector('[data-toggle-dark]')?.addEventListener('click',()=>{state.darkMode=!state.darkMode;localStorage.setItem('kls-driver-dark',state.darkMode?'1':'0');document.body.classList.toggle('dark',state.darkMode);render();});
+    document.querySelectorAll('[data-nav-address]').forEach(btn=>btn.onclick=()=>{state.navAddress=btn.dataset.navAddress;render();});
+    document.querySelector('[data-close-nav]')?.addEventListener('click',()=>{state.navAddress=null;render();});
+    document.querySelectorAll('[data-favourite-address]').forEach(btn=>btn.onclick=()=>{const address=btn.dataset.favouriteAddress,key=favouriteKey(address);localStorage.setItem(key,isFavourite(address)?'0':'1');render();});
+    document.querySelectorAll('[data-job-chat]').forEach(form=>form.onsubmit=async e=>{e.preventDefault();const message=String(new FormData(form).get('message')||'').trim();if(!message)return;const payload={job_id:form.dataset.jobChat,driver_id:state.profile.linked_driver_id,sender_type:'driver',message,created_at:new Date().toISOString()};if(!navigator.onLine){const queued={id:crypto.randomUUID(),type:'job_message',payload};state.offlineQueue.push(queued);saveOfflineQueue();state.jobMessages.push({...payload,id:queued.id,_queued:true});notice('Message saved and will send when your signal returns.','ok');return;}const{data,error}=await db.from('driver_job_messages').insert(payload).select().single();if(error){notice(error.message,'error');return;}state.jobMessages.push(data);render();});
     document.getElementById('driver-workflow-form')?.addEventListener('submit',completeWorkflow);
     document.getElementById('incident-form')?.addEventListener('submit',submitIncident);
     document.querySelectorAll('[data-pod]').forEach(btn=>{btn.onclick=()=>{state.podJob=state.jobs.find(j=>j.id===btn.dataset.pod);render();};});
     document.querySelectorAll('[data-close-pod]').forEach(btn=>btn.onclick=()=>{state.podJob=null;render();});
     setupSignature();
     document.getElementById('pod-submit-button')?.addEventListener('click',completePod);
+    setupPhotoPreviews(); updateJobTimers(); clearInterval(window.__klsJobTimer); window.__klsJobTimer=setInterval(updateJobTimers,30000);
   }
 
 
@@ -555,6 +602,8 @@
       state.jobs=jobsResult.data||[];
       const messagesResult=await db.from('driver_messages').select('*').eq('driver_id',driver.id).order('created_at',{ascending:false}).limit(50);
       state.messages=messagesResult.error?[]:(messagesResult.data||[]);
+      const jobMessagesResult=await db.from('driver_job_messages').select('*').eq('driver_id',driver.id).order('created_at',{ascending:true}).limit(200);
+      state.jobMessages=jobMessagesResult.error?[]:(jobMessagesResult.data||[]);
       state.lastUpdated=new Date().toISOString();
 
       // Driver Exchange is deliberately loaded after the core app is visible.
@@ -787,7 +836,7 @@
     if(state.user)await loadDriver();
     else{state.loading=false;render();}
   }
-  window.addEventListener('online',()=>{state.online=true;refreshAssignedJobs(true);render();});
+  window.addEventListener('online',async()=>{state.online=true;await flushOfflineQueue();await loadDriver();render();});
   window.addEventListener('offline',()=>{state.online=false;render();});
   document.addEventListener('visibilitychange',()=>{if(!document.hidden&&state.user&&state.profile)refreshAssignedJobs(true);});
   init();

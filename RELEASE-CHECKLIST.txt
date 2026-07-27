@@ -1,4 +1,4 @@
-KLS SameDay Office v27.1 — Premium Light UI
+KLS SameDay Office v27.2 — Premium Light UI
 
 Release focus
 - Complete premium light-theme redesign
@@ -18,7 +18,7 @@ Checks completed
 - manifest.json validation
 - vercel.json validation
 - CSS brace validation
-- Version and service-worker cache updated to v27.1
+- Version and service-worker cache updated to v27.2
 
 After deployment
 1. Allow Vercel to finish deploying.

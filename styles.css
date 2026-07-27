@@ -337,7 +337,7 @@ td button:not(.alt):not(.danger){background:#111827!important;color:#fff!importa
 @media(max-width:700px){.actions{background:#fff!important;border-top:1px solid #eaecf0!important}.side{box-shadow:14px 0 34px rgba(16,24,40,.14)!important}}
 
 /* =========================================================
-   KLS SameDay Office v27.1 — Premium contrast refinement
+   KLS SameDay Office v27.2 — Complete premium light-surface pass
    Keeps the dark hero/finance accents, while all working
    panels use bright surfaces and high-contrast typography.
    ========================================================= */
@@ -478,3 +478,179 @@ td button:not(.alt):not(.danger){background:#111827!important;color:#fff!importa
 button:not(:disabled){font-weight:700}
 button.primary:not(:disabled),.primary:not(:disabled){color:#fff!important}
 button.secondary:not(:disabled),.secondary:not(:disabled){color:#344054!important}
+
+/* =========================================================
+   KLS SameDay Office v27.2 — Complete light-surface pass
+   Converts every legacy operational module to readable,
+   premium white surfaces. Only major hero accents and the
+   finance strip remain intentionally dark.
+   ========================================================= */
+
+/* Universal module work surfaces */
+.attention-list button,.all-clear,.mini-metrics>div,
+.dispatch-column,.dispatch-card,.dispatch-route,
+.planner-job,.ops-list-row,
+.crm-card,.crm-timeline,.crm-account,.crm-notes,
+.driver-card,.driver-route p,.tracking-controls,.existing-pod,
+.track-card,.track-route p,.track-waiting,.track-update,.delivered-box,
+.driver-manager,.driver-dispatch-card,.driver-assignment-strip,.track-stops,.eta-box,
+.live-map-panel,.dispatch-map,.map-empty,
+.fleet-card,.fleet-dates p,.fleet-alerts>div,
+.schedule-toolbar,.calendar-wrap,.calendar-weekdays b,.calendar-day,.calendar-job,.schedule-list button,
+.portal-shell,.portal-top,.portal-job-list article,.portal-admin-list article,.portal-access-list article,
+.tracking-job-card,.intelligence-card,.intelligence-route p,.intelligence-numbers>div,.best-driver,
+.route-unassigned,.route-driver-lane,.route-job-card,
+.driver-toolbar,
+.dispatch-v4-tools,.dispatch-board-column,.dispatch-board-column>header,.dispatch-board-card,.dispatch-driver-strip,
+.driver-control-card,.driver-control-details>div,.driver-current-job,
+.jobs-command-kpis>div,.jobs-board-column,.jobs-board-column>header,.jobs-board-card,.jobs-board-route,
+.job-command-summary>div,.job-command-side>section,.job-pod-preview p,
+.dispatch-command-panel,.dispatch-alert-row,.dispatch-activity-row,
+.ops-chart-panel,.ops-activity>div>button,
+.billing-queue-card,
+.crm-table th,.crm-record-sections details,.crm-account-grid p,
+.pipeline-column,.lead-card,
+.communication-tabs button,.communication-preview,.reminder-list article,.template-list article,
+.template-edit-form,.communication-history article,.recent-communications button,
+.ai-recommendation,.ai-alert,
+.bi-insights button,.bi-summary article,
+.system-check,.export-grid button,
+.job-workflow,.job-action-bar {
+  background:#fff!important;
+  color:#101828!important;
+  border-color:#e4e7ec!important;
+  box-shadow:0 6px 18px rgba(16,24,40,.05)!important;
+}
+
+/* Dark-page shells that should now be light */
+.portal-shell,.public-track,html,body,main{
+  background:#f4f6f8!important;
+  color:#101828!important;
+}
+
+/* Inputs and controls inside older modules */
+.driver-manager input,.dispatch-assignment select,.driver-availability select,
+.driver-control-details select,.jobs-driver-control select,.job-driver-select,
+.communication-tabs button,.template-edit-form input,.template-edit-form textarea,.template-edit-form select{
+  background:#fff!important;
+  color:#101828!important;
+  border:1px solid #d0d5dd!important;
+}
+
+/* Readable headings and normal text everywhere */
+.dispatch-column h2,.dispatch-card b,.dispatch-card strong,.dispatch-route b,
+.planner-job b,.ops-list-row b,.crm-card b,.crm-timeline b,.crm-account b,
+.driver-card b,.driver-route b,.track-card b,.track-route b,.live-map-panel h2,
+.fleet-card b,.calendar-day b,.calendar-job b,.schedule-list b,
+.portal-job-list b,.portal-admin-list b,.portal-access-list b,
+.tracking-job-card b,.intelligence-card b,.best-driver b,.route-job-card b,
+.dispatch-board-card b,.driver-control-card b,.driver-current-job b,
+.jobs-board-card b,.job-command-summary b,.job-command-side b,
+.dispatch-alert-row b,.dispatch-activity-row b,.billing-queue-card b,
+.crm-record-sections b,.crm-account-grid b,.lead-card b,
+.communication-preview b,.reminder-list b,.template-list b,.communication-history b,
+.recent-communications b,.ai-recommendation b,.ai-alert b,
+.bi-insights b,.bi-summary b,.system-check b,.export-grid b,
+.job-workflow b,.job-action-bar b{
+  color:#101828!important;
+}
+
+.dispatch-column p,.dispatch-card p,.dispatch-card small,.dispatch-route p,
+.planner-job p,.planner-job small,.ops-list-row p,.ops-list-row small,
+.crm-card p,.crm-card small,.crm-timeline p,.crm-account p,.crm-notes p,
+.driver-card p,.driver-card small,.driver-route small,.track-card p,.track-card small,
+.track-route p,.track-waiting p,.track-update p,.live-map-panel p,.map-empty p,
+.fleet-card p,.fleet-card small,.calendar-day small,.calendar-job small,.schedule-list small,
+.portal-job-list p,.portal-job-list small,.portal-admin-list small,.portal-access-list small,
+.tracking-job-card p,.tracking-job-card small,.intelligence-card p,.intelligence-card small,
+.best-driver p,.best-driver small,.route-job-card p,.route-job-card small,
+.dispatch-board-card p,.dispatch-board-card small,.driver-control-card p,.driver-control-card small,
+.driver-current-job p,.jobs-board-card p,.jobs-board-card small,
+.job-command-summary p,.job-command-side p,.dispatch-alert-row small,.dispatch-activity-row small,
+.billing-queue-card p,.billing-queue-card small,.crm-record-sections p,.crm-account-grid p,
+.lead-card p,.lead-card small,.communication-preview p,.reminder-list small,.template-list small,
+.communication-history p,.communication-history small,.recent-communications small,
+.ai-recommendation p,.ai-alert p,.bi-insights small,.bi-summary p,.system-check small,
+.export-grid small,.job-workflow small,.job-contact-card span,.jobs-search-count{
+  color:#667085!important;
+}
+
+/* Board headers and counters */
+.dispatch-column-head>span,.dispatch-board-column>header b,.jobs-board-column>header>span,
+.dispatch-command-panel>header>b,.ops-activity>div>button>span,
+.history-icon,.recent-communications button>span,.export-grid button>span,
+.crm-event>span,.driver-card-head>span,.calendar-date span,.schedule-list em,
+.dispatch-board-meta span,.dispatch-status-pill,.jobs-status-pill,.account-status,
+.channel-pill,.communication-status,.decision,.tracking-health{
+  background:#f2f4f7!important;
+  color:#344054!important;
+  border-color:#e4e7ec!important;
+}
+
+/* Keep useful semantic statuses readable */
+.account-status.paid,.portal-status.delivered,.portal-status.approved,.tracking-health.live,
+.decision.accept,.profit-pill.good,.system-live,.live-pill,.dispatch-badge,.eta-countdown{
+  background:#ecfdf3!important;color:#067647!important;border-color:#abefc6!important;
+}
+.account-status.partpaid,.tracking-health.recent,.channel-pill.email,.communication-status.prepared,.eta-pill{
+  background:#eff8ff!important;color:#175cd3!important;border-color:#b2ddff!important;
+}
+.account-status.overdue,.portal-status.rejected,.portal-status.cancelled,.tracking-health.stale,
+.decision.low-margin,.profit-pill.loss{
+  background:#fef3f2!important;color:#b42318!important;border-color:#fecdca!important;
+}
+.account-status.unpaid,.portal-status.pending,.decision.review,.profit-pill.warn{
+  background:#fffaeb!important;color:#b54708!important;border-color:#fedf89!important;
+}
+
+/* Warning and alert cards remain coloured but with strong contrast */
+.attention-card,.bi-insights button.warn,.profit-warning,.fleet-alerts>div{
+  background:#fffaeb!important;color:#7a2e0e!important;border-color:#fedf89!important;
+}
+.bi-insights button.danger,.reminder-list article.high{
+  background:#fef3f2!important;color:#b42318!important;border-color:#fecdca!important;
+}
+.bi-insights button.good{
+  background:#ecfdf3!important;color:#067647!important;border-color:#abefc6!important;
+}
+
+/* Workflow bar is now a white premium card */
+.job-workflow span{background:#fff!important;color:#667085!important;border-color:#d0d5dd!important}
+.job-workflow .done span{background:#ecfdf3!important;color:#067647!important;border-color:#6ce9a6!important}
+.job-action-bar{box-shadow:none!important}
+
+/* Major dark accents: force high-contrast white typography */
+.hero,.command-hero,.ops-hero,.crm-hero,.fleet-hero,.schedule-hero,.accounts-hero,
+.portal-hero,.tracking-hero,.smart-hero,.route-hero,.dispatch-v4-hero,.drivers-hero,
+.jobs-command-hero,.billing-hero,.documents-hero,.reports-hero,.pipeline-hero,
+.communications-hero,.ai-hero,.bi-hero,.profit-hero,.system-version,.dispatch-toolbar{
+  color:#fff!important;
+}
+.hero *,.command-hero *,.ops-hero *,.crm-hero *,.fleet-hero *,.schedule-hero *,
+.accounts-hero *,.portal-hero *,.tracking-hero *,.smart-hero *,.route-hero *,
+.dispatch-v4-hero *,.drivers-hero *,.jobs-command-hero *,.billing-hero *,
+.documents-hero *,.reports-hero *,.pipeline-hero *,.communications-hero *,
+.ai-hero *,.bi-hero *,.profit-hero *,.system-version *,.dispatch-toolbar *{
+  color:#fff!important;
+}
+
+/* Buttons inside dark accents */
+.hero .secondary,.command-hero .secondary,.ops-hero .secondary,.crm-hero .secondary,
+.fleet-hero .secondary,.schedule-hero .secondary,.accounts-hero .secondary,
+.tracking-hero .secondary,.smart-hero .secondary,.route-hero .secondary,
+.dispatch-v4-hero .secondary,.drivers-hero .secondary,.jobs-command-hero .secondary,
+.billing-hero .secondary,.documents-hero .secondary,.reports-hero .secondary,
+.pipeline-hero .secondary,.communications-hero .secondary,.ai-hero .secondary,
+.bi-hero .secondary,.profit-hero .secondary,.dispatch-toolbar .secondary{
+  background:#fff!important;color:#101828!important;border-color:#fff!important;
+}
+
+/* Map popup compatibility */
+.leaflet-popup-content-wrapper,.leaflet-popup-tip{background:#fff!important;color:#101828!important}
+.leaflet-popup-content{color:#101828!important}
+
+/* Final accessibility safety net for legacy dark text */
+.card h1,.card h2,.card h3,.card h4,.panel h1,.panel h2,.panel h3,.panel h4,
+article h1,article h2,article h3,article h4,section h1,section h2,section h3,section h4{
+  color:#101828;
+}

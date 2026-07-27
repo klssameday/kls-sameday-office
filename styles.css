@@ -901,7 +901,7 @@ button:not(:disabled):active{transform:translateY(1px)}
 }
 
 /* =========================================================
-   KLS SameDay Office v27.5 — Typography & visual consistency
+   KLS SameDay Office v27.6 — Typography & visual consistency
    ========================================================= */
 :root{
   --kls-text:#101828;
@@ -1011,4 +1011,67 @@ button:disabled,.btn:disabled{
   h1{font-size:1.55rem}
   h2{font-size:1.2rem}
   button,.btn,.primary,.secondary,.danger,.success{min-height:44px}
+}
+
+/* =========================================================
+   KLS SameDay Office v27.6 — Performance, print & data-view polish
+   ========================================================= */
+
+/* Keep large operational tables usable without breaking the page layout */
+.tablewrap,.table-wrap,.data-table-wrap,[class*="table-container"]{
+  max-width:100%;
+  overflow-x:auto;
+  overscroll-behavior-inline:contain;
+  scrollbar-gutter:stable;
+  -webkit-overflow-scrolling:touch;
+}
+.tablewrap table,.table-wrap table,.data-table-wrap table,[class*="table-container"] table{
+  min-width:720px;
+}
+
+/* Faster-feeling, restrained interaction feedback */
+button,.btn,a.nav-item,.card,.panel{
+  transition:background-color .16s ease,border-color .16s ease,color .16s ease,box-shadow .16s ease,transform .16s ease;
+}
+button:not(:disabled):active,.btn:not(:disabled):active{transform:translateY(1px)}
+
+/* Prevent long references, email addresses and postcodes from overflowing cards */
+.card,.panel,.modal,.drawer,td,th{
+  overflow-wrap:anywhere;
+}
+
+/* Cleaner native scrollbars on supported desktop browsers */
+*{scrollbar-width:thin;scrollbar-color:#cbd5e1 transparent}
+*::-webkit-scrollbar{width:10px;height:10px}
+*::-webkit-scrollbar-thumb{background:#cbd5e1;border:3px solid transparent;border-radius:999px;background-clip:padding-box}
+*::-webkit-scrollbar-track{background:transparent}
+
+/* Print-ready quotes, invoices, job sheets and reports */
+@media print{
+  @page{size:A4;margin:12mm}
+  html,body{background:#fff!important;color:#000!important;font-size:11pt!important}
+  body{min-height:auto!important}
+  .side,.sidebar,.topbar,header,.hamb,.install-app-button,
+  button,.btn,.no-print,[data-no-print],nav,.toast,.modal-backdrop{
+    display:none!important;
+  }
+  .main,.content,.page-content,.main-content,#app{
+    width:100%!important;max-width:none!important;margin:0!important;padding:0!important;
+  }
+  .card,.panel,.kpi,.metric,.stat-card,.summary-card,.tablewrap{
+    background:#fff!important;color:#000!important;border:1px solid #d0d5dd!important;
+    box-shadow:none!important;break-inside:avoid;
+  }
+  h1,h2,h3,h4,h5,h6,p,span,small,label,td,th{
+    color:#000!important;text-shadow:none!important;
+  }
+  table{width:100%!important;min-width:0!important;border-collapse:collapse!important}
+  th,td{border:1px solid #d0d5dd!important;padding:6px!important}
+  a{color:#000!important;text-decoration:none!important}
+  .hero,.welcome-banner,.finance-strip,.dark-banner,.premium-banner,[class*="dark-panel"]{
+    background:#fff!important;color:#000!important;border:1px solid #d0d5dd!important;
+  }
+  .hero *,.welcome-banner *,.finance-strip *,.dark-banner *,.premium-banner *,[class*="dark-panel"] *{
+    color:#000!important;
+  }
 }

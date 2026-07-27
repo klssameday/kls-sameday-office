@@ -1,16 +1,16 @@
-# KLS SameDay Office v27.5
+# KLS SameDay Office v27.6
 
-Premium navigation and usability refinement release.
+## Performance, Print & Data-View Polish
 
-## v27.5 improvements
+This release retains every working v27.5 feature and improves day-to-day usability:
 
-- White premium sidebar with clear active navigation
-- Sticky translucent top bar for easier movement through long pages
-- Stronger page hierarchy and card styling
-- Cleaner form focus and hover states
-- More polished tables and empty states
-- Consistent button feedback
-- Improved mobile navigation presentation
-- All v27.3 accessibility and responsive improvements retained
+- Faster third-party resource connection setup
+- Safer horizontal scrolling for large tables
+- Long references and addresses no longer break cards
+- Cleaner desktop scrollbars
+- More responsive button feedback
+- Print-ready layouts for quotes, invoices, job sheets and reports
+- Matching driver-app polish
+- Updated PWA cache and asset versions
 
-Commit summary: `Improve typography and visual consistency in KLS SameDay Office v27.5`
+Commit summary: `Improve performance, printing and data views in KLS SameDay Office v27.6`

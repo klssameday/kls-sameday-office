@@ -102,7 +102,8 @@
     communicationTab: 'overview',
     communicationSearch: '',
     financeTab: 'overview',
-    financeForecastDays: 30
+    financeForecastDays: 30,
+    biMonths: 6
   };
 
   let locationWatchId = null;
@@ -166,6 +167,7 @@
       ['invoices','Invoices'],
       ['documents','Delivery Documents'],
       ['accounts','Finance Centre'],
+      ['businessintel','BI Dashboard'],
       ['reports','Business Reports']
     ]],
     ['System', [
@@ -178,13 +180,13 @@
     dispatch:'Live Dispatch', drivers:'Driver Control', exchange:'Driver Exchange', driver:'Driver App', tracking:'Live Tracking',
     fleet:'Fleet Management', fleetcentre:'Driver & Fleet Centre', schedule:'Booking Calendar', portalrequests:'Customer Portal',
     quoterequests:'Online Requests', pipeline:'Sales Pipeline', newquote:'New Quote', quotes:'Quotes', jobs:'Jobs',
-    invoices:'Invoices', documents:'Delivery Documents', accounts:'Finance Centre', reports:'Business Reports', customers:'Customers', communications:'Automated Communications', settings:'Settings'
+    invoices:'Invoices', documents:'Delivery Documents', accounts:'Finance Centre', businessintel:'Business Intelligence Dashboard', reports:'Business Reports', customers:'Customers', communications:'Automated Communications', settings:'Settings'
   };
 
   const navIcons = {
     dashboard:'⌂', aiassistant:'✦', operations:'◷', dispatch:'⇄', jobs:'▤', newquote:'＋', quotes:'◫',
     quoterequests:'↧', pipeline:'◆', customers:'◎', portalrequests:'◉', drivers:'♙', fleetcentre:'▣', driver:'♙', tracking:'⌖',
-    exchange:'⇆', routes:'◇', schedule:'□', invoices:'£', documents:'▧', accounts:'◌', reports:'▥', communications:'✉', settings:'⚙'
+    exchange:'⇆', routes:'◇', schedule:'□', invoices:'£', documents:'▧', accounts:'◌', businessintel:'◈', reports:'▥', communications:'✉', settings:'⚙'
   };
 
   function layout(content) {
@@ -703,6 +705,73 @@
       <section class="cards accounts-kpis">${card('Total invoiced',money(totalInvoiced),'All active invoices','invoices')}${card('Received',money(totalPaid),'Payments recorded','accounts')}${card('Outstanding',money(outstanding),`${money(overdue)} overdue`,'accounts')}${card('This month result',money(monthProfit),`${money(monthIncome)} in · ${money(monthExpenses)} out`,'accounts')}</section>${tabs}${body}`;
   }
 
+
+
+  function businessIntelligenceView() {
+    const monthsCount = Math.max(3, Math.min(12, Number(state.biMonths || 6)));
+    const now = new Date();
+    const monthKeys = Array.from({length:monthsCount}, (_,offset) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - (monthsCount - 1 - offset), 1, 12);
+      return { key:d.toISOString().slice(0,7), label:d.toLocaleDateString('en-GB',{month:'short'}), full:d.toLocaleDateString('en-GB',{month:'long',year:'numeric'}) };
+    });
+    const activeJobs = state.jobs.filter(j => j.job_status !== 'Cancelled');
+    const validInvoices = state.invoices.filter(i => i.status !== 'Cancelled');
+    const monthData = monthKeys.map(m => {
+      const jobs = activeJobs.filter(j => String(j.collection_date || j.delivered_at || j.created_at || '').slice(0,7) === m.key);
+      const invoices = validInvoices.filter(i => String(i.issue_date || i.created_at || '').slice(0,7) === m.key);
+      const paid = validInvoices.filter(i => String(i.paid_date || '').slice(0,7) === m.key).reduce((sum,i)=>sum+invoicePaid(i),0);
+      const costs = state.expenses.filter(e => String(e.expense_date || e.created_at || '').slice(0,7) === m.key).reduce((sum,e)=>sum+Number(e.amount||0),0);
+      const revenue = jobs.reduce((sum,j)=>sum+Number(j.total_price||j.quoted_price||0),0);
+      return {...m,jobs:jobs.length,revenue,invoiced:invoices.reduce((sum,i)=>sum+Number(i.total||0),0),paid,costs,profit:paid-costs};
+    });
+    const current = monthData[monthData.length-1] || {revenue:0,paid:0,costs:0,profit:0,jobs:0};
+    const previous = monthData[monthData.length-2] || {revenue:0,paid:0,costs:0,profit:0,jobs:0};
+    const change = (a,b) => b ? ((a-b)/Math.abs(b))*100 : (a ? 100 : 0);
+    const trendNote = (value,label='vs last month') => `${value>=0?'▲':'▼'} ${Math.abs(value).toFixed(0)}% ${label}`;
+    const allRangeKeys = new Set(monthKeys.map(m=>m.key));
+    const rangeJobs = activeJobs.filter(j=>allRangeKeys.has(String(j.collection_date||j.delivered_at||j.created_at||'').slice(0,7)));
+    const delivered = rangeJobs.filter(j=>j.job_status==='Delivered'||j.delivered_at);
+    const rangeQuotes = state.quotes.filter(q=>allRangeKeys.has(String(q.created_at||q.quote_date||'').slice(0,7)));
+    const acceptedQuotes = rangeQuotes.filter(q=>String(q.status||'').toLowerCase()==='accepted');
+    const quoteConversion = rangeQuotes.length ? acceptedQuotes.length/rangeQuotes.length*100 : 0;
+    const completionRate = rangeJobs.length ? delivered.length/rangeJobs.length*100 : 0;
+    const totalRangeRevenue = rangeJobs.reduce((s,j)=>s+Number(j.total_price||j.quoted_price||0),0);
+    const avgJob = rangeJobs.length ? totalRangeRevenue/rangeJobs.length : 0;
+    const miles = rangeJobs.reduce((s,j)=>s+Number(j.miles||j.mileage||0),0);
+    const revenuePerMile = miles ? totalRangeRevenue/miles : 0;
+    const customerStats = new Map();
+    rangeJobs.forEach(j=>{ const key=j.customer_id||j.customer_name||j.contact_name||'Unknown'; const row=customerStats.get(key)||{name:j.customer_name||j.contact_name||'Unknown',jobs:0,revenue:0}; row.jobs++; row.revenue+=Number(j.total_price||j.quoted_price||0); customerStats.set(key,row); });
+    const customers=[...customerStats.values()].sort((a,b)=>b.revenue-a.revenue);
+    const repeatCustomers=customers.filter(c=>c.jobs>1).length;
+    const repeatRate=customers.length?repeatCustomers/customers.length*100:0;
+    const topCustomerShare=totalRangeRevenue&&customers[0]?customers[0].revenue/totalRangeRevenue*100:0;
+    const vehicleStats=new Map();
+    rangeJobs.forEach(j=>{const key=j.vehicle||j.vehicle_type||'Not set';const row=vehicleStats.get(key)||{jobs:0,revenue:0};row.jobs++;row.revenue+=Number(j.total_price||j.quoted_price||0);vehicleStats.set(key,row)});
+    const vehiclesRank=[...vehicleStats.entries()].map(([name,v])=>({name,...v,average:v.jobs?v.revenue/v.jobs:0})).sort((a,b)=>b.revenue-a.revenue);
+    const maxTrend=Math.max(1,...monthData.flatMap(m=>[m.revenue,m.paid,m.costs]));
+    const trendChart=monthData.map(m=>`<article class="bi-month"><div class="bi-bars"><i class="booked" style="height:${Math.max(m.revenue?5:1,m.revenue/maxTrend*100)}%" title="Booked ${money(m.revenue)}"></i><i class="received" style="height:${Math.max(m.paid?5:1,m.paid/maxTrend*100)}%" title="Received ${money(m.paid)}"></i><i class="cost" style="height:${Math.max(m.costs?5:1,m.costs/maxTrend*100)}%" title="Costs ${money(m.costs)}"></i></div><b>${esc(m.label)}</b><small>${m.jobs} job${m.jobs===1?'':'s'}</small></article>`).join('');
+    const maxCustomer=Math.max(1,...customers.slice(0,6).map(c=>c.revenue));
+    const customerRows=customers.slice(0,6).map((c,idx)=>`<article class="bi-rank-row"><strong>${idx+1}</strong><span><b>${esc(c.name)}</b><small>${c.jobs} job${c.jobs===1?'':'s'} · ${money(c.revenue)}</small><i><em style="width:${c.revenue/maxCustomer*100}%"></em></i></span><mark>${totalRangeRevenue?(c.revenue/totalRangeRevenue*100).toFixed(0):0}%</mark></article>`).join('')||'<div class="fleet-empty">No customer revenue in this period.</div>';
+    const vehicleRows=vehiclesRank.slice(0,6).map(v=>[esc(v.name),v.jobs,money(v.revenue),money(v.average)]);
+    const overdue=validInvoices.filter(i=>invoiceBalance(i)>0&&i.due_date&&i.due_date<todayISO());
+    const unassigned=state.jobs.filter(j=>!['Delivered','Cancelled'].includes(j.job_status)&&!j.assigned_driver_id);
+    const forecastBase=monthData.slice(-3);
+    const forecastRevenue=forecastBase.length?forecastBase.reduce((s,m)=>s+m.revenue,0)/forecastBase.length:0;
+    const openPipeline=state.leads.filter(l=>!['Won','Lost'].includes(l.stage)).reduce((s,l)=>s+Number(l.value||0),0);
+    const forecastWithPipeline=forecastRevenue+(openPipeline*.25);
+    const insights=[];
+    if(change(current.revenue,previous.revenue)<-10) insights.push({tone:'warn',title:'Booked revenue is falling',text:`Revenue is ${Math.abs(change(current.revenue,previous.revenue)).toFixed(0)}% below last month. Prioritise quote follow-ups and dormant customers.`,page:'pipeline'});
+    if(quoteConversion<35&&rangeQuotes.length>=3) insights.push({tone:'warn',title:'Quote conversion needs attention',text:`Only ${quoteConversion.toFixed(0)}% of quotes were accepted across the selected period.`,page:'quotes'});
+    if(topCustomerShare>40) insights.push({tone:'warn',title:'Customer concentration risk',text:`${customers[0]?.name||'The top customer'} represents ${topCustomerShare.toFixed(0)}% of booked revenue.`,page:'customers'});
+    if(overdue.length) insights.push({tone:'danger',title:`${overdue.length} overdue invoice${overdue.length===1?'':'s'}`,text:`${money(overdue.reduce((s,i)=>s+invoiceBalance(i),0))} needs collection action.`,page:'accounts'});
+    if(unassigned.length) insights.push({tone:'warn',title:`${unassigned.length} unassigned active job${unassigned.length===1?'':'s'}`,text:'Assign drivers early to protect service performance.',page:'dispatch'});
+    if(!insights.length) insights.push({tone:'good',title:'Business indicators are healthy',text:'No major commercial or operational risks were detected from the current records.',page:'dashboard'});
+    return `<section class="bi-hero"><div><small>V26.34 BUSINESS INTELLIGENCE</small><h2>Turn your KLS data into decisions</h2><p>Live commercial performance, customer value, operational efficiency and forward outlook.</p></div><label>Trend window<select id="bi-months"><option value="3" ${monthsCount===3?'selected':''}>3 months</option><option value="6" ${monthsCount===6?'selected':''}>6 months</option><option value="9" ${monthsCount===9?'selected':''}>9 months</option><option value="12" ${monthsCount===12?'selected':''}>12 months</option></select></label></section>
+      <section class="bi-kpis">${card('Booked this month',money(current.revenue),trendNote(change(current.revenue,previous.revenue)),'jobs')}${card('Cash received',money(current.paid),trendNote(change(current.paid,previous.paid)),'accounts')}${card('Cash result',money(current.profit),`${money(current.costs)} costs recorded`,'accounts')}${card('Average job',money(avgJob),`${money(revenuePerMile)} revenue per mile`,'jobs')}${card('Quote conversion',`${quoteConversion.toFixed(0)}%`,`${acceptedQuotes.length} accepted from ${rangeQuotes.length}`,'quotes')}${card('Completion rate',`${completionRate.toFixed(0)}%`,`${delivered.length} of ${rangeJobs.length} delivered`,'dispatch')}</section>
+      <section class="bi-grid"><div class="panel bi-trend"><div class="panelhead"><div><h2>Commercial trend</h2><p>Booked revenue, cash received and operating costs.</p></div><div class="bi-legend"><span><i class="booked"></i>Booked</span><span><i class="received"></i>Received</span><span><i class="cost"></i>Costs</span></div></div><div class="bi-trend-chart">${trendChart}</div></div><div class="panel"><div class="panelhead"><div><h2>Decision alerts</h2><p>Automatically identified priorities.</p></div></div><div class="bi-insights">${insights.map(x=>`<button class="${x.tone}" data-page="${x.page}"><span>!</span><div><b>${esc(x.title)}</b><small>${esc(x.text)}</small></div><strong>→</strong></button>`).join('')}</div></div></section>
+      <section class="bi-summary"><article><small>REPEAT CUSTOMER RATE</small><b>${repeatRate.toFixed(0)}%</b><p>${repeatCustomers} of ${customers.length} customers booked more than once.</p></article><article><small>TOP CUSTOMER SHARE</small><b>${topCustomerShare.toFixed(0)}%</b><p>${esc(customers[0]?.name||'No customer data')} concentration across selected months.</p></article><article><small>NEXT MONTH OUTLOOK</small><b>${money(forecastWithPipeline)}</b><p>Three-month run rate plus 25% of open sales pipeline.</p></article><article><small>OPEN PIPELINE</small><b>${money(openPipeline)}</b><p>Current value of active sales opportunities.</p></article></section>
+      <section class="bi-grid lower"><div class="panel"><div class="panelhead"><div><h2>Customer value concentration</h2><p>Top customers ranked by booked revenue.</p></div><button class="secondary" data-page="customers">Open CRM</button></div><div class="bi-rank">${customerRows}</div></div><div>${panel('Vehicle performance',table(['Vehicle','Jobs','Revenue','Average'],vehicleRows),'Use this to identify the vehicle types producing the strongest returns.')}</div></section>`;
+  }
 
   function businessReportsView() {
     const period = state.reportPeriod || todayISO().slice(0,7);
@@ -1388,7 +1457,7 @@ function settingsView() {
     if (state.loading) { document.getElementById('app').innerHTML = '<div class="loading">Loading KLS SameDay Office…</div>'; return; }
     if (!state.user) { document.getElementById('app').innerHTML = authView(); bindAuth(); return; }
     if (state.portalUser) { document.getElementById('app').innerHTML = customerPortalView(); bindCustomerPortal(); return; }
-    const views = { dashboard, aiassistant: aiDispatchAssistantView, smart: smartDispatchView, routes: routePlannerView, operations: operationsView, dispatch: dispatchView, drivers: driversManagementView, exchange: driverExchangeView, driver: driverView, tracking: liveTrackingView, fleet: fleetView, schedule: scheduleView, newquote: newQuote, quotes: quotesView, jobs: jobsView, invoices: invoicesView, documents: deliveryDocumentsView, accounts: accountsView, reports: businessReportsView, portalrequests: portalRequestsView, quoterequests: quoteRequestsView, customers: customersView, pipeline: salesPipelineView, fleetcentre: fleetCentreView, communications: communicationView, settings: settingsView };
+    const views = { dashboard, businessintel: businessIntelligenceView, aiassistant: aiDispatchAssistantView, smart: smartDispatchView, routes: routePlannerView, operations: operationsView, dispatch: dispatchView, drivers: driversManagementView, exchange: driverExchangeView, driver: driverView, tracking: liveTrackingView, fleet: fleetView, schedule: scheduleView, newquote: newQuote, quotes: quotesView, jobs: jobsView, invoices: invoicesView, documents: deliveryDocumentsView, accounts: accountsView, reports: businessReportsView, portalrequests: portalRequestsView, quoterequests: quoteRequestsView, customers: customersView, pipeline: salesPipelineView, fleetcentre: fleetCentreView, communications: communicationView, settings: settingsView };
     document.getElementById('app').innerHTML = layout(views[state.page]());
     bindApp();
     if (state.page === 'dashboard') initialiseCommandMap();
@@ -1753,6 +1822,7 @@ function settingsView() {
     document.querySelectorAll('[data-delete-lead]').forEach(b=>b.onclick=e=>{e.stopPropagation();if(confirm('Delete this lead?')){state.leads=state.leads.filter(x=>x.id!==b.dataset.deleteLead);saveLeads();render();}});
     document.querySelectorAll('[data-lead-id]').forEach(c=>c.onclick=e=>{if(e.target.closest('button,select,a'))return;state.editLeadId=c.dataset.leadId;render();});
     document.querySelectorAll('[data-lead-quote]').forEach(b=>b.onclick=()=>{const l=state.leads.find(x=>x.id===b.dataset.leadQuote);if(!l)return;state.page='newquote';state.quoteCustomerId=null;showNotice(`Create a quote for ${l.company}. Add them as a customer first if needed.`,'ok');render();});
+    document.getElementById('bi-months')?.addEventListener('change', event => { state.biMonths = Number(event.target.value || 6); render(); });
     document.getElementById('report-period')?.addEventListener('change', event => { state.reportPeriod = event.target.value || todayISO().slice(0,7); render(); });
     document.querySelector('[data-export-report]')?.addEventListener('click', exportBusinessReportCsv);
     document.querySelectorAll('[data-ai-assign]').forEach(button => button.onclick = async () => {

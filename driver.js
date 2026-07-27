@@ -1,4 +1,4 @@
-// KLS SameDay Driver v31.3 — live jobs and activity workflow
+// KLS SameDay Driver v31.4 — navigation and detailed job workflow
 (() => {
   const raw = window.KLS_CONFIG || {};
   const root = document.getElementById('driver-app');
@@ -42,6 +42,54 @@
       const fallback=current ? (job.updated_at||job.created_at) : null;
       return {step,time:explicit||fallback,current,complete};
     }).filter(Boolean);
+  }
+
+
+  function displayValue(job, keys, fallback='Not supplied'){
+    const value=keys.map(key=>job?.[key]).find(v=>v!==undefined&&v!==null&&String(v).trim()!=='');
+    return value===undefined||value===null||String(value).trim()===''?fallback:String(value);
+  }
+  function routeStats(job){
+    const mileage=displayValue(job,['estimated_mileage','mileage','distance_miles'],'');
+    const duration=displayValue(job,['estimated_duration','estimated_drive_time','drive_time','journey_time'],'');
+    return {mileage,duration};
+  }
+  function routeHeader(job){
+    const status=statusDisplay[job.job_status]?.[0]||job.job_status||'Booked';
+    return `<section class="route-job-header">
+      <div class="route-job-top"><div><small>${esc(job.job_number||'JOB')}</small><h1>${esc(shortPlace(job.collection_address))} <span>→</span> ${esc(shortPlace(job.delivery_address))}</h1></div><b>${esc(displayValue(job,['service_type','service_level'],'Dedicated Same-Day'))}</b></div>
+      <div class="route-current-status"><small>CURRENT STATUS</small><strong>${esc(status)}</strong></div>
+    </section>`;
+  }
+  function routeInfoPanel(job){
+    const stats=routeStats(job);
+    return `<section class="route-info-grid">
+      <div><small>EST. MILEAGE</small><b>${stats.mileage?`${esc(stats.mileage)} miles`:'Not supplied'}</b></div>
+      <div><small>EST. DRIVE TIME</small><b>${esc(stats.duration||'Not supplied')}</b></div>
+      <div><small>COLLECTION</small><b>${jobTime(job)}</b></div>
+      <div><small>DELIVERY DEADLINE</small><b>${deliveryTime(job)}</b></div>
+    </section>`;
+  }
+  function jobInfoPanel(job){
+    const rows=[
+      ['Customer reference',displayValue(job,['customer_reference','customer_ref','reference'],'Not supplied')],
+      ['Purchase order',displayValue(job,['purchase_order','po_number','purchase_order_number'],'Not supplied')],
+      ['Internal job number',displayValue(job,['job_number'],'Not supplied')],
+      ['Vehicle required',displayValue(job,['vehicle_required','vehicle_type','vehicle'],'Not supplied')],
+      ['Service type',displayValue(job,['service_type','service_level'],'Dedicated Same-Day')],
+      ['Items',displayValue(job,['item_count','number_of_items','pieces'],'Not supplied')]
+    ];
+    return `<section class="job-info-panel"><div class="panel-title"><small>JOB INFORMATION</small><h2>Booking details</h2></div>${rows.map(([label,value])=>`<div><span>${esc(label)}</span><b>${esc(value)}</b></div>`).join('')}</section>`;
+  }
+  function goodsDetails(job){
+    const rows=[
+      ['Description',displayValue(job,['goods_description','load_description'],'')],
+      ['Weight',displayValue(job,['weight','goods_weight','weight_kg'],'')],
+      ['Dimensions',displayValue(job,['dimensions','goods_dimensions'],'')],
+      ['Quantity',displayValue(job,['item_count','number_of_items','pieces'],'')]
+    ].filter(([,value])=>value);
+    if(!rows.length)return '';
+    return `<section class="goods-card detailed-goods"><small>GOODS</small>${rows.map(([label,value])=>`<div><span>${esc(label)}</span><b>${esc(value)}</b></div>`).join('')}</section>`;
   }
 
   function authView(){
@@ -124,11 +172,15 @@
   }
   function miniJobCard(job,label='UPCOMING'){
     const status=statusDisplay[job.job_status]?.[0]||job.job_status||'Booked';
-    return `<article class="driver-job-summary" data-open-job="${job.id}" role="button" tabindex="0">
+    const completed=job.job_status==='Delivered';
+    const completionTime=fmtClock(job.delivered_at||job.completed_at||job.updated_at);
+    const photo=Boolean(job.pod_photo_url||job.delivery_photo_url||job.photo_url);
+    const signature=Boolean(job.signature_url||job.pod_signature_url);
+    return `<article class="driver-job-summary ${completed?'completed-summary':''}" data-open-job="${job.id}" role="button" tabindex="0">
       <div class="summary-top"><span>${esc(label)}</span><b>${esc(job.job_number||'Job')}</b></div>
       <div class="cx-route"><strong>${esc(shortPlace(job.collection_address))}</strong><i>→</i><strong>${esc(shortPlace(job.delivery_address))}</strong></div>
       <h3>${esc(job.customer_name||job.contact_name||'Customer')}</h3>
-      <div class="summary-times"><span><small>COLLECT</small>${jobTime(job)}</span><span><small>DELIVER</small>${deliveryTime(job)}</span></div>
+      ${completed?`<div class="completed-evidence"><span><small>COMPLETED</small>${esc(completionTime||'Recorded')}</span><span class="${photo?'yes':'no'}">Photo ${photo?'✓':'—'}</span><span class="${signature?'yes':'no'}">Signature ${signature?'✓':'—'}</span></div>`:`<div class="summary-times"><span><small>COLLECT</small>${jobTime(job)}</span><span><small>DELIVER</small>${deliveryTime(job)}</span></div>`}
       <div class="summary-status"><span class="status-dot"></span>${esc(status)}</div>
       <footer><span>${esc(job.vehicle||job.vehicle_type||'Vehicle')}</span><button class="btn primary" data-open-job="${job.id}">Open job</button></footer>
     </article>`;
@@ -168,8 +220,8 @@
       <button class="btn secondary full profile-signout" data-signout>Sign out</button>
     </section>`;
   }
-  function detailSection(title,address,contact,phone,notes){
-    return `<section class="location-card"><small>${esc(title)}</small><h2>${esc(address||'Address not supplied')}</h2>${contact?`<div class="location-line"><span>Contact</span><b>${esc(contact)}</b></div>`:''}${phone?`<div class="location-line"><span>Telephone</span><b class="phone-number">${esc(phone)}</b></div>`:''}${notes?`<div class="job-instructions"><span>Instructions</span><p>${esc(notes)}</p></div>`:''}</section>`;
+  function detailSection(title,address,contact,phone,notes,company,timeLabel,timeValue){
+    return `<section class="location-card detailed-location"><div class="location-title"><small>${esc(title)}</small>${timeValue?`<b>${esc(timeLabel)}: ${esc(timeValue)}</b>`:''}</div>${company?`<h3>${esc(company)}</h3>`:''}<h2>${esc(address||'Address not supplied')}</h2>${contact?`<div class="location-line"><span>Contact</span><b>${esc(contact)}</b></div>`:''}${phone?`<div class="location-line"><span>Telephone</span><b class="phone-number">${esc(phone)}</b></div>`:''}${notes?`<div class="job-instructions"><span>Instructions</span><p>${esc(notes)}</p></div>`:''}</section>`;
   }
   function jobDetailView(job){
     const action=nextAction(job);
@@ -177,15 +229,21 @@
     const atCollection=['Booked','En Route to Collection','Arrived at Collection'].includes(job.job_status);
     const destination=atCollection?job.collection_address:job.delivery_address;
     const idx=Math.max(0,steps.indexOf(job.job_status));
+    const collectCompany=displayValue(job,['collection_company','collection_name','customer_name'],'');
+    const deliveryCompany=displayValue(job,['delivery_company','delivery_name','recipient_company'],'');
+    const collectionClock=String(job.collection_time||'').slice(0,5);
+    const deliveryClock=String(job.delivery_time||'').slice(0,5);
     return `<section class="job-detail-screen">
       <div class="detail-nav"><button class="back-link" data-back-dashboard>← Main screen</button><span>${esc(job.job_number||'Job')}</span></div>
+      ${routeHeader(job)}
       ${statusBanner(job)}
-      <div class="detail-heading"><div><small>${jobTime(job)}</small><h1>${esc(job.customer_name||job.contact_name||'Customer')}</h1></div><span>${esc(job.vehicle||job.vehicle_type||'Vehicle')}</span></div>
+      ${routeInfoPanel(job)}
       ${importantNotes(job)}
       <div class="workflow-progress">${steps.map((step,i)=>`<span class="${i<idx?'complete':i===idx?'current':''}"><i></i><small>${esc(step)}</small></span>`).join('')}</div>
-      ${detailSection('COLLECTION',job.collection_address,contactValue(job,'collection'),phoneValue(job,'collection'),notesValue(job,'collection'))}
-      ${detailSection('DELIVERY',job.delivery_address,contactValue(job,'delivery'),phoneValue(job,'delivery'),notesValue(job,'delivery'))}
-      ${job.goods_description?`<section class="goods-card"><small>GOODS</small><p>${esc(job.goods_description)}</p></section>`:''}
+      ${detailSection('COLLECTION',job.collection_address,contactValue(job,'collection'),phoneValue(job,'collection'),notesValue(job,'collection'),collectCompany,'Ready',collectionClock)}
+      ${detailSection('DELIVERY',job.delivery_address,contactValue(job,'delivery'),phoneValue(job,'delivery'),notesValue(job,'delivery'),deliveryCompany,'Deadline',deliveryClock)}
+      ${goodsDetails(job)}
+      ${jobInfoPanel(job)}
       <section class="job-activity-card"><div class="activity-heading"><div><small>JOB ACTIVITY</small><h2>Progress history</h2></div><span>${esc(statusDisplay[job.job_status]?.[0]||job.job_status||'Booked')}</span></div><div class="activity-list">${activityRows(job).map(row=>`<div class="activity-row ${row.current?'current':''}"><i></i><div><b>${esc(row.step)}</b><small>${row.time?fmtClock(row.time):(row.complete?'Completed':'Current step')}</small></div></div>`).join('')}</div></section>
       <div class="sticky-job-actions">
         ${job.job_status!=='Delivered'?`<a class="btn secondary navigate-btn" target="_blank" rel="noopener" href="${mapsLink(destination)}">Open navigation</a>`:''}

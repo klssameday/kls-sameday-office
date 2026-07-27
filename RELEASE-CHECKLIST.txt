@@ -1,7 +1,7 @@
-KLS SameDay Office v31.3 — Driver Live Jobs & Activity
+KLS SameDay Office v31.4 — Driver Live Jobs & Activity
 
-1. Upload all v31.3 files to GitHub/Vercel.
-2. Confirm driver.html loads driver.css?v=31.3 and driver.js?v=31.3.
+1. Upload all v31.4 files to GitHub/Vercel.
+2. Confirm driver.html loads driver.css?v=31.4 and driver.js?v=31.4.
 3. Sign in with a linked driver account.
 4. Check Home, Jobs, Exchange and Profile bottom navigation.
 5. Open an assigned job and verify Main screen return button.
@@ -9,9 +9,17 @@ KLS SameDay Office v31.3 — Driver Live Jobs & Activity
 7. Test Previous step correction.
 8. Confirm collection and delivery telephone numbers display correctly.
 9. Test navigation, live location and POD completion.
-10. Confirm service worker cache updates to kls-v31-3.
+10. Confirm service worker cache updates to kls-v31-4.
 
 11. Open an assigned job and confirm the Job Activity timeline is visible.
 12. Turn the device connection off/on and confirm the LIVE/OFFLINE indicator changes.
 13. Tap Refresh jobs and confirm the last-updated time changes.
 14. Confirm active Jobs and Exchange badge counts display correctly.
+
+
+v31.4 DRIVER CHECKS
+[ ] Open an assigned job and confirm the route header and status.
+[ ] Confirm collection/delivery cards show available details correctly.
+[ ] Confirm navigation opens the correct current destination.
+[ ] Confirm Previous Step and Main Screen buttons still work.
+[ ] Complete a test job and check the completed-job evidence display.

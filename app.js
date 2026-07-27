@@ -2737,5 +2737,59 @@ function systemHealthSummary() {
     if (state.user) await loadAll(); else { state.loading = false; render(); }
   }
 
+
+  // v28.1 Professional UX: keyboard command palette and calmer feedback.
+  const quickPages = [
+    ['dashboard','Dashboard'],['operations','Today’s Planner'],['dispatch','Live Dispatch'],['jobs','Jobs'],
+    ['newquote','New Quote'],['quotes','Quotes'],['customers','Customers'],['pipeline','Sales Pipeline'],
+    ['drivers','Driver Control'],['fleetcentre','Driver & Fleet Centre'],['tracking','Live Tracking'],
+    ['routes','Route Planner'],['schedule','Booking Calendar'],['invoices','Invoices'],['accounts','Finance Centre'],
+    ['businessintel','BI Dashboard'],['profitcentre','Job Profit Control'],['reports','Business Reports'],['settings','Settings']
+  ];
+
+  function closeCommandPalette(){ document.getElementById('kls-command-palette')?.remove(); }
+  function openCommandPalette(){
+    if (!state.user || document.getElementById('kls-command-palette')) return;
+    const wrap=document.createElement('div');
+    wrap.id='kls-command-palette'; wrap.className='command-palette-backdrop';
+    wrap.innerHTML=`<section class="command-palette" role="dialog" aria-modal="true" aria-label="Quick navigation">
+      <header><span>⌕</span><input id="command-search" autocomplete="off" placeholder="Search pages…" aria-label="Search pages"><kbd>Esc</kbd></header>
+      <div class="command-results">${quickPages.map(([key,label],i)=>`<button data-command-page="${key}" class="${i===0?'selected':''}"><span>${esc(label)}</span><small>Open page</small><b>↵</b></button>`).join('')}</div>
+      <footer><span><kbd>↑</kbd><kbd>↓</kbd> move</span><span><kbd>Enter</kbd> open</span><span>Ctrl/⌘ + K</span></footer>
+    </section>`;
+    document.body.appendChild(wrap);
+    const input=wrap.querySelector('input');
+    const resultBox=wrap.querySelector('.command-results');
+    const buttons=()=>[...resultBox.querySelectorAll('button:not([hidden])')];
+    const select=(index)=>{const list=buttons(); if(!list.length)return; list.forEach(b=>b.classList.remove('selected')); list[(index+list.length)%list.length].classList.add('selected'); list[(index+list.length)%list.length].scrollIntoView({block:'nearest'});};
+    const openSelected=()=>{const chosen=resultBox.querySelector('button.selected:not([hidden])')||buttons()[0]; if(!chosen)return; state.page=chosen.dataset.commandPage; closeCommandPalette(); render(); window.scrollTo({top:0,behavior:'smooth'});};
+    input.addEventListener('input',()=>{const q=input.value.trim().toLowerCase(); [...resultBox.children].forEach(b=>{b.hidden=!b.textContent.toLowerCase().includes(q); b.classList.remove('selected')}); select(0);});
+    input.addEventListener('keydown',e=>{const list=buttons(); const idx=Math.max(0,list.findIndex(b=>b.classList.contains('selected'))); if(e.key==='ArrowDown'){e.preventDefault();select(idx+1)} if(e.key==='ArrowUp'){e.preventDefault();select(idx-1)} if(e.key==='Enter'){e.preventDefault();openSelected()} if(e.key==='Escape'){closeCommandPalette()}});
+    resultBox.addEventListener('click',e=>{const button=e.target.closest('[data-command-page]'); if(!button)return; state.page=button.dataset.commandPage; closeCommandPalette(); render(); window.scrollTo({top:0,behavior:'smooth'});});
+    wrap.addEventListener('mousedown',e=>{if(e.target===wrap)closeCommandPalette()});
+    requestAnimationFrame(()=>input.focus());
+  }
+
+  document.addEventListener('keydown',e=>{
+    if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();openCommandPalette();}
+    if(e.key==='Escape'){
+      closeCommandPalette();
+      const close=document.querySelector('[data-close],[data-close-defect],[data-action="menu-close"]');
+      if(close && document.querySelector('.modalback,.modal-backdrop,.pod-overlay,.side.open')) close.click();
+    }
+  });
+
+  const uxObserver=new MutationObserver(()=>{
+    document.querySelectorAll('.notice:not([data-ux-ready])').forEach(notice=>{
+      notice.dataset.uxReady='1';
+      notice.setAttribute('role',notice.classList.contains('error')?'alert':'status');
+      if(!notice.classList.contains('error')) setTimeout(()=>{
+        if(notice.isConnected){notice.classList.add('notice-leaving'); setTimeout(()=>notice.querySelector('[data-action="notice-close"]')?.click(),220);}
+      },5000);
+    });
+  });
+  uxObserver.observe(document.getElementById('app'),{childList:true,subtree:true});
+
+
   initialise();
 })();

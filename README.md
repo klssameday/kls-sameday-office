@@ -1,18 +1,18 @@
-# KLS SameDay Office v28.0
+# KLS SameDay Office v28.1
 
-## Premium SaaS Edition
+## Professional UX Polish
 
-This release replaces the remaining mixed dark/light styling with one consistent commercial design system while retaining all working v27.6 functionality.
+This release retains every working v28.0 feature and improves day-to-day interaction:
 
-### Main improvements
-- Unified light workspace across every office module
-- White working panels with dark, readable typography
-- Black retained only for premium hero banners, primary actions and active navigation
-- Consistent buttons, forms, cards, tables, modals and status messages
-- Redesigned dashboard KPI presentation and cleaner command-centre spacing
-- Light Dispatch, CRM, Driver Management, Fleet, Calendar, Accounts and reporting surfaces
-- Matching premium light Driver App
-- Corrected offline page contrast
-- Updated PWA cache, manifest and asset versions
+- Quick page navigation with Ctrl/Command + K
+- Searchable command palette
+- Smoother page and notification transitions
+- Success messages dismiss automatically
+- Stronger keyboard focus indicators
+- Improved loading and empty states
+- Refined table hover feedback
+- Escape-key support for overlays
+- Matching driver-app interaction polish
+- Reduced-motion accessibility support
 
-Commit summary: `Launch KLS SameDay Office v28.0 Premium SaaS Edition`
+Commit summary: `Add professional UX polish and quick navigation in KLS SameDay Office v28.1`

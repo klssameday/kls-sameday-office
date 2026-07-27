@@ -1,19 +1,19 @@
-KLS SameDay Office v28.0 — Premium SaaS Edition
+KLS SameDay Office v28.1 — Professional UX Polish
 
 Before upload
 - Extract the ZIP
-- Upload all files and the icons folder over the current GitHub project
-- Keep config.js included
+- Upload every file and the icons folder over the current GitHub project
+- Keep your working config.js included
 
 After deployment
-- Wait for Vercel to finish deploying
 - Hard refresh with Command + Shift + R
-- Check Dashboard, Dispatch, CRM, Fleet, Calendar, Accounts and Driver App
-- Confirm working panels are white with dark readable text
-- Confirm only hero banners, active navigation and primary buttons remain black
+- Press Command + K and test quick navigation
+- Check Dashboard, Jobs, Dispatch, CRM and Settings
+- Confirm success notifications close after a few seconds
+- Confirm Escape closes the command palette and open overlays
+- Test the Driver App
 
 Validation
 - JavaScript syntax checked
 - JSON checked
-- CSS brace balance checked
-- Service-worker cache updated to v28.0
+- Service-worker cache updated to v28.1

@@ -64,3 +64,12 @@ html,body{background:#f4f6f8!important;color:#111318!important}
 .pod-overlay{background:rgba(17,24,39,.58)!important;backdrop-filter:blur(4px)}
 .signature-wrap{background:#fff!important;border-color:#dfe3e8!important}
 @media(max-width:600px){.driver-top{background:rgba(255,255,255,.97)!important}}
+
+
+/* v28.1 driver UX polish */
+.job-card,.btn,.driver-welcome{transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease,background-color .16s ease}
+.btn:active:not(:disabled){transform:translateY(1px) scale(.992)}
+.btn:focus-visible,input:focus-visible,textarea:focus-visible,button:focus-visible{outline:2px solid #111318!important;outline-offset:2px!important;box-shadow:0 0 0 4px rgba(17,19,24,.12)!important}
+.job-card{animation:driver-card-in .2s ease-out both}.job-list .job-card:nth-child(2){animation-delay:.04s}.job-list .job-card:nth-child(3){animation-delay:.08s}
+@keyframes driver-card-in{from{opacity:.4;transform:translateY(5px)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){.job-card{animation:none}.job-card,.btn,.driver-welcome{transition:none}}

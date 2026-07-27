@@ -26,3 +26,12 @@ Smart Driver Assistant upgrade.
 - Existing v34.1 guided workflow, route, messages, incidents and POD retained
 
 No new Supabase SQL migration is required for v34.2.
+
+
+## v34.4 – Smart Route Assistant
+
+- Highlights timed collection and delivery risks.
+- Suggests the next job based on current status and deadlines.
+- Lets drivers optimise or manually reorder the route.
+- Provides one-tap delay alerts to dispatch using the existing incident table.
+- No additional Supabase migration is required.

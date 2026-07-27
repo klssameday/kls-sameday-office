@@ -10,3 +10,6 @@ KLS SameDay Office v33.1 – Release Checklist
 8. Deploy to GitHub/Vercel.
 
 V34.3: Run SUPABASE-v34.3-DRIVER-APP-PRO.sql and test job chat policies.
+
+
+v34.4: Test route optimisation, manual up/down ordering, deadline risk badges and Alert office. No new SQL required.

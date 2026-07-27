@@ -1,8 +1,8 @@
 {
   "name": "kls-sameday-office",
   "private": true,
-  "version": "34.3.0",
+  "version": "34.4.0",
   "scripts": {
-    "test": "node --check app.js && node --check driver.js && node --check sw.js && node -e \"JSON.parse(require('fs').readFileSync('manifest.json','utf8'));JSON.parse(require('fs').readFileSync('vercel.json','utf8'));console.log('KLS v33.1 checks passed')\""
+    "test": "node --check app.js && node --check driver.js && node --check sw.js && node -e \"JSON.parse(require('fs').readFileSync('manifest.json','utf8'));JSON.parse(require('fs').readFileSync('vercel.json','utf8'));console.log('KLS v34.4 checks passed')\""
   }
 }

@@ -1,4 +1,4 @@
-// KLS SameDay Driver v34.3 — Driver App Pro
+// KLS SameDay Driver v34.4 — Smart Route Assistant
 (() => {
   const raw = window.KLS_CONFIG || {};
   const root = document.getElementById('driver-app');
@@ -9,7 +9,7 @@
   })();
   const db = validUrl && key && window.supabase ? window.supabase.createClient(url, key) : null;
   const steps = ['Booked','En Route to Collection','Arrived at Collection','Collected','In Transit','Arrived at Delivery','Delivered'];
-  let state = { user:null, profile:null, jobs:[], loading:true, mode:'signin', notice:null, podJob:null, workflowJob:null, workflowType:null, tab:'home', screen:'dashboard', detailJobId:null, networkJobs:[], myBids:[], messages:[], incidents:[], online:navigator.onLine, lastUpdated:null, refreshing:false, jobAlerts:[], notificationsEnabled:typeof Notification!=='undefined'&&Notification.permission==='granted', completionCelebration:null, darkMode:localStorage.getItem('kls-driver-dark')==='1', assistantHelp:false, arrivalPrompt:null, fuelDismissed:localStorage.getItem('kls-fuel-dismissed')===new Date().toISOString().slice(0,10), navAddress:null, jobMessages:[], offlineQueue:JSON.parse(localStorage.getItem('kls-driver-offline-queue')||'[]') };
+  let state = { user:null, profile:null, jobs:[], loading:true, mode:'signin', notice:null, podJob:null, workflowJob:null, workflowType:null, tab:'home', screen:'dashboard', detailJobId:null, networkJobs:[], myBids:[], messages:[], incidents:[], online:navigator.onLine, lastUpdated:null, refreshing:false, jobAlerts:[], notificationsEnabled:typeof Notification!=='undefined'&&Notification.permission==='granted', completionCelebration:null, darkMode:localStorage.getItem('kls-driver-dark')==='1', assistantHelp:false, arrivalPrompt:null, fuelDismissed:localStorage.getItem('kls-fuel-dismissed')===new Date().toISOString().slice(0,10), navAddress:null, jobMessages:[], offlineQueue:JSON.parse(localStorage.getItem('kls-driver-offline-queue')||'[]'), routeOrder:JSON.parse(localStorage.getItem('kls-driver-route-order')||'[]') };
   let watchId = null;
   let activeJobId = null;
   let signatureCanvas = null;
@@ -406,9 +406,64 @@
 
 
 
+  function routeDateTime(job,type='collection'){
+    const date=type==='delivery'?(job.delivery_date||job.collection_date):job.collection_date;
+    const time=String(type==='delivery'?(job.delivery_time||'23:59'):(job.collection_time||'09:00')).slice(0,5);
+    if(!date)return null;
+    const value=new Date(`${String(date).slice(0,10)}T${time}:00`);
+    return Number.isNaN(value.getTime())?null:value;
+  }
+  function routeRisk(job,index){
+    if(job.job_status==='Delivered')return {level:'done',label:'Completed',minutes:null};
+    const target=routeDateTime(job,activeStatuses.includes(job.job_status)?'delivery':'collection');
+    if(!target)return {level:'normal',label:'No timed deadline',minutes:null};
+    const minutes=Math.round((target-Date.now())/60000);
+    if(minutes<0)return {level:'danger',label:`${Math.abs(minutes)} min overdue`,minutes};
+    if(minutes<=30)return {level:'danger',label:`Due in ${minutes} min`,minutes};
+    if(minutes<=75)return {level:'warning',label:`Due in ${minutes} min`,minutes};
+    return {level:'normal',label:`${Math.floor(minutes/60)}h ${minutes%60}m remaining`,minutes};
+  }
+  function orderedRouteJobs(){
+    const base=state.jobs.slice().sort((a,b)=>{
+      const ad=routeDateTime(a)?.getTime()||Number.MAX_SAFE_INTEGER;
+      const bd=routeDateTime(b)?.getTime()||Number.MAX_SAFE_INTEGER;
+      return ad-bd;
+    });
+    const ids=state.routeOrder.filter(id=>base.some(job=>job.id===id));
+    const missing=base.filter(job=>!ids.includes(job.id));
+    return [...ids.map(id=>base.find(job=>job.id===id)),...missing];
+  }
+  function saveRouteOrder(jobs){state.routeOrder=jobs.map(job=>job.id);localStorage.setItem('kls-driver-route-order',JSON.stringify(state.routeOrder));}
+  function optimiseRoute(){
+    const jobs=state.jobs.slice().sort((a,b)=>{
+      if(a.job_status==='Delivered'&&b.job_status!=='Delivered')return -1;
+      if(b.job_status==='Delivered'&&a.job_status!=='Delivered')return 1;
+      if(activeStatuses.includes(a.job_status)&&!activeStatuses.includes(b.job_status))return -1;
+      if(activeStatuses.includes(b.job_status)&&!activeStatuses.includes(a.job_status))return 1;
+      const ar=routeRisk(a,0),br=routeRisk(b,0);
+      return (ar.minutes??Number.MAX_SAFE_INTEGER)-(br.minutes??Number.MAX_SAFE_INTEGER);
+    });
+    saveRouteOrder(jobs);notice('Route reordered around the current job and the earliest deadlines.','ok');
+  }
+  function moveRouteJob(jobId,direction){
+    const jobs=orderedRouteJobs();const index=jobs.findIndex(job=>job.id===jobId);const target=index+direction;
+    if(index<0||target<0||target>=jobs.length)return;
+    [jobs[index],jobs[target]]=[jobs[target],jobs[index]];saveRouteOrder(jobs);render();
+  }
+  async function reportRouteRisk(jobId){
+    const job=state.jobs.find(item=>item.id===jobId);if(!job)return;
+    const risk=routeRisk(job,0);const notes=`Route warning for ${job.job_number||'job'}: ${risk.label}. Driver requested dispatch review.`;
+    const {error}=await db.from('driver_incidents').insert({driver_id:state.profile.linked_driver_id,job_id:job.id,incident_type:'Traffic delay',notes,status:'open'});
+    if(error){notice(error.message,'error');return;}notice('Dispatch has been alerted about the timing risk.','ok');
+  }
   function routeView(){
-    const jobs=state.jobs.slice().sort((a,b)=>String(a.collection_date||'').localeCompare(String(b.collection_date||''))||String(a.collection_time||'').localeCompare(String(b.collection_time||'')));
-    return `<section class="route-screen"><div class="screen-heading"><small>TODAY'S ROUTE</small><h1>Your running order</h1><p>Completed, current and upcoming jobs in one view.</p></div>${jobs.length?`<div class="route-list">${jobs.map((job,i)=>{const done=job.job_status==='Delivered';const current=activeStatuses.includes(job.job_status);return `<article class="route-stop ${done?'done':current?'current':''}" data-open-job="${job.id}"><div class="route-number">${done?'✓':i+1}</div><div><small>${done?'COMPLETED':current?'CURRENT JOB':'UPCOMING'}</small><h3>${esc(shortPlace(job.collection_address))} → ${esc(shortPlace(job.delivery_address))}</h3><p>${jobTime(job)} · ${esc(job.job_number||'Job')}</p></div><span>›</span></article>`}).join('')}</div>`:'<div class="empty"><strong>No route assigned</strong></div>'}</section>`;
+    const jobs=orderedRouteJobs();
+    const next=jobs.find(job=>job.job_status!=='Delivered');
+    const nextRisk=next?routeRisk(next,0):null;
+    return `<section class="route-screen"><div class="screen-heading"><small>SMART ROUTE ASSISTANT</small><h1>Your running order</h1><p>Timed jobs are highlighted so the most urgent work is easy to spot.</p></div>
+      ${next?`<section class="route-advice ${nextRisk.level}"><div><small>SUGGESTED NEXT</small><h2>${esc(next.job_number||'Job')} · ${esc(shortPlace(next.collection_address))}</h2><p>${esc(nextRisk.label)}</p></div><button class="btn primary" data-open-job="${next.id}">Open job</button></section>`:''}
+      <div class="route-toolbar"><button class="btn primary" data-optimise-route>Optimise order</button><button class="btn secondary" data-reset-route>Reset by time</button></div>
+      ${jobs.length?`<div class="route-list">${jobs.map((job,i)=>{const done=job.job_status==='Delivered';const current=activeStatuses.includes(job.job_status);const risk=routeRisk(job,i);return `<article class="route-stop ${done?'done':current?'current':''} risk-${risk.level}"><div class="route-number" data-open-job="${job.id}">${done?'✓':i+1}</div><div data-open-job="${job.id}"><small>${done?'COMPLETED':current?'CURRENT JOB':'UPCOMING'}</small><h3>${esc(shortPlace(job.collection_address))} → ${esc(shortPlace(job.delivery_address))}</h3><p>${jobTime(job)} · ${esc(job.job_number||'Job')}</p><b class="route-risk-label">${esc(risk.label)}</b></div><div class="route-order-actions"><button data-route-up="${job.id}" aria-label="Move up" ${i===0?'disabled':''}>↑</button><button data-route-down="${job.id}" aria-label="Move down" ${i===jobs.length-1?'disabled':''}>↓</button>${risk.level==='danger'&&!done?`<button class="alert-office" data-route-alert="${job.id}">Alert office</button>`:''}</div></article>`}).join('')}</div>`:'<div class="empty"><strong>No route assigned</strong></div>'}</section>`;
   }
 
   function messagesView(){
@@ -507,6 +562,11 @@
     document.querySelectorAll('[data-nav-address]').forEach(btn=>btn.onclick=()=>{state.navAddress=btn.dataset.navAddress;render();});
     document.querySelector('[data-close-nav]')?.addEventListener('click',()=>{state.navAddress=null;render();});
     document.querySelectorAll('[data-favourite-address]').forEach(btn=>btn.onclick=()=>{const address=btn.dataset.favouriteAddress,key=favouriteKey(address);localStorage.setItem(key,isFavourite(address)?'0':'1');render();});
+    document.querySelector('[data-optimise-route]')?.addEventListener('click',optimiseRoute);
+    document.querySelector('[data-reset-route]')?.addEventListener('click',()=>{state.routeOrder=[];localStorage.removeItem('kls-driver-route-order');render();});
+    document.querySelectorAll('[data-route-up]').forEach(btn=>btn.onclick=()=>moveRouteJob(btn.dataset.routeUp,-1));
+    document.querySelectorAll('[data-route-down]').forEach(btn=>btn.onclick=()=>moveRouteJob(btn.dataset.routeDown,1));
+    document.querySelectorAll('[data-route-alert]').forEach(btn=>btn.onclick=()=>reportRouteRisk(btn.dataset.routeAlert));
     document.querySelectorAll('[data-job-chat]').forEach(form=>form.onsubmit=async e=>{e.preventDefault();const message=String(new FormData(form).get('message')||'').trim();if(!message)return;const payload={job_id:form.dataset.jobChat,driver_id:state.profile.linked_driver_id,sender_type:'driver',message,created_at:new Date().toISOString()};if(!navigator.onLine){const queued={id:crypto.randomUUID(),type:'job_message',payload};state.offlineQueue.push(queued);saveOfflineQueue();state.jobMessages.push({...payload,id:queued.id,_queued:true});notice('Message saved and will send when your signal returns.','ok');return;}const{data,error}=await db.from('driver_job_messages').insert(payload).select().single();if(error){notice(error.message,'error');return;}state.jobMessages.push(data);render();});
     document.getElementById('driver-workflow-form')?.addEventListener('submit',completeWorkflow);
     document.getElementById('incident-form')?.addEventListener('submit',submitIncident);

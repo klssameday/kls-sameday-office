@@ -335,3 +335,146 @@ td button:not(.alt):not(.danger){background:#111827!important;color:#fff!importa
 [class*="panel"],[class*="card"],[class*="modal"],[class*="drawer"],[class*="sheet"]{color:var(--kls-text)}
 .panel button:not(.primary):not(.secondary):not(.danger):not([class*="status"]),.card button:not(.primary):not(.secondary):not(.danger):not([class*="status"]),.customermodal button:not(.primary):not(.secondary):not(.danger){color:#344054}
 @media(max-width:700px){.actions{background:#fff!important;border-top:1px solid #eaecf0!important}.side{box-shadow:14px 0 34px rgba(16,24,40,.14)!important}}
+
+/* =========================================================
+   KLS SameDay Office v27.1 — Premium contrast refinement
+   Keeps the dark hero/finance accents, while all working
+   panels use bright surfaces and high-contrast typography.
+   ========================================================= */
+
+/* Dashboard: dark accent areas must always use light type */
+.command-hero,
+.command-hero h1,.command-hero h2,.command-hero h3,.command-hero b,.command-hero strong,
+.ops-finance-strip,.ops-finance-strip b,
+.jobs-command-hero,.jobs-command-hero h2,
+.ops-hero,.ops-hero h2,
+.smart-hero,.smart-hero h2,
+.tracking-hero,.tracking-hero h2,
+.communications-hero,.communications-hero h2{
+  color:#fff!important;
+}
+.command-hero small,.command-hero p,
+.jobs-command-hero small,.jobs-command-hero p,
+.ops-hero small,.ops-hero p,
+.smart-hero small,.smart-hero p,
+.tracking-hero small,.tracking-hero p,
+.communications-hero small,.communications-hero p{
+  color:#d0d5dd!important;
+}
+
+/* Dashboard working panels: premium white cards */
+.command-map-panel,.command-board-panel,.command-panel,.ops-chart-panel{
+  background:#fff!important;
+  color:#101828!important;
+  border-color:#e4e7ec!important;
+  box-shadow:0 8px 24px rgba(16,24,40,.06)!important;
+}
+.command-map-panel>header,.command-board-panel>header,.command-panel>header{
+  border-bottom-color:#eaecf0!important;
+}
+.command-map-panel h2,.command-board-panel h2,.command-panel h2,.ops-chart-panel h2,
+.command-map-panel b,.command-board-panel b,.command-panel b,.ops-chart-panel b,
+.command-map-panel strong,.command-board-panel strong,.command-panel strong,.ops-chart-panel strong{
+  color:#101828!important;
+}
+.command-map-panel small,.command-board-panel small,.command-panel small,.ops-chart-panel small,
+.command-map-empty,.command-panel>footer{
+  color:#667085!important;
+}
+.command-panel>header>button{
+  color:#344054!important;
+}
+.command-panel>header>b{
+  background:#f2f4f7!important;
+  color:#101828!important;
+}
+.command-map{
+  background:#f8fafc!important;
+}
+.command-map-empty{
+  background:linear-gradient(135deg,#f8fafc,#f2f4f7)!important;
+}
+.command-map-empty b{color:#101828!important}
+
+/* Dashboard lists and activity */
+.command-alerts button,.command-driver{
+  color:#101828!important;
+  border-bottom-color:#eaecf0!important;
+  background:#fff!important;
+}
+.command-alerts button:hover,.command-driver:hover{
+  background:#f9fafb!important;
+}
+.command-alerts small,.command-driver small{
+  color:#667085!important;
+}
+.command-driver strong{color:#344054!important}
+.command-all-clear{color:#667085!important}.command-all-clear b{color:#101828!important}
+.ops-activity>div>button{
+  background:#fff!important;
+  color:#101828!important;
+  border-color:#eaecf0!important;
+}
+.ops-activity>div>button:hover{background:#f9fafb!important;border-color:#98a2b3!important}
+.ops-activity>div>button>span{background:#f2f4f7!important;color:#344054!important}
+.ops-activity>div>button small,.ops-activity>div>button time{color:#667085!important}
+.command-quick>div>button{
+  background:#fff!important;
+  color:#101828!important;
+  border-color:#e4e7ec!important;
+}
+.command-quick>div>button:hover{background:#f9fafb!important;border-color:#98a2b3!important}
+.command-quick button small{color:#667085!important}
+
+/* Dispatch snapshot on the dashboard */
+.command-board{background:#fff!important}
+.command-stage{background:#f8fafc!important;border-color:#e4e7ec!important}
+.command-stage>header{color:#344054!important;border-bottom-color:#e4e7ec!important}
+.command-stage>header b{background:#eaecf0!important;color:#344054!important}
+.command-stage button{background:#fff!important;color:#101828!important;border-color:#e4e7ec!important}
+.command-stage button:hover{background:#f9fafb!important;border-color:#98a2b3!important}
+.command-stage button small{color:#667085!important}.command-stage button span{color:#475467!important}.command-stage p{color:#98a2b3!important}
+
+/* White chart cards with dark labels */
+.ops-chart-panel header small{color:#667085!important}
+.ops-bar-item b{color:#344054!important}.ops-bar-item small{color:#667085!important}
+.ops-bar-item>span{background:#344054!important}.ops-bar-chart.revenue .ops-bar-item>span{background:#667085!important}
+
+/* Finance strip remains a deliberate premium black accent */
+.ops-finance-strip{background:#111827!important;border-color:#111827!important}
+.ops-finance-strip>div,.ops-finance-strip>button{background:#111827!important;color:#fff!important}
+.ops-finance-strip>div+div,.ops-finance-strip>button{border-left:1px solid #344054!important}
+.ops-finance-strip small{color:#d0d5dd!important}
+.ops-finance-strip>button:hover{background:#1f2937!important}
+
+/* Legacy dark cards throughout the application */
+.planner-panel,.planner-job,.ops-list-row,.ops-bottom-actions button,
+.tracking-job-card,.intelligence-card,.best-driver,
+.dispatch-command-panel,.dispatch-alert-row,.dispatch-activity-row,
+.crm-record-sections details,.crm-account-grid p,
+.communication-preview,.reminder-list article,.template-list article,
+.communication-history article,.recent-communications button,
+.portal-job-list article,.portal-admin-list article,.portal-access-list article,
+.export-grid button,.system-check{
+  background:#fff!important;
+  color:#101828!important;
+  border-color:#e4e7ec!important;
+}
+.planner-job p,.ops-list-row small,.ops-bottom-actions small,
+.tracking-job-card p,.tracking-job-card small,
+.intelligence-card small,.best-driver span,.best-driver small,
+.dispatch-alert-row small,.dispatch-activity-row small,
+.crm-record-sections summary span,.communication-preview p,
+.reminder-list small,.template-list small,.communication-history small,
+.communication-history p,.recent-communications small,
+.portal-job-list p,.portal-job-list small,.portal-admin-list small,.portal-access-list small,
+.export-grid button small,.system-check small{
+  color:#667085!important;
+}
+.export-grid button:hover,.recent-communications button:hover{background:#f9fafb!important;border-color:#98a2b3!important}
+.export-grid button>span,.history-icon,.recent-communications button>span{background:#f2f4f7!important;color:#344054!important}
+
+/* Never allow headings or normal button labels to fade into a surface */
+button:not(:disabled){font-weight:700}
+button.primary:not(:disabled),.primary:not(:disabled){color:#fff!important}
+button.secondary:not(:disabled),.secondary:not(:disabled){color:#344054!important}

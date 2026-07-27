@@ -1,23 +1,20 @@
-# KLS SameDay Office v33.0
+# KLS SameDay Office v33.1
 
-## Professional Dispatch Board
+## Dispatch Quick Control
 
-This is a working upgrade based on v32.1. It adds real dispatch controls rather than placeholder screens.
+This release adds a real office dispatch quick-edit drawer to the v33 dispatch board.
 
 ### Included
-- Live five-column drag-and-drop dispatch board
-- Search by job, customer, postcode, vehicle or driver
-- Driver, priority and date filters
-- Urgent, Timed, VIP and Normal priority badges
-- One-click urgent/normal priority toggle on job cards
-- Multi-select jobs
-- Bulk driver assignment
-- Bulk status updates
-- Live driver cards, GPS freshness, alerts, activity and map retained
-- Supabase migration for dispatch priority and delivery deadline fields
+- Quick edit any dispatch job without leaving the board
+- Change status, priority, driver, collection date/time and delivery deadline
+- Set customer ETA, vehicle and office-only dispatch notes
+- Open the full job record from the quick editor
+- Bulk priority changes for selected jobs
+- Delivery deadline risk alerts
+- Existing drag-and-drop, GPS, filters and bulk status tools retained
 
-### Before using priority controls
-Run `SUPABASE-v33-DISPATCH.sql` once in the Supabase SQL Editor.
+### Database
+Run `SUPABASE-v33-DISPATCH.sql` if it has not already been run. No additional migration is required for v33.1.
 
-### GitHub Summary
-`Release v33.0 – Professional Dispatch Board`
+### GitHub summary
+`Release v33.1 – Dispatch Quick Control`

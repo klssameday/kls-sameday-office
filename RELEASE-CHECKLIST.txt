@@ -1,15 +1,10 @@
-KLS SameDay Office v33.0 – Release Checklist
+KLS SameDay Office v33.1 – Release Checklist
 
-[ ] Run SUPABASE-v33-DISPATCH.sql in Supabase SQL Editor
-[ ] Upload the complete v33.0 project to GitHub/Vercel
-[ ] Confirm Dispatch opens without errors
-[ ] Test search, driver, priority and date filters
-[ ] Toggle a job between Normal and Urgent
-[ ] Select multiple jobs and bulk assign a driver
-[ ] Select multiple jobs and bulk change status
-[ ] Drag a job between dispatch columns
-[ ] Confirm Driver App still receives assigned jobs
-[ ] Confirm live GPS and POD still work
-
-GitHub Summary:
-Release v33.0 – Professional Dispatch Board
+1. Run SUPABASE-v33-DISPATCH.sql if not already completed.
+2. Open Dispatch and click Quick edit on a job.
+3. Change driver, priority, status and delivery deadline; save and refresh.
+4. Add dispatch notes and confirm they remain saved.
+5. Select multiple jobs and change their priority.
+6. Confirm jobs due within 45 minutes appear in Needs attention.
+7. Test drag-and-drop and Driver App updates.
+8. Deploy to GitHub/Vercel.

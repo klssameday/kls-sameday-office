@@ -1,6 +1,6 @@
 {
   "id": "/",
-  "name": "KLS SameDay Office v26.39",
+  "name": "KLS SameDay Office v27.0",
   "short_name": "KLS Office",
   "description": "KLS SameDay courier office and mobile driver app.",
   "start_url": "/?source=app",
@@ -12,8 +12,8 @@
     "minimal-ui"
   ],
   "orientation": "any",
-  "background_color": "#09090b",
-  "theme_color": "#09090b",
+  "background_color": "#f4f6f8",
+  "theme_color": "#f4f6f8",
   "categories": [
     "business",
     "productivity"

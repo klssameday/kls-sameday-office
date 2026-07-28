@@ -1314,7 +1314,8 @@
   function portalRequestsView() {
     const pending=state.portalBookings.filter(b=>b.status==='Pending');
     const rows=state.portalBookings.length?`<div class="portal-admin-list">${state.portalBookings.map(b=>{const customer=state.customers.find(c=>c.id===b.customer_id);return `<article><div><span><b>${esc(customer?.company||'Customer')}</b><small>${fmtDate(b.collection_date)} ${esc(String(b.collection_time||'').slice(0,5))}</small></span>${portalStatusBadge(b.status)}</div><p><small>COLLECT</small>${esc(b.collection_address)}</p><p><small>DELIVER</small>${esc(b.delivery_address)}</p><p><small>VEHICLE</small>${esc(b.vehicle||'Not specified')}</p>${b.load_description?`<p><small>LOAD</small>${esc(b.load_description)}</p>`:''}<footer>${b.status==='Pending'?`<button class="primary" data-portal-approve="${b.id}">Approve & create job</button><button class="danger" data-portal-reject="${b.id}">Reject</button>`:''}</footer></article>`}).join('')}</div>`:'<div class="fleet-empty">No portal booking requests yet.</div>';
-    return `<section class="fleet-hero"><div><small>V31.0.1 CUSTOMER PORTAL</small><h2>Customer Portal</h2><p>Review requests sent directly by customer accounts.</p></div><strong>${pending.length} pending</strong></section>${panel('Customer requests',rows,'Approved requests create a confirmed job in your booking calendar.')}`;
+    const messages=state.portalMessages.length?`<div class="portal-admin-list">${state.portalMessages.map(message=>{const customer=state.customers.find(c=>c.id===message.customer_id);return `<article><div><span><b>${esc(message.subject||'Customer message')}</b><small>${esc(customer?.company||'Customer')} · ${fmtDate(message.created_at)} · ${message.sender_type==='office'?'Sent by KLS':'From customer'}</small></span></div><p>${esc(message.message||'')}</p>${message.sender_type!=='office'?`<form class="portal-reply-form" data-portal-reply="${message.id}"><label>Reply<textarea name="message" required placeholder="Write your reply to ${esc(customer?.company||'the customer')}"></textarea></label><button class="primary">Send reply</button></form>`:''}</article>`}).join('')}</div>`:'<div class="fleet-empty">No customer messages yet.</div>';
+    return `<section class="fleet-hero"><div><small>V31.0.1 CUSTOMER PORTAL</small><h2>Customer Portal</h2><p>Review requests and messages sent directly by customer accounts.</p></div><strong>${pending.length} pending · ${state.portalMessages.filter(m=>m.sender_type!=='office').length} messages</strong></section>${panel('Customer requests',rows,'Approved requests create a confirmed job in your booking calendar.')}${panel('Customer messages',messages,'Replies appear inside the customer’s secure portal.')}`;
   }
 
   function driverExchangeView() {
@@ -1862,6 +1863,7 @@ function systemHealthSummary() {
         invoices: db.from('invoices').select('*').order('created_at', { ascending: false }),
         expenses: db.from('expenses').select('*').order('expense_date', { ascending: false }),
         portalBookings: db.from('portal_bookings').select('*').order('created_at', { ascending: false }),
+        portalMessages: db.from('portal_messages').select('*').order('created_at', { ascending: false }),
         portalAccessUsers: db.from('customer_users').select('*, customers(company)').order('created_at', { ascending: false }),
         routeStops: db.from('route_stops').select('*').order('stop_order', { ascending: true }),
         quoteRequests: db.from('public_quote_requests').select('*').order('created_at', { ascending: false }),
@@ -1877,7 +1879,7 @@ function systemHealthSummary() {
         if (!result) throw new Error(`No database response received for ${name}.`);
         if (result.error) throw new Error(`${name}: ${result.error.message}`);
       }
-      const { customers, customerContacts, customerFollowups, drivers, fleet, fuelLogs, maintenance, recurringJobs, quotes, jobs, archivedJobs, invoices, expenses, portalBookings, portalAccessUsers, routeStops, quoteRequests, driverAccounts, exchangeJobs, exchangeBids, settings } = loaded;
+      const { customers, customerContacts, customerFollowups, drivers, fleet, fuelLogs, maintenance, recurringJobs, quotes, jobs, archivedJobs, invoices, expenses, portalBookings, portalMessages, portalAccessUsers, routeStops, quoteRequests, driverAccounts, exchangeJobs, exchangeBids, settings } = loaded;
       state.customers = customers.data || [];
       state.customerContacts = customerContacts.data || [];
       state.customerFollowups = customerFollowups.data || [];
@@ -1892,6 +1894,7 @@ function systemHealthSummary() {
       state.invoices = invoices.data || [];
       state.expenses = expenses.data || [];
       state.portalBookings = portalBookings.data || [];
+      state.portalMessages = portalMessages.data || [];
       state.portalAccessUsers = portalAccessUsers.data || [];
       state.routeStops = routeStops.data || [];
       state.quoteRequests = quoteRequests.data || [];
@@ -2704,6 +2707,32 @@ function systemHealthSummary() {
     document.querySelectorAll('[data-portal-reject]').forEach(button=>button.addEventListener('click',async()=>{
       const request=state.portalBookings.find(b=>b.id===button.dataset.portalReject); if(!request)return;
       const {error}=await db.from('portal_bookings').update({status:'Rejected'}).eq('id',request.id); if(error)showNotice(error.message,'error'); else {request.status='Rejected';showNotice('Portal request rejected.','ok');} render();
+    }));
+    document.querySelectorAll('[data-portal-reply]').forEach(form=>form.addEventListener('submit',async event=>{
+      event.preventDefault();
+      const original=state.portalMessages.find(message=>message.id===form.dataset.portalReply);
+      if(!original)return;
+      const button=form.querySelector('button');
+      const values=Object.fromEntries(new FormData(form));
+      try{
+        button.disabled=true; button.textContent='Sending…';
+        const payload={
+          owner_id:state.user.id,
+          customer_id:original.customer_id,
+          auth_user_id:original.auth_user_id,
+          sender_type:'office',
+          subject:`Re: ${original.subject||'Customer message'}`,
+          message:String(values.message||'').trim()
+        };
+        const {data,error}=await db.from('portal_messages').insert(payload).select().single();
+        if(error)throw error;
+        state.portalMessages.unshift(data);
+        showNotice('Reply sent to the customer portal.','ok');
+        render();
+      }catch(error){
+        showNotice(error.message,'error');
+        render();
+      }
     }));
 
     const portalAccessForm = document.getElementById('portal-access-form');

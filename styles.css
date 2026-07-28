@@ -893,6 +893,63 @@ button:not(:disabled):active{transform:translateY(1px)}
 .primary:not(:disabled):hover{box-shadow:0 5px 14px rgba(16,24,40,.18)!important}
 .secondary:not(:disabled):hover{box-shadow:0 2px 6px rgba(16,24,40,.08)!important}
 
+/* KLS SameDay Office v35.1 — safe job archive */
+.archive-mark{
+  border-color:#d0d5dd!important;
+  background:#f9fafb!important;
+  color:#344054!important;
+}
+.archive-job-list{
+  display:grid;
+  gap:12px;
+}
+.archive-job-card{
+  padding:18px;
+  border:1px solid #e4e7ec;
+  border-radius:16px;
+  background:#fff;
+  box-shadow:0 1px 2px rgba(16,24,40,.04);
+}
+.archive-job-main,.archive-job-card footer{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:16px;
+}
+.archive-job-main small{
+  color:#667085;
+  font-size:10px;
+  font-weight:900;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+}
+.archive-job-main h3{margin:3px 0}
+.archive-job-main p,.archive-job-main>span{margin:0;color:#667085;font-size:13px}
+.archive-job-route{
+  display:grid;
+  grid-template-columns:1fr auto 1fr;
+  gap:14px;
+  align-items:center;
+  margin:16px 0;
+  padding:14px;
+  border-radius:12px;
+  background:#f9fafb;
+}
+.archive-job-route p{margin:0;color:#344054}
+.archive-job-route small{display:block;margin-bottom:4px;color:#667085;font-weight:900}
+.archive-job-card footer{
+  align-items:center;
+  padding-top:14px;
+  border-top:1px solid #eaecf0;
+}
+.archive-job-card footer>div{display:flex;gap:8px;flex-wrap:wrap}
+@media(max-width:700px){
+  .archive-job-main,.archive-job-card footer{align-items:stretch;flex-direction:column}
+  .archive-job-route{grid-template-columns:1fr}
+  .archive-job-route>b{display:none}
+  .archive-job-card footer>div{display:grid;grid-template-columns:1fr}
+}
+
 /* Mobile navigation polish */
 @media(max-width:700px){
   .side{box-shadow:18px 0 42px rgba(16,24,40,.18)!important}

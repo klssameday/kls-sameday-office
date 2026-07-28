@@ -58,6 +58,7 @@
     scheduleMonth: new Date().toISOString().slice(0,7),
     quotes: [],
     jobs: [],
+    archivedJobs: [],
     invoices: [],
     expenses: [],
     portalUser: null,
@@ -75,6 +76,7 @@
     loading: true,
     jobEditorId: null,
     jobSearch: '',
+    jobArchiveMode: false,
     authMode: 'signin',
     selectedCustomerId: null,
     quoteCustomerId: null,
@@ -468,6 +470,7 @@
         ${job.job_status==='Delivered'&&!invoice?`<button class="primary" type="button" data-invoice="${job.id}">Create invoice</button>`:''}
         ${invoice?`<button class="secondary" type="button" data-page="invoices">Open invoice</button>`:''}
         ${pod?`<button class="secondary" type="button" data-print-pod="${job.id}">Open POD</button>`:''}
+        ${['Delivered','Cancelled'].includes(job.job_status)?`<button class="secondary" type="button" data-archive-job="${job.id}">Archive job</button>`:''}
       </div>
       <div class="job-command-summary"><div><small>STATUS</small><b>${esc(job.job_status || 'Booked')}</b></div><div><small>DRIVER</small><b>${esc(driver?.name || 'Unassigned')}</b></div><div><small>VEHICLE</small><b>${esc(job.vehicle || 'TBC')}</b></div><div><small>VALUE</small><b>${money(job.total_price)}</b></div></div>
       <div class="job-command-layout"><form id="job-editor-form" class="job-command-form"><div class="grid two"><label>Collection date<input name="collection_date" type="date" value="${esc(String(job.collection_date||'').slice(0,10))}"></label><label>Collection time<input name="collection_time" type="time" value="${esc(String(job.collection_time||'').slice(0,5))}"></label><label>Vehicle<select name="vehicle">${Object.keys(vehicles).map(v=>`<option ${job.vehicle===v?'selected':''}>${v}</option>`).join('')}</select></label><label>Status<select name="job_status">${['Booked','En Route to Collection','Arrived at Collection','Collected','In Transit','Arrived at Delivery','Delivered','Cancelled'].map(v=>`<option ${job.job_status===v?'selected':''}>${v}</option>`).join('')}</select></label><label id="job-driver-field">Assigned driver<select name="assigned_driver_id"><option value="">Unassigned</option>${state.drivers.map(d=>`<option value="${d.id}" ${job.assigned_driver_id===d.id?'selected':''}>${esc(d.name)} · ${esc(d.vehicle||'Vehicle TBC')}</option>`).join('')}</select></label><label>Job price (£)<input name="total_price" type="number" min="0" step="0.01" value="${Number(job.total_price||0)}"></label></div><label>Collection address<textarea name="collection_address" required>${esc(job.collection_address||'')}</textarea></label><label>Delivery address<textarea name="delivery_address" required>${esc(job.delivery_address||'')}</textarea></label><label>Goods / job details<textarea name="goods_description">${esc(job.goods_description||'')}</textarea></label><div class="actions"><button type="button" class="secondary" data-action="job-close">Cancel</button><button class="primary">Save job</button></div></form>
@@ -477,6 +480,16 @@
 
   function jobsView() {
     const term = String(state.jobSearch || '').trim().toLowerCase();
+    if (state.jobArchiveMode) {
+      const archived = state.archivedJobs.filter(job => {
+        if (!term) return true;
+        const haystack = [job.job_number,job.customer_name,job.contact_name,job.collection_address,job.delivery_address,job.vehicle,job.job_status].join(' ').toLowerCase();
+        return haystack.includes(term);
+      });
+      return `<section class="jobs-command-hero"><div><small>ADMIN JOB RECORDS</small><h2>Archived Jobs</h2><p>Restore jobs to active records or permanently remove test data and mistakes.</p></div><div class="jobs-live-mark archive-mark">${state.archivedJobs.length} archived</div></section>
+        <div class="jobs-board-toolbar"><label class="search">Search archived jobs <input id="job-search" value="${esc(state.jobSearch||'')}" placeholder="Job, customer, postcode, vehicle or status"></label><span class="jobs-search-count">${archived.length} shown</span><button class="secondary" data-job-archive-view="active">Back to active jobs</button></div>
+        <section class="archive-job-list">${archived.length ? archived.map(job=>`<article class="archive-job-card"><div class="archive-job-main"><div><small>${esc(job.job_status||'Job')}</small><h3>${esc(job.job_number||'Job')}</h3><p>${esc(job.customer_name||job.contact_name||'Customer')}</p></div><span>Archived ${fmtDate(job.archived_at)}</span></div><div class="archive-job-route"><p><small>COLLECT</small>${esc(job.collection_address||'Address TBC')}</p><b>→</b><p><small>DELIVER</small>${esc(job.delivery_address||'Address TBC')}</p></div><footer><span>${esc(job.vehicle||'Vehicle TBC')} · ${money(job.total_price)}</span><div><button class="secondary" data-restore-job="${job.id}">Restore</button><button class="danger" data-delete-archived-job="${job.id}">Delete permanently</button></div></footer></article>`).join('') : '<div class="jobs-board-empty">No archived jobs match this search.</div>'}</section>`;
+    }
     const visibleJobs = state.jobs.filter(job => {
       if (!term) return true;
       const customer = jobCustomer(job);
@@ -494,7 +507,7 @@
     const unassigned = state.jobs.filter(j=>!j.assigned_driver_id && !['Delivered','Cancelled'].includes(j.job_status)).length;
     return `<section class="jobs-command-hero"><div><small>V26.39 OPERATIONS WORKFLOW</small><h2>Jobs Control Centre</h2><p>Search, assign, navigate, update, invoice and open POD without leaving the job.</p></div><div class="jobs-live-mark"><span class="dot"></span> Live updates</div></section>
       <div class="jobs-command-kpis"><div><small>ALL JOBS</small><b>${state.jobs.length}</b></div><div><small>IN PROGRESS</small><b>${activeCount}</b></div><div><small>UNASSIGNED</small><b>${unassigned}</b></div><div><small>DELIVERED</small><b>${state.jobs.filter(j=>jobStatusGroup(j.job_status)==='delivered').length}</b></div></div>
-      <div class="jobs-board-toolbar"><label class="search">Search every job field <input id="job-search" value="${esc(state.jobSearch||'')}" placeholder="Job, customer, phone, postcode, vehicle or driver"></label><span class="jobs-search-count">${visibleJobs.length} shown</span><button class="primary" data-page="newquote">+ New quote</button></div>
+      <div class="jobs-board-toolbar"><label class="search">Search every job field <input id="job-search" value="${esc(state.jobSearch||'')}" placeholder="Job, customer, phone, postcode, vehicle or driver"></label><span class="jobs-search-count">${visibleJobs.length} shown</span><button class="secondary" data-job-archive-view="archived">Archived (${state.archivedJobs.length})</button><button class="primary" data-page="newquote">+ New quote</button></div>
       <div class="jobs-kanban">${columns.map(([key,title,jobs])=>`<section class="jobs-board-column column-${key}"><header><div><h3>${title}</h3><small>${jobs.length} job${jobs.length===1?'':'s'}</small></div><span>${jobs.length}</span></header><div class="jobs-board-list">${jobs.length?jobs.map(jobBoardCard).join(''):`<div class="jobs-board-empty">No ${title.toLowerCase()} jobs</div>`}</div></section>`).join('')}</div>${jobEditorModal()}`;
   }
 
@@ -1819,7 +1832,7 @@ function systemHealthSummary() {
         state.portalCustomer = portalUser.customers || null;
         const [bookings, jobs, invoices, quotes, messages, addresses, settings] = await Promise.all([
           db.from('portal_bookings').select('*').eq('customer_id', portalUser.customer_id).order('created_at',{ascending:false}),
-          db.from('jobs').select('*').eq('customer_id', portalUser.customer_id).eq('customer_visible', true).order('created_at',{ascending:false}),
+          db.from('jobs').select('*').eq('customer_id', portalUser.customer_id).eq('customer_visible', true).is('archived_at', null).order('created_at',{ascending:false}),
           db.from('invoices').select('*').eq('customer_id', portalUser.customer_id).eq('portal_visible', true).order('created_at',{ascending:false}),
           db.from('quotes').select('*').eq('customer_id', portalUser.customer_id).in('status',['Sent','Accepted','Declined']).order('created_at',{ascending:false}),
           db.from('portal_messages').select('*').eq('customer_id', portalUser.customer_id).order('created_at',{ascending:false}),
@@ -1844,7 +1857,8 @@ function systemHealthSummary() {
         maintenance: db.from('vehicle_maintenance').select('*').order('log_date', { ascending: false }),
         recurringJobs: db.from('recurring_jobs').select('*').order('next_run_date', { ascending: true }),
         quotes: db.from('quotes').select('*').order('created_at', { ascending: false }),
-        jobs: db.from('jobs').select('*').order('created_at', { ascending: false }),
+        jobs: db.from('jobs').select('*').is('archived_at', null).order('created_at', { ascending: false }),
+        archivedJobs: db.from('jobs').select('*').not('archived_at', 'is', null).order('archived_at', { ascending: false }),
         invoices: db.from('invoices').select('*').order('created_at', { ascending: false }),
         expenses: db.from('expenses').select('*').order('expense_date', { ascending: false }),
         portalBookings: db.from('portal_bookings').select('*').order('created_at', { ascending: false }),
@@ -1863,7 +1877,7 @@ function systemHealthSummary() {
         if (!result) throw new Error(`No database response received for ${name}.`);
         if (result.error) throw new Error(`${name}: ${result.error.message}`);
       }
-      const { customers, customerContacts, customerFollowups, drivers, fleet, fuelLogs, maintenance, recurringJobs, quotes, jobs, invoices, expenses, portalBookings, portalAccessUsers, routeStops, quoteRequests, driverAccounts, exchangeJobs, exchangeBids, settings } = loaded;
+      const { customers, customerContacts, customerFollowups, drivers, fleet, fuelLogs, maintenance, recurringJobs, quotes, jobs, archivedJobs, invoices, expenses, portalBookings, portalAccessUsers, routeStops, quoteRequests, driverAccounts, exchangeJobs, exchangeBids, settings } = loaded;
       state.customers = customers.data || [];
       state.customerContacts = customerContacts.data || [];
       state.customerFollowups = customerFollowups.data || [];
@@ -1874,6 +1888,7 @@ function systemHealthSummary() {
       state.recurringJobs = recurringJobs.data || [];
       state.quotes = quotes.data || [];
       state.jobs = (jobs.data || []).map(j => ({ ...j, customer_name: j.customer_name || j.contact_name || '' }));
+      state.archivedJobs = (archivedJobs.data || []).map(j => ({ ...j, customer_name: j.customer_name || j.contact_name || '' }));
       state.invoices = invoices.data || [];
       state.expenses = expenses.data || [];
       state.portalBookings = portalBookings.data || [];
@@ -2232,7 +2247,7 @@ function systemHealthSummary() {
     document.querySelector('[data-action="menu-open"]')?.addEventListener('click', () => document.getElementById('side').classList.add('open'));
     document.querySelector('[data-action="menu-close"]')?.addEventListener('click', () => document.getElementById('side').classList.remove('open'));
     document.querySelector('[data-action="notice-close"]')?.addEventListener('click', () => { state.notice = null; render(); });
-    document.querySelector('[data-action="signout"]')?.addEventListener('click', async () => { await db.auth.signOut(); state.user = null; state.customers=[]; state.drivers=[]; state.fleet=[]; state.fuelLogs=[]; state.maintenance=[]; state.recurringJobs=[]; state.quotes=[]; state.jobs=[]; state.invoices=[]; state.expenses=[]; render(); });
+    document.querySelector('[data-action="signout"]')?.addEventListener('click', async () => { await db.auth.signOut(); state.user = null; state.customers=[]; state.drivers=[]; state.fleet=[]; state.fuelLogs=[]; state.maintenance=[]; state.recurringJobs=[]; state.quotes=[]; state.jobs=[]; state.archivedJobs=[]; state.invoices=[]; state.expenses=[]; render(); });
 
     const driverForm = document.getElementById('driver-form');
     if(driverForm) driverForm.onsubmit=async e=>{e.preventDefault();const values=Object.fromEntries(new FormData(driverForm));const loginEmail=String(values.login_email||'').trim().toLowerCase();delete values.login_email;values.user_id=state.user.id;values.active=true;values.availability_status='Available';values.last_seen_at=new Date().toISOString();try{const{data,error}=await db.from('drivers').insert(values).select().single();if(error)throw error;const accountPayload={owner_id:state.user.id,driver_id:data.id,email:loginEmail,active:true,auth_user_id:loginEmail===String(state.user?.email||'').trim().toLowerCase()?state.user.id:null};const{data:account,error:accountError}=await db.from('driver_accounts').insert(accountPayload).select().single();if(accountError){await db.from('drivers').delete().eq('id',data.id);throw accountError;}state.drivers.push(data);state.driverAccounts.unshift(account);showNotice(`${data.name} added. Driver login: ${loginEmail}`,'ok');render();}catch(error){showNotice(error.message,'error');render();}};
@@ -2439,6 +2454,25 @@ function systemHealthSummary() {
       event.currentTarget.disabled=true;
       const {data,error}=await db.from('jobs').update(payload).eq('id',job.id).select().single();
       if(error){showNotice(error.message,'error');}else{Object.assign(job,data||payload);showNotice(`${job.job_number||'Job'} marked ${status}.`,'ok');}render();
+    });
+    document.querySelector('[data-archive-job]')?.addEventListener('click', async event => {
+      const job=state.jobs.find(item=>item.id===event.currentTarget.dataset.archiveJob);
+      if(!job||!['Delivered','Cancelled'].includes(job.job_status))return;
+      if(!confirm(`Archive ${job.job_number||'this job'}? It will leave the active Jobs screen but can be restored.`))return;
+      event.currentTarget.disabled=true;
+      try{
+        const {data,error}=await db.rpc('archive_job',{p_job_id:job.id});
+        if(error)throw error;
+        const archived={...job,...(data||{}),archived_at:data?.archived_at||new Date().toISOString(),archived_by:data?.archived_by||state.user.id};
+        state.jobs=state.jobs.filter(item=>item.id!==job.id);
+        state.archivedJobs.unshift(archived);
+        state.jobEditorId=null;
+        showNotice(`${job.job_number||'Job'} archived. It can be restored from Archived Jobs.`,'ok');
+        render();
+      }catch(error){
+        showNotice(`${error.message}. Run SUPABASE-v35.1-JOB-ARCHIVE.sql in Supabase first.`,'error');
+        render();
+      }
     });
     document.querySelectorAll('[data-action="job-close"]').forEach(button => button.onclick = () => { state.jobEditorId = null; render(); });
     document.getElementById('job-editor-form')?.addEventListener('submit', async event => {
@@ -2763,6 +2797,47 @@ function systemHealthSummary() {
 
     const jobSearch = document.getElementById('job-search');
     if (jobSearch) jobSearch.oninput = event => { state.jobSearch = event.target.value; render(); requestAnimationFrame(()=>{const input=document.getElementById('job-search');if(input){input.focus();input.setSelectionRange(input.value.length,input.value.length);}}); };
+    document.querySelectorAll('[data-job-archive-view]').forEach(button => button.onclick = () => {
+      state.jobArchiveMode=button.dataset.jobArchiveView==='archived';
+      state.jobEditorId=null;
+      state.jobSearch='';
+      render();
+    });
+    document.querySelectorAll('[data-restore-job]').forEach(button => button.onclick = async () => {
+      const job=state.archivedJobs.find(item=>item.id===button.dataset.restoreJob);
+      if(!job)return;
+      button.disabled=true;
+      try{
+        const {data,error}=await db.rpc('restore_archived_job',{p_job_id:job.id});
+        if(error)throw error;
+        const restored={...job,...(data||{}),archived_at:null,archived_by:null};
+        state.archivedJobs=state.archivedJobs.filter(item=>item.id!==job.id);
+        state.jobs.unshift(restored);
+        showNotice(`${job.job_number||'Job'} restored to active jobs.`,'ok');
+        render();
+      }catch(error){
+        showNotice(`${error.message}. Run SUPABASE-v35.1-JOB-ARCHIVE.sql in Supabase first.`,'error');
+        render();
+      }
+    });
+    document.querySelectorAll('[data-delete-archived-job]').forEach(button => button.onclick = async () => {
+      const job=state.archivedJobs.find(item=>item.id===button.dataset.deleteArchivedJob);
+      if(!job)return;
+      const confirmation=job.job_number||'DELETE';
+      const typed=prompt(`Permanently delete ${job.job_number||'this archived job'}?\n\nThis cannot be undone. Type ${confirmation} to confirm.`);
+      if(typed!==confirmation)return;
+      button.disabled=true;
+      try{
+        const {error}=await db.rpc('delete_archived_job',{p_job_id:job.id});
+        if(error)throw error;
+        state.archivedJobs=state.archivedJobs.filter(item=>item.id!==job.id);
+        showNotice(`${job.job_number||'Job'} permanently deleted. The deletion audit record was retained.`,'ok');
+        render();
+      }catch(error){
+        showNotice(`${error.message}. Only archived jobs without an invoice can be permanently deleted.`,'error');
+        render();
+      }
+    });
     const customerSearch = document.getElementById('customer-search');
     const customerHealthFilter = document.getElementById('customer-health-filter');
     const filterCustomerRows = () => {
@@ -2826,9 +2901,13 @@ function systemHealthSummary() {
   let officePollId=null;
   async function refreshOfficeJobsNow(){
     if(!db||!state.user||state.portalUser)return;
-    const {data,error}=await db.from('jobs').select('*').order('created_at',{ascending:false});
-    if(error)return;
-    state.jobs=(data||[]).map(j=>({...j,customer_name:j.customer_name||j.contact_name||''}));
+    const [active,archived]=await Promise.all([
+      db.from('jobs').select('*').is('archived_at',null).order('created_at',{ascending:false}),
+      db.from('jobs').select('*').not('archived_at','is',null).order('archived_at',{ascending:false})
+    ]);
+    if(active.error||archived.error)return;
+    state.jobs=(active.data||[]).map(j=>({...j,customer_name:j.customer_name||j.contact_name||''}));
+    state.archivedJobs=(archived.data||[]).map(j=>({...j,customer_name:j.customer_name||j.contact_name||''}));
     if(state.page==='jobs'||state.page==='dispatch'||state.page==='planner')render();
   }
   window.addEventListener('focus',refreshOfficeJobsNow);
@@ -2838,12 +2917,22 @@ function systemHealthSummary() {
     if(officePollId)clearInterval(officePollId);
     officePollId=setInterval(async()=>{
       if(!db||!state.user||state.portalUser||document.hidden)return;
-      const {data,error}=await db.from('jobs').select('*').order('created_at',{ascending:false});
-      if(error)return;
-      const next=(data||[]).map(j=>({...j,customer_name:j.customer_name||j.contact_name||''}));
-      const before=JSON.stringify(state.jobs.map(j=>[j.id,j.job_status,j.assigned_driver_id,j.updated_at,j.delivered_at,j.pod_photo_url]));
-      const after=JSON.stringify(next.map(j=>[j.id,j.job_status,j.assigned_driver_id,j.updated_at,j.delivered_at,j.pod_photo_url]));
-      if(before!==after){state.jobs=next;render();}
+      const [active,archived]=await Promise.all([
+        db.from('jobs').select('*').is('archived_at',null).order('created_at',{ascending:false}),
+        db.from('jobs').select('*').not('archived_at','is',null).order('archived_at',{ascending:false})
+      ]);
+      if(active.error||archived.error)return;
+      const next=(active.data||[]).map(j=>({...j,customer_name:j.customer_name||j.contact_name||''}));
+      const nextArchived=(archived.data||[]).map(j=>({...j,customer_name:j.customer_name||j.contact_name||''}));
+      const before=JSON.stringify({
+        active:state.jobs.map(j=>[j.id,j.job_status,j.assigned_driver_id,j.updated_at,j.delivered_at,j.pod_photo_url]),
+        archived:state.archivedJobs.map(j=>[j.id,j.archived_at,j.updated_at])
+      });
+      const after=JSON.stringify({
+        active:next.map(j=>[j.id,j.job_status,j.assigned_driver_id,j.updated_at,j.delivered_at,j.pod_photo_url]),
+        archived:nextArchived.map(j=>[j.id,j.archived_at,j.updated_at])
+      });
+      if(before!==after){state.jobs=next;state.archivedJobs=nextArchived;render();}
     },5000);
   }
 

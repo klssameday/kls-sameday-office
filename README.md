@@ -1,4 +1,7 @@
-# KLS SameDay Office v35.1.0
+# KLS SameDay Office v35.2.0
+
+Archive-safe reporting update: archived jobs remain included in dashboards, customer history,
+POD documents, business intelligence, profitability reports, CSV exports and full backups.
 
 ## Safe Job Archive
 

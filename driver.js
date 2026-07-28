@@ -1,4 +1,4 @@
-// KLS SameDay Driver v35.1 — hides archived jobs from active driver work
+// KLS SameDay Driver v35.4 — secure office-issued driver invitations
 (() => {
   const raw = window.KLS_CONFIG || {};
   const root = document.getElementById('driver-app');
@@ -9,7 +9,8 @@
   })();
   const db = validUrl && key && window.supabase ? window.supabase.createClient(url, key) : null;
   const steps = ['Booked','En Route to Collection','Arrived at Collection','Collected','In Transit','Arrived at Delivery','Delivered'];
-  let state = { user:null, profile:null, jobs:[], loading:true, mode:'signin', notice:null, podJob:null, workflowJob:null, workflowType:null, tab:'home', screen:'dashboard', detailJobId:null, networkJobs:[], myBids:[], messages:[], incidents:[], online:navigator.onLine, lastUpdated:null, refreshing:false, jobAlerts:[], notificationsEnabled:typeof Notification!=='undefined'&&Notification.permission==='granted', completionCelebration:null, darkMode:localStorage.getItem('kls-driver-dark')==='1', assistantHelp:false, arrivalPrompt:null, fuelDismissed:localStorage.getItem('kls-fuel-dismissed')===new Date().toISOString().slice(0,10), navAddress:null, jobMessages:[], offlineQueue:JSON.parse(localStorage.getItem('kls-driver-offline-queue')||'[]'), routeOrder:JSON.parse(localStorage.getItem('kls-driver-route-order')||'[]'), jobDocuments:[], historySearch:'', isOfficeOwner:false };
+  const inviteEmail = String(new URLSearchParams(location.search).get('invite') || '').trim().toLowerCase();
+  let state = { user:null, profile:null, jobs:[], loading:true, mode:inviteEmail?'signup':'signin', notice:null, podJob:null, workflowJob:null, workflowType:null, tab:'home', screen:'dashboard', detailJobId:null, networkJobs:[], myBids:[], messages:[], incidents:[], online:navigator.onLine, lastUpdated:null, refreshing:false, jobAlerts:[], notificationsEnabled:typeof Notification!=='undefined'&&Notification.permission==='granted', completionCelebration:null, darkMode:localStorage.getItem('kls-driver-dark')==='1', assistantHelp:false, arrivalPrompt:null, fuelDismissed:localStorage.getItem('kls-fuel-dismissed')===new Date().toISOString().slice(0,10), navAddress:null, jobMessages:[], offlineQueue:JSON.parse(localStorage.getItem('kls-driver-offline-queue')||'[]'), routeOrder:JSON.parse(localStorage.getItem('kls-driver-route-order')||'[]'), jobDocuments:[], historySearch:'', isOfficeOwner:false };
   let watchId = null;
   let activeJobId = null;
   let signatureCanvas = null;
@@ -162,7 +163,7 @@
 
   function authView(){
     const signup=state.mode==='signup';
-    return `<div class="driver-auth"><section class="driver-auth-card"><div class="driver-brand"><b>KLS</b><span>Driver<small>SameDay mobile app</small></span></div><h1>${signup?'Create driver login':'Driver sign in'}</h1><p>Only assigned jobs, navigation, tracking and proof of delivery are shown here. Prices and office accounts are not available.</p>${state.notice?`<div class="driver-msg ${state.notice.type}">${esc(state.notice.text)}</div>`:''}<form id="driver-auth-form"><label>Email<input name="email" type="email" autocomplete="email" required></label><label>Password<input name="password" type="password" minlength="6" autocomplete="current-password" required></label><button class="btn primary full">${signup?'Create login':'Sign in'}</button></form><div class="auth-switch">${signup?'Already registered?':'First time?'} <button data-mode="${signup?'signin':'signup'}">${signup?'Sign in':'Create driver login'}</button></div></section></div>`;
+    return `<div class="driver-auth"><section class="driver-auth-card"><div class="driver-brand"><b>KLS</b><span>Driver<small>SameDay mobile app</small></span></div><h1>${signup?'Create your driver login':'Driver sign in'}</h1><p>${signup?'The KLS office has invited you. Choose a password to activate your Driver App.':'Only assigned jobs, navigation, tracking and proof of delivery are shown here. Prices and office accounts are not available.'}</p>${state.notice?`<div class="driver-msg ${state.notice.type}">${esc(state.notice.text)}</div>`:''}<form id="driver-auth-form"><label>Email<input name="email" type="email" autocomplete="email" required value="${esc(signup?inviteEmail:'')}" ${signup&&inviteEmail?'readonly':''}></label><label>Password<input name="password" type="password" minlength="6" autocomplete="${signup?'new-password':'current-password'}" required></label><button class="btn primary full">${signup?'Activate driver login':'Sign in'}</button></form><div class="auth-switch">${signup?'Already registered?':'Need a login?'} ${signup?'<button data-mode="signin">Sign in</button>':'Ask the KLS office to send your personal setup link.'}</div></section></div>`;
   }
 
   const activeStatuses = ['En Route to Collection','Arrived at Collection','Collected','In Transit','Arrived at Delivery'];
@@ -537,7 +538,7 @@
   function bindCommon(){document.querySelectorAll('[data-signout]').forEach(b=>b.onclick=async()=>{stopTracking(false);await db.auth.signOut();});}
   function bindAuth(){
     document.querySelector('[data-mode]')?.addEventListener('click',e=>{state.mode=e.currentTarget.dataset.mode;state.notice=null;render();});
-    document.getElementById('driver-auth-form')?.addEventListener('submit',async e=>{e.preventDefault();const f=Object.fromEntries(new FormData(e.currentTarget));try{if(!db)throw new Error('Supabase is not configured.');if(state.mode==='signup'){const{data,error}=await db.auth.signUp({email:f.email,password:f.password});if(error)throw error;if(!data.session){state.notice={text:'Login created. Confirm the email, then sign in.',type:'ok'};render();return;}}else{const{error}=await db.auth.signInWithPassword({email:f.email,password:f.password});if(error)throw error;}}catch(error){state.notice={text:error.message,type:'error'};render();}});
+    document.getElementById('driver-auth-form')?.addEventListener('submit',async e=>{e.preventDefault();const f=Object.fromEntries(new FormData(e.currentTarget));try{if(!db)throw new Error('Supabase is not configured.');if(state.mode==='signup'){if(!inviteEmail)throw new Error('Ask the KLS office for your personal setup link.');const{data,error}=await db.auth.signUp({email:f.email,password:f.password,options:{emailRedirectTo:`${location.origin}/driver.html`}});if(error)throw error;if(!data.session){state.mode='signin';state.notice={text:'Login created. Check your email to confirm it, then sign in.',type:'ok'};render();return;}}else{const{error}=await db.auth.signInWithPassword({email:f.email,password:f.password});if(error)throw error;}}catch(error){state.notice={text:error.message,type:'error'};render();}});
   }
 
   function bindApp(){
@@ -630,23 +631,24 @@
 
       if(!state.user?.id) throw new Error('No signed-in user was found. Please sign out and sign in again.');
 
-      // Use the real KLS schema directly: public.drivers.user_id links the
-      // authenticated Supabase user to the driver record. No RPC is required.
-      const driverResult = await withTimeout(
-        db.from('drivers')
-          .select('id,user_id,name,phone,vehicle,availability_status')
-          .eq('user_id',state.user.id)
-          .maybeSingle(),
-        10000,
-        'Driver account check'
-      );
-      if(driverResult.error) throw driverResult.error;
-      const driver=driverResult.data;
+      const claimResult = await withTimeout(db.rpc('claim_driver_login'),10000,'Driver invitation check');
+      let account = claimResult.error ? null : claimResult.data;
+      if(Array.isArray(account)) account=account[0]||null;
+      let driver=null;
+      if(account?.driver_id){
+        const linkedResult=await withTimeout(db.from('drivers').select('id,user_id,name,phone,vehicle,availability_status').eq('id',account.driver_id).maybeSingle(),10000,'Linked driver record');
+        if(linkedResult.error)throw linkedResult.error;
+        driver=linkedResult.data;
+      }else{
+        const ownerResult=await withTimeout(db.from('drivers').select('id,user_id,name,phone,vehicle,availability_status').eq('user_id',state.user.id).maybeSingle(),10000,'Office driver account check');
+        if(ownerResult.error&&!claimResult.error)throw ownerResult.error;
+        driver=ownerResult.data;
+      }
 
       if(!driver){
         state.loading=false;
         state.profile=null;
-        state.notice={text:`No driver record is linked to ${state.user.email}. In Driver Control, make sure this login is linked to the driver.`,type:'error'};
+        state.notice={text:claimResult.error?.message||`No active driver invitation is linked to ${state.user.email}. Ask the KLS office to check the email and resend your setup link.`,type:'error'};
         render();
         return;
       }
@@ -655,8 +657,8 @@
       state.isOfficeOwner = !ownerCheck.error && !!ownerCheck.data;
 
       state.profile={
-        account_id:null,
-        owner_id:driver.user_id,
+        account_id:account?.id||null,
+        owner_id:account?.owner_id||driver.user_id,
         driver_id:driver.id,
         linked_driver_id:driver.id,
         driver_name:driver.name,

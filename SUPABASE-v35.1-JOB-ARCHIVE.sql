@@ -85,8 +85,7 @@ declare
 begin
   update public.jobs
      set archived_at = now(),
-         archived_by = auth.uid(),
-         updated_at = now()
+         archived_by = auth.uid()
    where id = p_job_id
      and user_id = auth.uid()
      and archived_at is null
@@ -112,8 +111,7 @@ declare
 begin
   update public.jobs
      set archived_at = null,
-         archived_by = null,
-         updated_at = now()
+         archived_by = null
    where id = p_job_id
      and user_id = auth.uid()
      and archived_at is not null

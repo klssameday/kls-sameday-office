@@ -1,4 +1,4 @@
-const CACHE = 'kls-v35-1-0';
+const CACHE = 'kls-v35-2-0';
 const APP_SHELL = [
   '/', '/index.html', '/offline.html', '/styles.css', '/app.js', '/manifest.json',
   '/driver.html', '/driver.css', '/driver.js',

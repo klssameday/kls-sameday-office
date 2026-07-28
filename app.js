@@ -2392,6 +2392,9 @@ function systemHealthSummary() {
     document.querySelectorAll('[data-accept]').forEach(button => button.onclick = async () => {
       try {
         const quote = state.quotes.find(q => q.id === button.dataset.accept);
+        if (!quote) throw new Error('Quote not found. Refresh the page and try again.');
+        button.disabled = true;
+        button.textContent = 'Creating job…';
         const jobPayload = {
           user_id: state.user.id, customer_id: quote.customer_id, quote_id: quote.id,
           customer_name: quote.customer_name, contact_name: quote.contact_name || quote.customer_name,
@@ -2401,8 +2404,14 @@ function systemHealthSummary() {
           miles: quote.miles, base_price: quote.quoted_price, extras: 0, total_price: quote.quoted_price, costs: 0,
           booking_notes: quote.notes || null, job_status: 'Booked', quote_status: 'Accepted', invoice_status: 'Not Invoiced'
         };
-        const { data: job, error: jobError } = await db.from('jobs').insert(jobPayload).select().single();
-        if (jobError) throw jobError;
+        const { data: existingJob, error: existingError } = await db.from('jobs').select('*').eq('quote_id', quote.id).maybeSingle();
+        if (existingError) throw existingError;
+        let job = existingJob;
+        if (!job) {
+          const { data: createdJob, error: jobError } = await db.from('jobs').insert(jobPayload).select().single();
+          if (jobError) throw jobError;
+          job = createdJob;
+        }
         const { error: quoteError } = await db.from('quotes').update({ status: 'Accepted', job_id: job.id }).eq('id', quote.id);
         if (quoteError) throw quoteError;
         quote.status = 'Accepted'; quote.job_id = job.id;
@@ -2534,7 +2543,10 @@ function systemHealthSummary() {
 
     document.querySelectorAll('[data-invoice]').forEach(button => button.onclick = async () => {
       try {
+        button.disabled = true;
+        button.textContent = 'Creating…';
         const job = state.jobs.find(j => j.id === button.dataset.invoice);
+        if (!job) throw new Error('Job not found. Refresh the page and try again.');
         if (state.invoices.some(i => i.job_id === job.id)) throw new Error('An invoice already exists for this job.');
         const invoice = await createInvoiceForJob(job);
         state.page = 'invoices';

@@ -1,4 +1,12 @@
-# KLS SameDay Office v35.3.0
+# KLS SameDay Office v35.4.0
+
+## v35.4.0
+
+- Replaces the invoice VAT-status banner with neutral professional wording.
+- Adds office-managed driver records with personal setup-email and copy-link actions.
+- Lets invited drivers create their own Supabase login and securely claim only their matching driver record.
+- Keeps office accounts, prices and business controls hidden from ordinary driver logins.
+- Adds `SUPABASE-v35.4-DRIVER-INVITES.sql` for driver account linking, permissions, job updates, GPS and POD completion.
 
 Finance, invoice and POD audit fixes:
 

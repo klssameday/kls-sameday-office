@@ -116,6 +116,10 @@
     profitSettings: JSON.parse(localStorage.getItem('kls_profit_settings') || 'null') || { fuelPrice: 1.48, mpg: 25, wearPerMile: 0.22, hourlyCost: 18, fixedJobCost: 12, targetMargin: 30 }
   };
 
+  function allJobRecords() {
+    return [...state.jobs, ...state.archivedJobs];
+  }
+
   let locationWatchId = null;
   let trackingPollId = null;
   let officeRealtimeChannel = null;
@@ -221,14 +225,15 @@
 
   function dashboard() {
     const today = todayISO();
+    const historicalJobs = allJobRecords();
     const now = Date.now();
     const startOfWeek = new Date();
     startOfWeek.setHours(0,0,0,0);
     startOfWeek.setDate(startOfWeek.getDate() - ((startOfWeek.getDay() + 6) % 7));
     const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
     const activeJobs = state.jobs.filter(j => !['Delivered','Cancelled'].includes(j.job_status));
-    const todayJobs = state.jobs.filter(j => j.job_status !== 'Cancelled' && String(j.collection_date || '').slice(0,10) === today);
-    const completedJobs = state.jobs.filter(j => j.job_status === 'Delivered');
+    const todayJobs = historicalJobs.filter(j => j.job_status !== 'Cancelled' && String(j.collection_date || '').slice(0,10) === today);
+    const completedJobs = historicalJobs.filter(j => j.job_status === 'Delivered');
     const liveJobs = activeJobs.filter(j => j.last_latitude && j.last_longitude);
     const availableDrivers = state.drivers.filter(d => String(d.status || d.availability_status || '').toLowerCase() === 'available');
     const onJobDrivers = state.drivers.filter(d => ['on job','on_job','busy','assigned'].includes(String(d.status || d.availability_status || '').toLowerCase()));
@@ -238,11 +243,11 @@
     const pendingQuotes = state.quotes.filter(q => q.status === 'Pending');
     const pendingPortal = state.portalBookings.filter(b => b.status === 'Pending');
     const todayRevenue = todayJobs.reduce((sum,j)=>sum+Number(j.total_price||0),0);
-    const weekJobs = state.jobs.filter(j => j.job_status !== 'Cancelled' && new Date(j.collection_date || j.created_at || 0) >= startOfWeek);
-    const monthJobs = state.jobs.filter(j => j.job_status !== 'Cancelled' && new Date(j.collection_date || j.created_at || 0) >= startOfMonth);
+    const weekJobs = historicalJobs.filter(j => j.job_status !== 'Cancelled' && new Date(j.collection_date || j.created_at || 0) >= startOfWeek);
+    const monthJobs = historicalJobs.filter(j => j.job_status !== 'Cancelled' && new Date(j.collection_date || j.created_at || 0) >= startOfMonth);
     const weekRevenue = weekJobs.reduce((sum,j)=>sum+Number(j.total_price||0),0);
     const monthRevenue = monthJobs.reduce((sum,j)=>sum+Number(j.total_price||0),0);
-    const averageJob = state.jobs.filter(j=>j.job_status!=='Cancelled').length ? state.jobs.filter(j=>j.job_status!=='Cancelled').reduce((s,j)=>s+Number(j.total_price||0),0) / state.jobs.filter(j=>j.job_status!=='Cancelled').length : 0;
+    const averageJob = historicalJobs.filter(j=>j.job_status!=='Cancelled').length ? historicalJobs.filter(j=>j.job_status!=='Cancelled').reduce((s,j)=>s+Number(j.total_price||0),0) / historicalJobs.filter(j=>j.job_status!=='Cancelled').length : 0;
     const deliveredTodayCount = completedJobs.filter(j=>String(j.collection_date||j.updated_at||'').slice(0,10)===today).length;
     const completionRate = todayJobs.length ? Math.round((deliveredTodayCount / todayJobs.length) * 100) : 0;
     const driverUtilisation = state.drivers.length ? Math.round((onJobDrivers.length / state.drivers.length) * 100) : 0;
@@ -277,7 +282,7 @@
       return `<button class="command-driver" data-page="tracking"><i class="${String(status).toLowerCase().replace(/\s+/g,'-')}"></i><span><b>${esc(d.name||d.full_name||'Driver')}</b><small>${esc(current ? `${current.job_number||'Job'} · ${current.job_status||'Active'}` : vehicle)}</small></span><strong>${esc(status)}</strong></button>`;
     }).join('') || '<div class="command-empty">No drivers added yet.</div>';
 
-    const activity = state.jobs.map(j=>({
+    const activity = historicalJobs.map(j=>({
       time:new Date(j.updated_at || j.created_at || j.collection_date || 0),
       icon:j.job_status==='Delivered'?'✓':j.job_status==='In Transit'?'→':j.job_status==='Collected'?'□':j.assigned_driver_name?'♙':'＋',
       title:`${j.job_number||'Job'} · ${j.job_status||'Booked'}`,
@@ -285,7 +290,7 @@
       page:'jobs'
     })).filter(a=>Number.isFinite(a.time.getTime())).sort((a,b)=>b.time-a.time).slice(0,8);
 
-    const lastSeven = Array.from({length:7},(_,i)=>{ const d=new Date(); d.setHours(0,0,0,0); d.setDate(d.getDate()-(6-i)); const iso=d.toISOString().slice(0,10); const jobs=state.jobs.filter(j=>j.job_status!=='Cancelled' && String(j.collection_date||'').slice(0,10)===iso); return {label:d.toLocaleDateString('en-GB',{weekday:'short'}), jobs:jobs.length, revenue:jobs.reduce((s,j)=>s+Number(j.total_price||0),0)}; });
+    const lastSeven = Array.from({length:7},(_,i)=>{ const d=new Date(); d.setHours(0,0,0,0); d.setDate(d.getDate()-(6-i)); const iso=d.toISOString().slice(0,10); const jobs=historicalJobs.filter(j=>j.job_status!=='Cancelled' && String(j.collection_date||'').slice(0,10)===iso); return {label:d.toLocaleDateString('en-GB',{weekday:'short'}), jobs:jobs.length, revenue:jobs.reduce((s,j)=>s+Number(j.total_price||0),0)}; });
     const maxJobs = Math.max(1,...lastSeven.map(d=>d.jobs));
     const maxRevenue = Math.max(1,...lastSeven.map(d=>d.revenue));
     const jobsChart = lastSeven.map(d=>`<div class="ops-bar-item"><span style="height:${Math.max(5,(d.jobs/maxJobs)*100)}%" title="${d.jobs} jobs"></span><b>${d.jobs}</b><small>${d.label}</small></div>`).join('');
@@ -713,7 +718,7 @@
 
 
   function invoicesView() {
-    const deliveredQueue = state.jobs.filter(job => job.job_status === 'Delivered' && !state.invoices.some(inv => inv.job_id === job.id));
+    const deliveredQueue = allJobRecords().filter(job => job.job_status === 'Delivered' && !state.invoices.some(inv => inv.job_id === job.id));
     const outstandingInvoices = state.invoices.filter(inv => invoiceBalance(inv) > 0 && inv.status !== 'Cancelled');
     const overdueInvoices = outstandingInvoices.filter(inv => inv.due_date && inv.due_date < todayISO());
     const outstandingTotal = outstandingInvoices.reduce((sum, inv) => sum + invoiceBalance(inv), 0);
@@ -742,7 +747,7 @@
 
 
   function deliveryDocumentsView() {
-    const delivered = state.jobs.filter(job => job.job_status === 'Delivered').sort((a,b)=>new Date(b.delivered_at || b.updated_at || b.created_at || 0)-new Date(a.delivered_at || a.updated_at || a.created_at || 0));
+    const delivered = allJobRecords().filter(job => job.job_status === 'Delivered').sort((a,b)=>new Date(b.delivered_at || b.updated_at || b.created_at || 0)-new Date(a.delivered_at || a.updated_at || a.created_at || 0));
     const withPod = delivered.filter(job => job.pod_photo_url || job.pod_signature_url || job.delivered_to);
     const withoutPod = delivered.filter(job => !(job.pod_photo_url || job.pod_signature_url || job.delivered_to));
     const thisMonth = todayISO().slice(0,7);
@@ -821,7 +826,7 @@
       const d = new Date(now.getFullYear(), now.getMonth() - (monthsCount - 1 - offset), 1, 12);
       return { key:d.toISOString().slice(0,7), label:d.toLocaleDateString('en-GB',{month:'short'}), full:d.toLocaleDateString('en-GB',{month:'long',year:'numeric'}) };
     });
-    const activeJobs = state.jobs.filter(j => j.job_status !== 'Cancelled');
+    const activeJobs = allJobRecords().filter(j => j.job_status !== 'Cancelled');
     const validInvoices = state.invoices.filter(i => i.status !== 'Cancelled');
     const monthData = monthKeys.map(m => {
       const jobs = activeJobs.filter(j => String(j.collection_date || j.delivered_at || j.created_at || '').slice(0,7) === m.key);
@@ -902,7 +907,7 @@
       const recommended = cost / (1 - targetMargin / 100);
       return { ...j, miles, revenue, hours, fuel, wear, labour, cost, profit, margin, recommended };
     };
-    const jobs = state.jobs.filter(j => j.job_status !== 'Cancelled' && getRevenue(j) > 0).map(estimate).sort((a,b)=>String(b.collection_date||b.created_at||'').localeCompare(String(a.collection_date||a.created_at||'')));
+    const jobs = allJobRecords().filter(j => j.job_status !== 'Cancelled' && getRevenue(j) > 0).map(estimate).sort((a,b)=>String(b.collection_date||b.created_at||'').localeCompare(String(a.collection_date||a.created_at||'')));
     const totalRevenue = jobs.reduce((s,j)=>s+j.revenue,0), totalCost=jobs.reduce((s,j)=>s+j.cost,0), totalProfit=jobs.reduce((s,j)=>s+j.profit,0);
     const avgMargin = totalRevenue ? totalProfit/totalRevenue*100 : 0;
     const weak = jobs.filter(j=>j.margin<targetMargin), loss = jobs.filter(j=>j.profit<0);
@@ -921,7 +926,7 @@
     const periodDate = new Date(`${period}-01T12:00:00`);
     const periodLabel = Number.isNaN(periodDate.getTime()) ? period : periodDate.toLocaleDateString('en-GB',{month:'long',year:'numeric'});
     const inPeriod = value => String(value || '').slice(0,7) === period;
-    const periodJobs = state.jobs.filter(job => inPeriod(job.collection_date || job.delivered_at || job.created_at) && job.job_status !== 'Cancelled');
+    const periodJobs = allJobRecords().filter(job => inPeriod(job.collection_date || job.delivered_at || job.created_at) && job.job_status !== 'Cancelled');
     const delivered = periodJobs.filter(job => job.job_status === 'Delivered' || job.delivered_at);
     const periodInvoices = state.invoices.filter(inv => inv.status !== 'Cancelled' && inPeriod(inv.issue_date || inv.created_at));
     const periodExpenses = state.expenses.filter(exp => inPeriod(exp.expense_date || exp.created_at));
@@ -973,7 +978,7 @@
 
   function customerMetrics(customer) {
     const quotes = state.quotes.filter(q => q.customer_id === customer.id);
-    const jobs = state.jobs.filter(j => j.customer_id === customer.id);
+    const jobs = allJobRecords().filter(j => j.customer_id === customer.id);
     const invoices = state.invoices.filter(i => i.customer_id === customer.id);
     const invoiced = invoices.reduce((sum, item) => sum + Number(item.total || 0), 0);
     const paid = invoices.filter(item => item.status === 'Paid').reduce((sum, item) => sum + Number(item.total || 0), 0);
@@ -1480,7 +1485,7 @@
       const litres=fuelLogs.reduce((s,x)=>s+Number(x.litres||0),0);
       body=`<section class="crm-kpis">${card('Fuel entries',fuelLogs.length,'Recorded purchases')}${card('Fuel spend',money(totalFuel),'Total recorded')}${card('Maintenance',money(totalMaintenance),'Repairs and servicing')}${card('Fleet running cost',money(fleetSpend),'Fuel plus maintenance')}</section>${panel('Recent fleet costs',`<div class="fleet-cost-table">${recent.map(x=>{const v=vehicles.find(v=>v.id===x.vehicle_id);return `<article><span><b>${esc(x.kind)}</b><small>${esc(vehicleName(v||{}))} · ${fmtDate(x.log_date||x.created_at)}${x.mileage?` · ${Number(x.mileage).toLocaleString('en-GB')} mi`:''}</small></span><p>${x.litres?`${Number(x.litres).toFixed(1)} litres`:esc(x.description||x.supplier||'Recorded cost')}</p><strong>${money(x.total_cost||x.cost)}</strong></article>`}).join('')||'<div class="empty">No running costs recorded.</div>'}</div>`,`Total fuel volume recorded: ${litres.toFixed(1)} litres.`)}`;
     } else if(state.fleetTab==='drivers') {
-      body=`<div class="fleet-record-grid">${drivers.map(d=>`<article class="fleet-record"><div><small>DRIVER</small><h3>${esc(d.name||d.full_name||'Unnamed driver')}</h3></div><span class="status ${esc(String(d.status||d.availability_status||'Offline').toLowerCase().replace(/ /g,'-'))}">${esc(d.status||d.availability_status||'Offline')}</span><p>${esc(d.phone||'No phone saved')}</p><div class="fleet-detail-grid"><span>Licence <b>${fmtDate(d.licence_expiry)}</b></span><span>CPC <b>${fmtDate(d.cpc_expiry)}</b></span><span>Medical <b>${fmtDate(d.medical_expiry)}</b></span><span>Jobs <b>${state.jobs.filter(j=>j.assigned_driver_id===d.id||j.assigned_driver_name===d.name).length}</b></span></div></article>`).join('')||'<div class="empty">No drivers added yet.</div>'}</div>`;
+      body=`<div class="fleet-record-grid">${drivers.map(d=>`<article class="fleet-record"><div><small>DRIVER</small><h3>${esc(d.name||d.full_name||'Unnamed driver')}</h3></div><span class="status ${esc(String(d.status||d.availability_status||'Offline').toLowerCase().replace(/ /g,'-'))}">${esc(d.status||d.availability_status||'Offline')}</span><p>${esc(d.phone||'No phone saved')}</p><div class="fleet-detail-grid"><span>Licence <b>${fmtDate(d.licence_expiry)}</b></span><span>CPC <b>${fmtDate(d.cpc_expiry)}</b></span><span>Medical <b>${fmtDate(d.medical_expiry)}</b></span><span>Jobs <b>${allJobRecords().filter(j=>j.assigned_driver_id===d.id||j.assigned_driver_name===d.name).length}</b></span></div></article>`).join('')||'<div class="empty">No drivers added yet.</div>'}</div>`;
     } else {
       const upcoming=alerts.slice().sort((a,b)=>a.days-b.days).slice(0,8);
       const costByVehicle=vehicles.map(v=>({v,...vehicleCosts(v)})).sort((a,b)=>(b.fuel+b.maintenance)-(a.fuel+a.maintenance)).slice(0,5);
@@ -1542,7 +1547,7 @@
       }
     });
     state.customers.forEach(customer => {
-      const relatedJobs = state.jobs.filter(job => job.customer_id === customer.id);
+      const relatedJobs = allJobRecords().filter(job => job.customer_id === customer.id);
       const latest = relatedJobs.map(job => new Date(job.collection_date || job.created_at || 0)).filter(date=>date.getTime()).sort((a,b)=>b-a)[0];
       const days = latest ? Math.floor((now - latest) / 864e5) : null;
       if (days !== null && days >= 60) reminders.push({ id:`customer-${customer.id}`, type:'customer', priority:days >= 120 ? 'high' : 'normal', title:`Reconnect with ${customer.company || 'customer'}`, detail:`No completed work recorded for ${days} days`, customer, record:customer, template:'customer-reengagement' });
@@ -1592,7 +1597,7 @@ function systemHealthSummary() {
       { label:'Supabase configuration', ok:configured, detail:configured ? 'Project URL and publishable key loaded.' : 'Connection settings are missing.' },
       { label:'Signed-in office account', ok:Boolean(state.user), detail:state.user?.email || 'No signed-in user.' },
       { label:'Customer data', ok:Array.isArray(state.customers), detail:`${state.customers.length} customer record${state.customers.length===1?'':'s'} loaded.` },
-      { label:'Jobs data', ok:Array.isArray(state.jobs), detail:`${state.jobs.length} job record${state.jobs.length===1?'':'s'} loaded.` },
+      { label:'Jobs data', ok:Array.isArray(state.jobs) && Array.isArray(state.archivedJobs), detail:`${allJobRecords().length} total job record${allJobRecords().length===1?'':'s'} loaded (${state.jobs.length} active, ${state.archivedJobs.length} archived).` },
       { label:'Invoices data', ok:Array.isArray(state.invoices), detail:`${state.invoices.length} invoice record${state.invoices.length===1?'':'s'} loaded.` },
       { label:'Driver data', ok:Array.isArray(state.drivers), detail:`${state.drivers.length} driver record${state.drivers.length===1?'':'s'} loaded.` },
       { label:'Offline support', ok:'serviceWorker' in navigator, detail:'Browser service-worker support detected.' }
@@ -1603,7 +1608,7 @@ function systemHealthSummary() {
   function createSystemBackup() {
     const backup = {
       product:'KLS SameDay Office',
-      version:'26.39',
+      version:'35.2.0',
       exported_at:new Date().toISOString(),
       account:state.user?.email || null,
       business_settings:state.settings,
@@ -1614,7 +1619,9 @@ function systemHealthSummary() {
       maintenance:state.maintenance,
       recurring_jobs:state.recurringJobs,
       quotes:state.quotes,
-      jobs:state.jobs,
+      jobs:allJobRecords(),
+      active_jobs:state.jobs,
+      archived_jobs:state.archivedJobs,
       invoices:state.invoices,
       expenses:state.expenses,
       portal_access_users:state.portalAccessUsers,
@@ -1639,12 +1646,12 @@ function systemHealthSummary() {
 
   function copySystemDiagnostics() {
     const diagnostics = [
-      'KLS SameDay Office v26.39',
+      'KLS SameDay Office v35.2.0',
       `Generated: ${new Date().toLocaleString('en-GB')}`,
       `Account: ${state.user?.email || 'Not signed in'}`,
       `Supabase: ${configured ? 'Connected' : 'Not configured'}`,
       `Customers: ${state.customers.length}`,
-      `Jobs: ${state.jobs.length}`,
+      `Jobs: ${allJobRecords().length} total (${state.jobs.length} active, ${state.archivedJobs.length} archived)`,
       `Quotes: ${state.quotes.length}`,
       `Invoices: ${state.invoices.length}`,
       `Drivers: ${state.drivers.length}`,
@@ -1688,7 +1695,7 @@ function systemHealthSummary() {
     const datasets = {
       customers:{ label:'customers', records:state.customers },
       quotes:{ label:'quotes', records:state.quotes },
-      jobs:{ label:'jobs', records:state.jobs },
+      jobs:{ label:'jobs', records:allJobRecords() },
       invoices:{ label:'invoices', records:state.invoices },
       expenses:{ label:'expenses', records:state.expenses },
       drivers:{ label:'drivers', records:state.drivers },
@@ -1708,9 +1715,9 @@ function systemHealthSummary() {
     const health = systemHealthSummary();
     const healthRows = health.map(item=>`<article class="system-check ${item.ok?'ok':'bad'}"><span>${item.ok?'✓':'!'}</span><div><b>${esc(item.label)}</b><small>${esc(item.detail)}</small></div></article>`).join('');
     const settingsPanel = panel('Business settings', `<form id="settings-form"><div class="grid two">${Object.entries(fields).map(([key,label]) => `<label>${label}<input name="${key}" value="${esc(state.settings[key] ?? '')}" ${key === 'default_terms' ? 'type="number"' : ''}></label>`).join('')}</div><div class="actions"><button class="primary">Save Settings</button></div></form><p class="saved">✓ Saved securely in Supabase.</p><hr class="portal-divider"><div class="portal-section-head"><div><h2>Customer Portal Access</h2><p>Ask the customer to create an account using their email address, then link that login here.</p></div><span>${state.portalAccessUsers.filter(u=>u.active).length} active</span></div><form id="portal-access-form"><div class="grid two"><label>Customer<select name="customer_id" required><option value="">Choose customer</option>${state.customers.map(c=>`<option value="${c.id}">${esc(c.company)}</option>`).join('')}</select></label><label>Customer login email<input name="email" type="email" required></label></div><div class="actions"><button class="primary">Enable Customer Portal</button></div></form><h3 class="linked-title">Linked customer accounts</h3>${linked}`);
-    const healthPanel = panel('System health & backup', `<div class="system-version"><div><small>CURRENT RELEASE</small><b>v26.39</b><span>Operations workflow and job action upgrade</span></div><span class="system-live">${configured?'CONNECTED':'CHECK CONNECTION'}</span></div><div class="system-checks">${healthRows}</div><div class="system-backup-actions"><button class="primary" type="button" data-system-backup>Download full backup</button><button class="secondary" type="button" data-copy-diagnostics>Copy diagnostics</button></div><p class="system-help">The backup contains the records currently loaded in the office system plus device-only leads, defects, communications and profit assumptions. Keep it somewhere secure.</p>`, 'Use this section before major updates and when reporting a fault.');
+    const healthPanel = panel('System health & backup', `<div class="system-version"><div><small>CURRENT RELEASE</small><b>v35.2.0</b><span>Archive-safe reporting and backup update</span></div><span class="system-live">${configured?'CONNECTED':'CHECK CONNECTION'}</span></div><div class="system-checks">${healthRows}</div><div class="system-backup-actions"><button class="primary" type="button" data-system-backup>Download full backup</button><button class="secondary" type="button" data-copy-diagnostics>Copy diagnostics</button></div><p class="system-help">The backup contains active and archived records currently loaded in the office system plus device-only leads, defects, communications and profit assumptions. Keep it somewhere secure.</p>`, 'Use this section before major updates and when reporting a fault.');
     const exportItems = [
-      ['customers','Customers',state.customers.length],['quotes','Quotes',state.quotes.length],['jobs','Jobs',state.jobs.length],['invoices','Invoices',state.invoices.length],['expenses','Expenses',state.expenses.length],['drivers','Drivers',state.drivers.length],['fleet','Fleet',state.fleet.length],['communications','Communications',state.communications.length],['leads','Sales leads',state.leads.length]
+      ['customers','Customers',state.customers.length],['quotes','Quotes',state.quotes.length],['jobs','Jobs',allJobRecords().length],['invoices','Invoices',state.invoices.length],['expenses','Expenses',state.expenses.length],['drivers','Drivers',state.drivers.length],['fleet','Fleet',state.fleet.length],['communications','Communications',state.communications.length],['leads','Sales leads',state.leads.length]
     ];
     const exportPanel = panel('Data Export Centre', `<div class="export-centre-head"><div><small>CSV DOWNLOADS</small><h3>Take your business data with you</h3><p>Download clean spreadsheet-ready files for accounts, analysis or safekeeping.</p></div><span>${exportItems.reduce((sum,item)=>sum+item[2],0)} records loaded</span></div><div class="export-grid">${exportItems.map(([id,label,count])=>`<button type="button" data-export-dataset="${id}"><span>⇩</span><div><b>${label}</b><small>${count} record${count===1?'':'s'}</small></div></button>`).join('')}</div><p class="system-help">Exports use CSV format and open in Excel, Numbers and Google Sheets. No records are changed or deleted.</p>`, 'Download one section at a time without altering the live Supabase database.');
     return `<section class="settings-layout"><div>${settingsPanel}</div><aside>${healthPanel}${exportPanel}</aside></section>`;
@@ -2000,7 +2007,7 @@ function systemHealthSummary() {
     const period = state.reportPeriod || todayISO().slice(0,7);
     const inPeriod = value => String(value || '').slice(0,7) === period;
     const rows = [['Type','Reference','Date','Customer / Supplier','Vehicle / Category','Description','Amount','Status']];
-    state.jobs.filter(job=>inPeriod(job.collection_date||job.delivered_at||job.created_at) && job.job_status!=='Cancelled').forEach(job=>rows.push([
+    allJobRecords().filter(job=>inPeriod(job.collection_date||job.delivered_at||job.created_at) && job.job_status!=='Cancelled').forEach(job=>rows.push([
       'Job',job.job_number||'',job.collection_date||job.delivered_at||job.created_at||'',job.customer_name||job.contact_name||'',job.vehicle||'',`${job.collection_address||''} to ${job.delivery_address||''}`,Number(job.total_price||job.quoted_price||0).toFixed(2),job.job_status||''
     ]));
     state.invoices.filter(inv=>inv.status!=='Cancelled' && inPeriod(inv.issue_date||inv.created_at)).forEach(inv=>rows.push([
@@ -2548,7 +2555,7 @@ function systemHealthSummary() {
       try {
         button.disabled = true;
         button.textContent = 'Creating…';
-        const job = state.jobs.find(j => j.id === button.dataset.invoice);
+        const job = allJobRecords().find(j => j.id === button.dataset.invoice);
         if (!job) throw new Error('Job not found. Refresh the page and try again.');
         if (state.invoices.some(i => i.job_id === job.id)) throw new Error('An invoice already exists for this job.');
         const invoice = await createInvoiceForJob(job);
@@ -2578,7 +2585,7 @@ function systemHealthSummary() {
     });
 
     document.querySelector('[data-create-all-invoices]')?.addEventListener('click', async buttonEvent => {
-      const jobs = state.jobs.filter(job => job.job_status === 'Delivered' && !state.invoices.some(inv => inv.job_id === job.id));
+      const jobs = allJobRecords().filter(job => job.job_status === 'Delivered' && !state.invoices.some(inv => inv.job_id === job.id));
       if (!jobs.length) return;
       if (!confirm(`Create ${jobs.length} invoice${jobs.length===1?'':'s'} now?`)) return;
       const button = buttonEvent.currentTarget;
@@ -2643,9 +2650,9 @@ function systemHealthSummary() {
       const term = event.target.value.toLowerCase();
       document.querySelectorAll('[data-document-card]').forEach(card => card.style.display = card.textContent.toLowerCase().includes(term) ? '' : 'none');
     });
-    document.querySelectorAll('[data-print-pod]').forEach(button => button.onclick = () => printPodCertificate(state.jobs.find(job => job.id === button.dataset.printPod)));
+    document.querySelectorAll('[data-print-pod]').forEach(button => button.onclick = () => printPodCertificate(allJobRecords().find(job => job.id === button.dataset.printPod)));
     document.querySelectorAll('[data-share-pod]').forEach(button => button.onclick = async () => {
-      const job = state.jobs.find(item => item.id === button.dataset.sharePod); if (!job) return;
+      const job = allJobRecords().find(item => item.id === button.dataset.sharePod); if (!job) return;
       const text = `${state.settings.trading_name} proof of delivery\n${job.job_number || 'Delivered job'}\nDelivered to: ${job.delivered_to || 'Recipient recorded'}\nDelivery: ${job.delivery_address || ''}${job.pod_photo_url ? `\nPOD photo: ${job.pod_photo_url}` : ''}${job.pod_signature_url ? `\nSignature: ${job.pod_signature_url}` : ''}`;
       try { if (navigator.share) await navigator.share({title:`POD ${job.job_number || ''}`,text}); else { await navigator.clipboard.writeText(text); showNotice('POD details copied.','ok'); render(); } } catch(error) { if(error.name !== 'AbortError'){ showNotice('Unable to share POD.','error'); render(); } }
     });

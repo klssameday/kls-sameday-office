@@ -1,3 +1,16 @@
+# KLS SameDay Office v35.3.0
+
+Finance, invoice and POD audit fixes:
+
+- Invoice wording now states that KLS is not VAT registered
+- Invoices show the service date, explicit payment terms, company number and registered office
+- Missing customer billing addresses are clearly flagged before an invoice is sent
+- Paid invoices no longer offer another payment action
+- POD documents recognise recipient names saved by both office and driver workflows
+- POD completion now requires a recipient, delivery photo and signature
+- Finance and reporting labels no longer show stale internal version numbers
+- The default KLS vehicle fuel assumption is updated from 25 MPG to 28 MPG
+
 # KLS SameDay Office v35.2.0
 
 Archive-safe reporting update: archived jobs remain included in dashboards, customer history,

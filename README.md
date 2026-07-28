@@ -1,3 +1,17 @@
+# KLS SameDay Office v35.1.0
+
+## Safe Job Archive
+
+- Delivered and cancelled jobs can be archived from the Jobs Control Centre
+- Archived jobs stay searchable and can be restored
+- Archived jobs are hidden from active office, customer and driver views
+- Permanent deletion is limited to the signed-in business owner
+- Deletions require the job number and leave an audit record
+- Jobs linked to an invoice cannot be permanently deleted
+- Job-document access is restricted to the owner and the assigned driver
+
+Run `SUPABASE-v35.1-JOB-ARCHIVE.sql` in Supabase before deployment.
+
 # KLS SameDay Office v35.0.1
 
 ## Customer Management (CRM)

@@ -1,3 +1,15 @@
+V35.1 SAFE JOB ARCHIVE
+1. Back up the Supabase database.
+2. Run SUPABASE-v35.1-JOB-ARCHIVE.sql.
+3. Confirm active Jobs does not show archived records.
+4. Archive one delivered test job and one cancelled test job.
+5. Confirm both disappear from the active office and Driver App views.
+6. Restore one archived job and confirm it returns to active Jobs.
+7. Permanently delete the other archived test job by typing its job number.
+8. Confirm a job linked to an invoice cannot be permanently deleted.
+9. Confirm the deletion appears in public.job_deletion_audit.
+10. Confirm one driver cannot open documents belonging to another driver's job.
+
 v35.0: Run SUPABASE-v35-CUSTOMER-MANAGEMENT.sql. Test adding/removing contacts, adding/completing follow-ups, and editing tags/status.
 KLS SameDay Office v33.1 – Release Checklist
 

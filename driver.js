@@ -1,4 +1,4 @@
-// KLS SameDay Driver v34.4 — Smart Route Assistant
+// KLS SameDay Driver v35.1 — hides archived jobs from active driver work
 (() => {
   const raw = window.KLS_CONFIG || {};
   const root = document.getElementById('driver-app');
@@ -670,6 +670,7 @@
         db.from('jobs')
           .select('*')
           .eq('assigned_driver_id',driver.id)
+          .is('archived_at',null)
           .order('collection_date',{ascending:true}),
         10000,
         'Assigned jobs'
@@ -854,7 +855,7 @@
   let driverPollId=null;
   async function refreshAssignedJobs(force=false){
     if(!db||!state.profile?.linked_driver_id||(!force&&document.hidden))return;
-    const {data,error}=await db.from('jobs').select('*').eq('assigned_driver_id',state.profile.linked_driver_id).order('collection_date',{ascending:true});
+    const {data,error}=await db.from('jobs').select('*').eq('assigned_driver_id',state.profile.linked_driver_id).is('archived_at',null).order('collection_date',{ascending:true});
     if(error)return;
     const previousIds=new Set(state.jobs.map(job=>job.id));
     const before=JSON.stringify(state.jobs.map(j=>[j.id,j.job_status,j.updated_at,j.delivered_at,j.pod_photo_url]));

@@ -1,6 +1,6 @@
-const CACHE = 'kls-v35-4-2';
+const CACHE = 'kls-v35-4-3';
 const APP_SHELL = [
-  '/', '/index.html', '/offline.html', '/styles.css', '/app.js', '/manifest.json',
+  '/', '/index.html', '/offline.html', '/styles.css', '/public-quote.css', '/app.js', '/manifest.json',
   '/driver.html', '/driver.css', '/driver.js',
   '/icons/favicon-32.png', '/icons/apple-touch-icon.png', '/icons/icon-192.png',
   '/icons/icon-512.png', '/icons/icon-maskable-512.png'

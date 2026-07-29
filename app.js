@@ -3041,8 +3041,27 @@ function systemHealthSummary() {
       .subscribe();
   }
 
+  async function redirectDriverOnlyAccount(user) {
+    if (!user?.id || !db) return false;
+    const ownerResult = await db.from('business_settings').select('user_id').eq('user_id', user.id).maybeSingle();
+    if (!ownerResult.error && ownerResult.data) return false;
+    const driverResult = await db.from('driver_accounts').select('id').eq('auth_user_id', user.id).eq('active', true).maybeSingle();
+    if (!driverResult.error && driverResult.data) {
+      location.replace('/driver.html');
+      return true;
+    }
+    return false;
+  }
+
   async function initialise() {
     const params = new URLSearchParams(location.search);
+    if (location.hash.includes('type=recovery') || params.get('type') === 'recovery') {
+      const driverRecovery = new URL('/driver.html', location.origin);
+      driverRecovery.searchParams.set('recovery', '1');
+      driverRecovery.hash = location.hash;
+      location.replace(driverRecovery.toString());
+      return;
+    }
     const quoteToken = params.get('quote');
     if (quoteToken) {
       state.loading = true; render();
@@ -3069,9 +3088,18 @@ function systemHealthSummary() {
     state.user = session?.user || null;
     db.auth.onAuthStateChange(async (_event, sessionNow) => {
       const nextUser = sessionNow?.user || null;
-      if (nextUser?.id !== state.user?.id) { state.user = nextUser; if (nextUser) await loadAll(); else { state.loading = false; render(); } }
+      if (nextUser?.id !== state.user?.id) {
+        state.user = nextUser;
+        if (nextUser) {
+          if (await redirectDriverOnlyAccount(nextUser)) return;
+          await loadAll();
+        } else { state.loading = false; render(); }
+      }
     });
-    if (state.user) await loadAll(); else { state.loading = false; render(); }
+    if (state.user) {
+      if (await redirectDriverOnlyAccount(state.user)) return;
+      await loadAll();
+    } else { state.loading = false; render(); }
   }
 
 

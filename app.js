@@ -2680,10 +2680,25 @@ function systemHealthSummary() {
       state.expenses=state.expenses.filter(e=>e.id!==button.dataset.deleteExpense); showNotice('Expense deleted.','ok'); render();
     });
 
+    const ensurePublicQuote = async quote => {
+      if (!quote.public_token) {
+        const expiry = new Date(Date.now() + 30 * 86400000).toISOString();
+        const { data, error } = await db.from('quotes').update({
+          public_token: crypto.randomUUID(),
+          public_expires_at: expiry,
+          customer_response: 'Awaiting reply'
+        }).eq('id', quote.id).select().single();
+        if (error) throw error;
+        Object.assign(quote, data);
+      }
+      return quotePublicUrl(quote);
+    };
     document.querySelectorAll('[data-publish-quote]').forEach(button=>button.onclick=async()=>{
       const quote=state.quotes.find(q=>q.id===button.dataset.publishQuote); if(!quote)return;
-      if(!quote.public_token){const expiry=new Date(Date.now()+30*86400000).toISOString();const {data,error}=await db.from('quotes').update({public_token:crypto.randomUUID(),public_expires_at:expiry,customer_response:'Awaiting reply'}).eq('id',quote.id).select().single();if(error)return showNotice(error.message,'error'),render();Object.assign(quote,data);}
-      const url=quotePublicUrl(quote);try{await navigator.clipboard.writeText(url);showNotice('Secure quotation link copied.','ok');}catch(_e){prompt('Copy this quotation link:',url);}render();
+      let url;
+      try { url = await ensurePublicQuote(quote); }
+      catch (error) { showNotice(error.message,'error'); render(); return; }
+      try{await navigator.clipboard.writeText(url);showNotice('Secure quotation link copied.','ok');}catch(_e){prompt('Copy this quotation link:',url);}render();
     });
     document.querySelectorAll('[data-copy-request-link]').forEach(button=>button.onclick=async()=>{const url=`${location.origin}${location.pathname}?request=quote`;try{await navigator.clipboard.writeText(url);showNotice('Public quote request link copied.','ok');}catch(_e){prompt('Copy this request link:',url);}render();});
     document.querySelectorAll('[data-request-convert]').forEach(button=>button.onclick=async()=>{const r=state.quoteRequests.find(x=>x.id===button.dataset.requestConvert);if(!r)return;state.quoteCustomerId=null;state.page='newquote';state.pendingRequest=r;render();setTimeout(()=>{const f=document.getElementById('quote-form');if(!f)return;['company','contact_name','email','phone','collection_date','collection_time','collection_address','delivery_address','vehicle','miles','goods_description'].forEach(k=>{if(f[k]&&r[k]!=null)f[k].value=r[k];});},0);});
@@ -2701,18 +2716,30 @@ function systemHealthSummary() {
     });
 
     document.querySelectorAll('[data-print-quote]').forEach(button => button.onclick = () => printDocument('quote', state.quotes.find(q => q.id === button.dataset.printQuote)));
-    const quoteMessage = quote => `${state.settings.trading_name} quotation ${quote.quote_number}\n\nCollection: ${quote.collection_address}\nDelivery: ${quote.delivery_address}\nVehicle: ${quote.vehicle}\nPrice: ${money(quote.quoted_price)}\n\nDedicated same-day courier service\n${state.settings.phone} • ${state.settings.email}`;
+    const quoteMessage = (quote, publicUrl = '') => `${state.settings.trading_name} quotation ${quote.quote_number}\n\nCollection: ${quote.collection_address}\nDelivery: ${quote.delivery_address}\nVehicle: ${quote.vehicle}\nPrice: ${money(quote.quoted_price)}${publicUrl ? `\n\nView and respond to your quotation:\n${publicUrl}` : ''}\n\nDedicated same-day courier service\n${state.settings.phone} • ${state.settings.email}`;
     document.querySelectorAll('[data-email-quote]').forEach(button => button.onclick = () => {
       const quote = state.quotes.find(q => q.id === button.dataset.emailQuote);
       const subject = encodeURIComponent(`${state.settings.trading_name} quotation ${quote.quote_number}`);
       const body = encodeURIComponent(quoteMessage(quote));
       window.location.href = `mailto:${encodeURIComponent(quote.email || '')}?subject=${subject}&body=${body}`;
     });
-    document.querySelectorAll('[data-whatsapp-quote]').forEach(button => button.onclick = () => {
+    document.querySelectorAll('[data-whatsapp-quote]').forEach(button => button.onclick = async () => {
       const quote = state.quotes.find(q => q.id === button.dataset.whatsappQuote);
+      if (!quote) return;
+      let publicUrl;
+      try {
+        button.disabled = true;
+        button.textContent = 'Opening…';
+        publicUrl = await ensurePublicQuote(quote);
+      } catch (error) {
+        showNotice(error.message, 'error');
+        render();
+        return;
+      }
       const digits = String(quote.phone || '').replace(/\D/g, '').replace(/^0/, '44');
-      const url = digits ? `https://wa.me/${digits}?text=${encodeURIComponent(quoteMessage(quote))}` : `https://wa.me/?text=${encodeURIComponent(quoteMessage(quote))}`;
+      const url = digits ? `https://wa.me/${digits}?text=${encodeURIComponent(quoteMessage(quote, publicUrl))}` : `https://wa.me/?text=${encodeURIComponent(quoteMessage(quote, publicUrl))}`;
       window.open(url, '_blank', 'noopener');
+      render();
     });
     document.getElementById('invoice-search')?.addEventListener('input', event => { state.invoiceSearch = event.target.value; render(); requestAnimationFrame(()=>{const input=document.getElementById('invoice-search'); if(input){input.focus(); input.setSelectionRange(input.value.length,input.value.length);}}); });
     document.getElementById('invoice-filter')?.addEventListener('change', event => { state.invoiceFilter = event.target.value; render(); });

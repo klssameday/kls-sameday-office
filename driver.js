@@ -1,4 +1,4 @@
-// KLS SameDay Driver v35.4 — secure office-issued driver invitations
+// KLS SameDay Driver v35.4.2 — secure driver recovery and office separation
 (() => {
   const raw = window.KLS_CONFIG || {};
   const root = document.getElementById('driver-app');
@@ -10,7 +10,8 @@
   const db = validUrl && key && window.supabase ? window.supabase.createClient(url, key) : null;
   const steps = ['Booked','En Route to Collection','Arrived at Collection','Collected','In Transit','Arrived at Delivery','Delivered'];
   const inviteEmail = String(new URLSearchParams(location.search).get('invite') || '').trim().toLowerCase();
-  let state = { user:null, profile:null, jobs:[], loading:true, mode:inviteEmail?'signup':'signin', notice:null, podJob:null, workflowJob:null, workflowType:null, tab:'home', screen:'dashboard', detailJobId:null, networkJobs:[], myBids:[], messages:[], incidents:[], online:navigator.onLine, lastUpdated:null, refreshing:false, jobAlerts:[], notificationsEnabled:typeof Notification!=='undefined'&&Notification.permission==='granted', completionCelebration:null, darkMode:localStorage.getItem('kls-driver-dark')==='1', assistantHelp:false, arrivalPrompt:null, fuelDismissed:localStorage.getItem('kls-fuel-dismissed')===new Date().toISOString().slice(0,10), navAddress:null, jobMessages:[], offlineQueue:JSON.parse(localStorage.getItem('kls-driver-offline-queue')||'[]'), routeOrder:JSON.parse(localStorage.getItem('kls-driver-route-order')||'[]'), jobDocuments:[], historySearch:'', isOfficeOwner:false };
+  const recoveryMode = new URLSearchParams(location.search).get('recovery') === '1' || location.hash.includes('type=recovery');
+  let state = { user:null, profile:null, jobs:[], loading:true, mode:recoveryMode?'recovery':(inviteEmail?'signup':'signin'), notice:null, podJob:null, workflowJob:null, workflowType:null, tab:'home', screen:'dashboard', detailJobId:null, networkJobs:[], myBids:[], messages:[], incidents:[], online:navigator.onLine, lastUpdated:null, refreshing:false, jobAlerts:[], notificationsEnabled:typeof Notification!=='undefined'&&Notification.permission==='granted', completionCelebration:null, darkMode:localStorage.getItem('kls-driver-dark')==='1', assistantHelp:false, arrivalPrompt:null, fuelDismissed:localStorage.getItem('kls-fuel-dismissed')===new Date().toISOString().slice(0,10), navAddress:null, jobMessages:[], offlineQueue:JSON.parse(localStorage.getItem('kls-driver-offline-queue')||'[]'), routeOrder:JSON.parse(localStorage.getItem('kls-driver-route-order')||'[]'), jobDocuments:[], historySearch:'', isOfficeOwner:false };
   let watchId = null;
   let activeJobId = null;
   let signatureCanvas = null;
@@ -163,7 +164,8 @@
 
   function authView(){
     const signup=state.mode==='signup';
-    return `<div class="driver-auth"><section class="driver-auth-card"><div class="driver-brand"><b>KLS</b><span>Driver<small>SameDay mobile app</small></span></div><h1>${signup?'Create your driver login':'Driver sign in'}</h1><p>${signup?'The KLS office has invited you. Choose a password to activate your Driver App.':'Only assigned jobs, navigation, tracking and proof of delivery are shown here. Prices and office accounts are not available.'}</p>${state.notice?`<div class="driver-msg ${state.notice.type}">${esc(state.notice.text)}</div>`:''}<form id="driver-auth-form"><label>Email<input name="email" type="email" autocomplete="email" required value="${esc(signup?inviteEmail:'')}" ${signup&&inviteEmail?'readonly':''}></label><label>Password<input name="password" type="password" minlength="6" autocomplete="${signup?'new-password':'current-password'}" required></label><button class="btn primary full">${signup?'Activate driver login':'Sign in'}</button></form><div class="auth-switch">${signup?'Already registered?':'Need a login?'} ${signup?'<button data-mode="signin">Sign in</button>':'Ask the KLS office to send your personal setup link.'}</div></section></div>`;
+    const recovery=state.mode==='recovery';
+    return `<div class="driver-auth"><section class="driver-auth-card"><div class="driver-brand"><b>KLS</b><span>Driver<small>SameDay mobile app</small></span></div><h1>${recovery?'Choose a new password':signup?'Create your driver login':'Driver sign in'}</h1><p>${recovery?'Set a new password for your Driver App. You will remain inside the driver-only system.':signup?'The KLS office has invited you. Choose a password to activate your Driver App.':'Only assigned jobs, navigation, tracking and proof of delivery are shown here. Prices and office accounts are not available.'}</p>${state.notice?`<div class="driver-msg ${state.notice.type}">${esc(state.notice.text)}</div>`:''}<form id="driver-auth-form">${recovery?'':`<label>Email<input name="email" type="email" autocomplete="email" required value="${esc(signup?inviteEmail:'')}" ${signup&&inviteEmail?'readonly':''}></label>`}<label>${recovery?'New password':'Password'}<input name="password" type="password" minlength="6" autocomplete="${signup||recovery?'new-password':'current-password'}" required></label>${recovery?'<label>Confirm new password<input name="confirm_password" type="password" minlength="6" autocomplete="new-password" required></label>':''}<button class="btn primary full">${recovery?'Save new password':signup?'Activate driver login':'Sign in'}</button></form>${recovery?'':`<div class="auth-switch">${signup?'Already registered?':'Forgotten your password?'} ${signup?'<button data-mode="signin">Sign in</button>':'<button data-driver-recovery>Reset it securely</button>'}</div>`}</section></div>`;
   }
 
   const activeStatuses = ['En Route to Collection','Arrived at Collection','Collected','In Transit','Arrived at Delivery'];
@@ -530,6 +532,7 @@
   function render(){
     document.body.classList.toggle('dark',state.darkMode);
     if(state.loading){root.innerHTML='<div class="driver-loading pro-loading"><div class="loader-mark">KLS</div><span></span><p>Loading Driver App…</p></div>';return;}
+    if(state.mode==='recovery'){root.innerHTML=authView();bindAuth();return;}
     if(!state.user){root.innerHTML=authView();bindAuth();return;}
     if(!state.profile){root.innerHTML=`<div class="driver-auth"><section class="driver-auth-card"><div class="driver-brand"><b>KLS</b><span>Driver</span></div><h1>Account not linked</h1>${state.notice?`<div class="driver-msg ${state.notice.type}">${esc(state.notice.text)}</div>`:`<p>Ask the KLS office to link this exact login email to your driver record:</p><div class="driver-msg error">${esc(state.user.email)}</div>`}<button class="btn secondary full" data-signout>Sign out</button></section></div>`;bindCommon();return;}
     applyAutomaticNightMode();root.innerHTML=appView();bindApp();startArrivalAssistant();
@@ -538,7 +541,17 @@
   function bindCommon(){document.querySelectorAll('[data-signout]').forEach(b=>b.onclick=async()=>{stopTracking(false);await db.auth.signOut();});}
   function bindAuth(){
     document.querySelector('[data-mode]')?.addEventListener('click',e=>{state.mode=e.currentTarget.dataset.mode;state.notice=null;render();});
-    document.getElementById('driver-auth-form')?.addEventListener('submit',async e=>{e.preventDefault();const f=Object.fromEntries(new FormData(e.currentTarget));try{if(!db)throw new Error('Supabase is not configured.');if(state.mode==='signup'){if(!inviteEmail)throw new Error('Ask the KLS office for your personal setup link.');const{data,error}=await db.auth.signUp({email:f.email,password:f.password,options:{emailRedirectTo:`${location.origin}/driver.html`}});if(error)throw error;if(!data.session){state.mode='signin';state.notice={text:'Login created. Check your email to confirm it, then sign in.',type:'ok'};render();return;}}else{const{error}=await db.auth.signInWithPassword({email:f.email,password:f.password});if(error)throw error;}}catch(error){state.notice={text:error.message,type:'error'};render();}});
+    document.querySelector('[data-driver-recovery]')?.addEventListener('click',async()=>{
+      const email=String(prompt('Enter the driver login email address:')||'').trim().toLowerCase();
+      if(!email)return;
+      try{
+        if(!db)throw new Error('Supabase is not configured.');
+        const {error}=await db.auth.resetPasswordForEmail(email,{redirectTo:`${location.origin}/driver.html?recovery=1`});
+        if(error)throw error;
+        state.notice={text:'Password reset email sent. Open it on this device.',type:'ok'};render();
+      }catch(error){state.notice={text:error.message,type:'error'};render();}
+    });
+    document.getElementById('driver-auth-form')?.addEventListener('submit',async e=>{e.preventDefault();const f=Object.fromEntries(new FormData(e.currentTarget));try{if(!db)throw new Error('Supabase is not configured.');if(state.mode==='recovery'){if(!state.user)throw new Error('This password reset link is invalid or has expired. Request a new one from the Driver App.');if(f.password!==f.confirm_password)throw new Error('The two passwords do not match.');const{error}=await db.auth.updateUser({password:f.password});if(error)throw error;history.replaceState({},'',`${location.origin}/driver.html`);state.mode='signin';state.notice={text:'Password updated successfully.',type:'ok'};await loadDriver();return;}if(state.mode==='signup'){if(!inviteEmail)throw new Error('Ask the KLS office for your personal setup link.');const{data,error}=await db.auth.signUp({email:f.email,password:f.password,options:{emailRedirectTo:`${location.origin}/driver.html`}});if(error)throw error;if(!data.session){state.mode='signin';state.notice={text:'Login created. Check your email to confirm it, then sign in.',type:'ok'};render();return;}}else{const{error}=await db.auth.signInWithPassword({email:f.email,password:f.password});if(error)throw error;}}catch(error){state.notice={text:error.message,type:'error'};render();}});
   }
 
   function bindApp(){
@@ -909,12 +922,13 @@
         authLoadToken++;
         stopTracking(false);
         state.profile=null;state.jobs=[];state.isOfficeOwner=false;state.loading=false;render();
-      }else if(changed){
+      }else if(changed&&state.mode!=='recovery'){
         queueDriverLoad();
       }
     });
 
-    if(state.user)await loadDriver();
+    if(state.mode==='recovery'){state.loading=false;render();}
+    else if(state.user)await loadDriver();
     else{state.loading=false;render();}
   }
   window.addEventListener('online',async()=>{state.online=true;await flushOfflineQueue();await loadDriver();render();});

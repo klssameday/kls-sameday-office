@@ -2443,7 +2443,7 @@ function systemHealthSummary() {
         button.disabled = true;
         button.textContent = 'Creating job…';
         const jobPayload = {
-          user_id: state.user.id, customer_id: quote.customer_id, quote_id: quote.id,
+          job_number: quote.quote_number,user_id: state.user.id, customer_id: quote.customer_id, quote_id: quote.id,
           customer_name: quote.customer_name, contact_name: quote.contact_name || quote.customer_name,
           customer_email: quote.email || null, contact_email: quote.email || null, contact_phone: quote.phone || null,
           collection_date: quote.collection_date, collection_time: quote.collection_time, collection_address: quote.collection_address,

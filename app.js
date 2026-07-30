@@ -2022,7 +2022,7 @@ function systemHealthSummary() {
   function bindPublicQuote() {
     const form=document.getElementById('public-quote-response');
     if(!form||!state.publicQuote)return;
-    const respond=async response=>{ const values=Object.fromEntries(new FormData(form)); const button=form.querySelector('button.primary'); if(button){button.disabled=true;button.textContent='Saving…';} const token=new URLSearchParams(location.search).get('quote'); const {data,error}=await db.rpc('respond_public_quote',{p_token:token,p_response:response,p_customer_name:values.customer_name,p_customer_message:values.customer_message||null}); if(error){state.notice={text:error.message,type:'error'};}else{state.publicQuote=Array.isArray(data)?data[0]:data;state.notice=null;} state.loading=false;render(); };
+    const respond=async response=>{ const values=Object.fromEntries(new FormData(form)); const button=form.querySelector('button.primary'); if(button){button.disabled=true;button.textContent='Saving…';} const token=new URLSearchParams(location.search).get('quote'); const {data,error}=await db.rpc('respond_public_quote_v2',{p_token:token,p_response:response,p_customer_name:values.customer_name,p_customer_message:values.customer_message||null}); if(error){state.notice={text:error.message,type:'error'};}else{state.publicQuote=Array.isArray(data)?data[0]:data;state.notice=null;} state.loading=false;render(); };
     form.onsubmit=e=>{e.preventDefault();respond('Accepted')};
     document.querySelector('[data-public-decline]')?.addEventListener('click',()=>respond('Declined'));
   }
@@ -3101,7 +3101,7 @@ function systemHealthSummary() {
     if (quoteToken) {
       state.loading = true; render();
       if (!configured) { state.loading = false; state.notice = {text:'Quotation service is not configured.',type:'error'}; render(); return; }
-      const { data, error } = await db.rpc('get_public_quote', { p_token: quoteToken });
+      const { data, error } = await db.rpc('get_public_quote_v2', { p_token: quoteToken });
       state.publicQuote = Array.isArray(data) ? data[0] : data;
       state.notice = error ? {text:error.message,type:'error'} : null;
       state.loading = false; render(); return;

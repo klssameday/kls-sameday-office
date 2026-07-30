@@ -3101,7 +3101,7 @@ function systemHealthSummary() {
     if (quoteToken) {
       state.loading = true; render();
       if (!configured) { state.loading = false; state.notice = {text:'Quotation service is not configured.',type:'error'}; render(); return; }
-      const { data, error } = await db.rpc('get_public_quote_v2', { p_token: quoteToken });
+      const { data, error } = await db.rpc('get_public_quote_v2', { p_token: quoteToken })
       state.publicQuote = Array.isArray(data) ? data[0] : data;
       state.notice = error ? {text:error.message,type:'error'} : null;
       state.loading = false; render(); return;

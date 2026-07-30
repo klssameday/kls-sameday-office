@@ -2001,7 +2001,7 @@ function systemHealthSummary() {
       user_id: state.user.id,
       job_id: job.id,
       customer_id: job.customer_id,
-      invoice_number: numberCode('INV'),
+      invoice_number: job.job_number ? `${job.job_number}-INV` : numberCode(),
       customer_name: job.customer_name || job.contact_name || 'Customer',
       total: Number(job.total_price || 0),
       status: 'Unpaid',

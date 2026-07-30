@@ -407,7 +407,7 @@
     return panel('Quotes', table(['Quote','Customer','Route','Vehicle','Price','Status','Online','Actions'], state.quotes.map(q => [
       esc(q.quote_number), esc(q.customer_name), `${esc(q.collection_address)}<br><i>→ ${esc(q.delivery_address)}</i>`, esc(q.vehicle), money(q.quoted_price), esc(q.status),
       q.public_token ? `<span class="account-status ${q.customer_response === 'Accepted' ? 'paid' : q.customer_response === 'Declined' ? 'overdue' : 'unpaid'}">${esc(q.customer_response || 'Awaiting reply')}</span>` : '<i>Not published</i>',
-      `<button data-print-quote="${q.id}">Print</button><button data-email-quote="${q.id}">Email</button><button data-whatsapp-quote="${q.id}">WhatsApp</button><button data-publish-quote="${q.id}">${q.public_token ? 'Copy link' : 'Create online link'}</button>${q.status === 'Pending' ? `<button data-accept="${q.id}">Accept → Job</button>` : ''}`
+      `<button data-print-quote="${q.id}">Print</button><button data-email-quote="${q.id}">Email</button><button data-whatsapp-quote="${q.id}">WhatsApp</button><button data-publish-quote="${q.id}">${q.public_token ? 'Copy link' : 'Create online link'}</button>${q.status === ['Pending','Accepted Online'].includes(q.status)? `<button data-accept="${q.id}">Accept → Job</button>` : ''}`
     ])), 'Send a secure link so the customer can review, accept or decline the quotation online.', '<button class="secondary" data-copy-request-link>Copy website request link</button>');
   }
 

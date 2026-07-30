@@ -1,9 +1,10 @@
-// KLS SameDay Driver v35.4.2 — secure driver recovery and office separation
+// KLS SameDay Driver v35.4.6 — background job push notifications
 (() => {
   const raw = window.KLS_CONFIG || {};
   const root = document.getElementById('driver-app');
   const url = String(raw.supabaseUrl || '').trim();
   const key = String(raw.supabaseAnonKey || '').trim();
+  const vapidPublicKey = String(raw.vapidPublicKey || '').trim();
   const validUrl = (() => {
     try { return new URL(url).hostname.endsWith('.supabase.co'); } catch { return false; }
   })();
@@ -11,7 +12,7 @@
   const steps = ['Booked','En Route to Collection','Arrived at Collection','Collected','In Transit','Arrived at Delivery','Delivered'];
   const inviteEmail = String(new URLSearchParams(location.search).get('invite') || '').trim().toLowerCase();
   const recoveryMode = new URLSearchParams(location.search).get('recovery') === '1' || location.hash.includes('type=recovery');
-  let state = { user:null, profile:null, jobs:[], loading:true, mode:recoveryMode?'recovery':(inviteEmail?'signup':'signin'), notice:null, podJob:null, workflowJob:null, workflowType:null, tab:'home', screen:'dashboard', detailJobId:null, networkJobs:[], myBids:[], messages:[], incidents:[], online:navigator.onLine, lastUpdated:null, refreshing:false, jobAlerts:[], notificationsEnabled:typeof Notification!=='undefined'&&Notification.permission==='granted', completionCelebration:null, darkMode:localStorage.getItem('kls-driver-dark')==='1', assistantHelp:false, arrivalPrompt:null, fuelDismissed:localStorage.getItem('kls-fuel-dismissed')===new Date().toISOString().slice(0,10), navAddress:null, jobMessages:[], offlineQueue:JSON.parse(localStorage.getItem('kls-driver-offline-queue')||'[]'), routeOrder:JSON.parse(localStorage.getItem('kls-driver-route-order')||'[]'), jobDocuments:[], historySearch:'', isOfficeOwner:false };
+  let state = { user:null, profile:null, jobs:[], loading:true, mode:recoveryMode?'recovery':(inviteEmail?'signup':'signin'), notice:null, podJob:null, workflowJob:null, workflowType:null, tab:'home', screen:'dashboard', detailJobId:null, networkJobs:[], myBids:[], messages:[], incidents:[], online:navigator.onLine, lastUpdated:null, refreshing:false, jobAlerts:[], notificationsEnabled:false, completionCelebration:null, darkMode:localStorage.getItem('kls-driver-dark')==='1', assistantHelp:false, arrivalPrompt:null, fuelDismissed:localStorage.getItem('kls-fuel-dismissed')===new Date().toISOString().slice(0,10), navAddress:null, jobMessages:[], offlineQueue:JSON.parse(localStorage.getItem('kls-driver-offline-queue')||'[]'), routeOrder:JSON.parse(localStorage.getItem('kls-driver-route-order')||'[]'), jobDocuments:[], historySearch:'', isOfficeOwner:false };
   let watchId = null;
   let activeJobId = null;
   let signatureCanvas = null;
@@ -50,27 +51,72 @@
 
 
 
-  function notifyNewJob(job){
+  function urlBase64ToUint8Array(value){
+    const padding='='.repeat((4-value.length%4)%4);
+    const base64=(value+padding).replace(/-/g,'+').replace(/_/g,'/');
+    return Uint8Array.from(atob(base64),character=>character.charCodeAt(0));
+  }
+  async function pushRegistration(){
+    if(!('serviceWorker'in navigator)||!('PushManager'in window)||typeof Notification==='undefined')return null;
+    return navigator.serviceWorker.register('/sw.js').then(()=>navigator.serviceWorker.ready);
+  }
+  async function syncNotificationState(){
+    try{
+      const registration=await pushRegistration();
+      const subscription=await registration?.pushManager.getSubscription();
+      state.notificationsEnabled=Notification.permission==='granted'&&!!subscription;
+    }catch(_error){state.notificationsEnabled=false;}
+  }
+  async function notifyNewJob(job){
     if(!job)return;
     state.jobAlerts=state.jobAlerts.filter(item=>item.id!==job.id);
     state.jobAlerts.unshift(job);
     if(state.notificationsEnabled&&typeof Notification!=='undefined'&&Notification.permission==='granted'){
       try{
-        const alert=new Notification(`New KLS job: ${job.job_number||'Assigned job'}`,{
+        const registration=await pushRegistration();
+        await registration?.showNotification(`New KLS job: ${job.job_number||'Assigned job'}`,{
           body:`${shortPlace(job.collection_address)} → ${shortPlace(job.delivery_address)} · ${jobTime(job)}`,
           icon:'/icons/icon-192.png',
+          badge:'/icons/favicon-32.png',
           tag:`kls-job-${job.id}`,
-          renotify:true
+          renotify:true,
+          data:{url:`/driver.html?job=${encodeURIComponent(job.id)}`,job_id:job.id}
         });
-        alert.onclick=()=>{window.focus();state.tab='home';state.screen='detail';state.detailJobId=job.id;state.jobAlerts=state.jobAlerts.filter(item=>item.id!==job.id);render();};
       }catch(error){ console.warn('Driver notification unavailable',error); }
     }
   }
-  async function enableJobNotifications(){
-    if(typeof Notification==='undefined'){notice('Job notifications are not supported on this device.','error');return;}
-    const permission=await Notification.requestPermission();
-    state.notificationsEnabled=permission==='granted';
-    notice(state.notificationsEnabled?'New job alerts are now enabled.':'Notification permission was not enabled.',state.notificationsEnabled?'ok':'error');
+  async function toggleJobNotifications(){
+    try{
+      const registration=await pushRegistration();
+      if(!registration||!vapidPublicKey)throw new Error('Push alerts are not configured on this device yet.');
+      const existing=await registration.pushManager.getSubscription();
+      if(existing){
+        await db.from('driver_push_subscriptions').delete().eq('endpoint',existing.endpoint);
+        await existing.unsubscribe();
+        state.notificationsEnabled=false;
+        notice('New job alerts are switched off.','ok');
+        return;
+      }
+      const permission=await Notification.requestPermission();
+      if(permission!=='granted')throw new Error('Notification permission was not allowed.');
+      const subscription=await registration.pushManager.subscribe({
+        userVisibleOnly:true,
+        applicationServerKey:urlBase64ToUint8Array(vapidPublicKey)
+      });
+      const json=subscription.toJSON();
+      const payload={
+        user_id:state.user.id,
+        endpoint:subscription.endpoint,
+        p256dh:json.keys?.p256dh,
+        auth_key:json.keys?.auth,
+        active:true,
+        updated_at:new Date().toISOString()
+      };
+      const {error}=await db.from('driver_push_subscriptions').upsert(payload,{onConflict:'endpoint'});
+      if(error){await subscription.unsubscribe();throw error;}
+      state.notificationsEnabled=true;
+      notice('New job alerts are switched on, including when the app is closed.','ok');
+    }catch(error){state.notificationsEnabled=false;notice(error?.message||'Unable to change job alerts.','error');}
   }
   function dismissJobAlert(jobId){state.jobAlerts=state.jobAlerts.filter(job=>job.id!==jobId);}
   function newJobAlertCard(job){
@@ -344,7 +390,7 @@
     return `<section class="profile-screen">
       <div class="screen-heading"><small>DRIVER PROFILE</small><h1>${esc(state.profile?.driver_name||'Driver')}</h1><p>${esc(state.profile?.driver_vehicle||'Vehicle not set')}</p></div>
       <div class="profile-card"><div><span>Login</span><b>${esc(state.user?.email||'')}</b></div><div><span>Telephone</span><b>${esc(state.profile?.driver_phone||'Not set')}</b></div><div><span>Availability</span><b>${esc(state.profile?.availability_status||'Available')}</b></div></div>
-      <section class="profile-notification-card"><div><span>New job alerts</span><b>${state.notificationsEnabled?'Enabled':'Not enabled'}</b></div><button class="btn secondary" data-enable-notifications>${state.notificationsEnabled?'Enabled ✓':'Enable alerts'}</button></section>
+      <section class="profile-notification-card"><div><span>New job alerts</span><b>${state.notificationsEnabled?'On':'Off'}</b></div><button class="btn secondary" data-enable-notifications>${state.notificationsEnabled?'Switch off':'Switch on'}</button></section>
       <button class="btn secondary full" data-driver-tab="incident">Report an incident</button><button class="btn secondary full" data-toggle-dark>${state.darkMode?'Use light mode':'Use dark mode'}</button>${state.isOfficeOwner?'<a class="btn primary full owner-office-link" href="/">Back to KLS Office</a>':''}<button class="btn secondary full profile-signout" data-signout>Sign out</button>
     </section>`;
   }
@@ -560,7 +606,7 @@
     document.querySelectorAll('[data-open-job]').forEach(btn=>btn.onclick=e=>{e.stopPropagation();dismissJobAlert(btn.dataset.openJob);state.screen='detail';state.detailJobId=btn.dataset.openJob;state.notice=null;render();window.scrollTo({top:0,behavior:'smooth'});});
     document.querySelector('[data-back-dashboard]')?.addEventListener('click',()=>{state.screen='dashboard';state.detailJobId=null;state.notice=null;render();window.scrollTo({top:0,behavior:'smooth'});});
     document.querySelector('[data-refresh-jobs]')?.addEventListener('click',async()=>{state.refreshing=true;render();await refreshAssignedJobs(true);state.refreshing=false;state.lastUpdated=new Date().toISOString();render();});
-    document.querySelector('[data-enable-notifications]')?.addEventListener('click',enableJobNotifications);
+    document.querySelector('[data-enable-notifications]')?.addEventListener('click',toggleJobNotifications);
     document.querySelector('[data-history-search]')?.addEventListener('input',e=>{state.historySearch=e.currentTarget.value;render();const input=document.querySelector('[data-history-search]');if(input){input.focus();input.setSelectionRange(input.value.length,input.value.length);}});
     document.querySelector('[data-close-celebration]')?.addEventListener('click',()=>{state.completionCelebration=null;state.tab='home';state.screen='dashboard';render();});
     document.querySelectorAll('[data-dismiss-job-alert]').forEach(btn=>btn.onclick=()=>{dismissJobAlert(btn.dataset.dismissJobAlert);render();});
@@ -699,6 +745,12 @@
       const documentsResult=state.jobs.length?await db.from('job_documents').select('*').in('job_id',state.jobs.map(j=>j.id)).order('created_at',{ascending:false}):{data:[],error:null};
       state.jobDocuments=documentsResult.error?[]:(documentsResult.data||[]);
       state.lastUpdated=new Date().toISOString();
+      await syncNotificationState();
+      const requestedJob=String(new URLSearchParams(location.search).get('job')||'');
+      if(requestedJob&&state.jobs.some(job=>job.id===requestedJob)){
+        state.tab='home';state.screen='detail';state.detailJobId=requestedJob;
+        history.replaceState({},'',location.pathname);
+      }
 
       // Driver Exchange is deliberately loaded after the core app is visible.
       // Missing optional tables must never block the Driver App.

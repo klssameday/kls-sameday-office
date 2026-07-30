@@ -30,6 +30,16 @@
   const configured = Boolean(config.supabaseUrl && config.supabaseAnonKey && window.supabase);
   const db = configured ? window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey) : null;
 
+  async function sendDriverJobPush(jobId) {
+    if (!db || !jobId) return;
+    try {
+      const { error } = await db.functions.invoke('send-driver-job-push', { body: { job_id: jobId } });
+      if (error) console.warn('Driver push alert was not delivered', error);
+    } catch (error) {
+      console.warn('Driver push alert was not delivered', error);
+    }
+  }
+
   const defaults = {
     trading_name: 'KLS SameDay',
     legal_name: 'Kings Logistics Services Ltd',
@@ -407,7 +417,7 @@
     return panel('Quotes', table(['Quote','Customer','Route','Vehicle','Price','Status','Online','Actions'], state.quotes.map(q => [
       esc(q.quote_number), esc(q.customer_name), `${esc(q.collection_address)}<br><i>→ ${esc(q.delivery_address)}</i>`, esc(q.vehicle), money(q.quoted_price), esc(q.status),
       q.public_token ? `<span class="account-status ${q.customer_response === 'Accepted' ? 'paid' : q.customer_response === 'Declined' ? 'overdue' : 'unpaid'}">${esc(q.customer_response || 'Awaiting reply')}</span>` : '<i>Not published</i>',
-      `<button data-print-quote="${q.id}">Print</button><button data-email-quote="${q.id}">Email</button><button data-whatsapp-quote="${q.id}">WhatsApp</button><button data-publish-quote="${q.id}">${q.public_token ? 'Copy link' : 'Create online link'}</button>${['Pending','Accepted Online'].includes(q.status)? `<button data-accept="${q.id}">Accept → Job</button>` : ''}`
+      `<button data-print-quote="${q.id}">Print</button><button data-email-quote="${q.id}">Email</button><button data-whatsapp-quote="${q.id}">WhatsApp</button><button data-publish-quote="${q.id}">${q.public_token ? 'Copy link' : 'Create online link'}</button>${q.status === 'Pending' ? `<button data-accept="${q.id}">Accept → Job</button>` : ''}`
     ])), 'Send a secure link so the customer can review, accept or decline the quotation online.', '<button class="secondary" data-copy-request-link>Copy website request link</button>');
   }
 
@@ -2001,7 +2011,7 @@ function systemHealthSummary() {
       user_id: state.user.id,
       job_id: job.id,
       customer_id: job.customer_id,
-      invoice_number: job.job_number ? `${job.job_number}-INV` : numberCode(),
+      invoice_number: numberCode('INV'),
       customer_name: job.customer_name || job.contact_name || 'Customer',
       total: Number(job.total_price || 0),
       status: 'Unpaid',
@@ -2240,7 +2250,7 @@ function systemHealthSummary() {
     document.querySelectorAll('[data-driver-share]').forEach(button => button.onclick = async () => { const j=state.jobs.find(x=>x.id===button.dataset.driverShare); if(!j)return; const text=`${j.job_number||'KLS Job'}\nCollect: ${j.collection_address||''}\nDeliver: ${j.delivery_address||''}\nStatus: ${j.job_status||'Booked'}`; try{ if(navigator.share) await navigator.share({title:j.job_number||'KLS Job',text}); else {await navigator.clipboard.writeText(text);showNotice('Job details copied.','ok');render();} }catch(error){ if(error.name!=='AbortError'){showNotice('Unable to share job details.','error');render();} } });
     document.querySelectorAll('[data-copy-track]').forEach(button => button.onclick = async () => { const j=state.jobs.find(x=>x.id===button.dataset.copyTrack); if(!j?.tracking_token){showNotice('Run the v9 Supabase upgrade first.','error');render();return;} await navigator.clipboard.writeText(trackingUrl(j)); showNotice('Customer tracking link copied.','ok'); render(); });
     document.querySelectorAll('[data-share-track]').forEach(button => button.onclick = async () => { const j=state.jobs.find(x=>x.id===button.dataset.shareTrack); if(!j)return; const text=`${state.settings.trading_name}: Your delivery ${j.job_number || ''} is ${j.job_status || 'booked'}.${j.eta_at ? ` ETA ${new Date(j.eta_at).toLocaleString('en-GB')}.` : ''} Track here: ${trackingUrl(j)}`; if(navigator.share){await navigator.share({title:'KLS SameDay tracking',text,url:trackingUrl(j)}).catch(()=>{});}else{await navigator.clipboard.writeText(text);showNotice('Tracking message copied.','ok');render();} });
-    document.querySelectorAll('[data-assign-job],[data-driver-assign]').forEach(select => select.onchange = async () => { const jobId=select.dataset.assignJob||select.dataset.driverAssign; const driver=state.drivers.find(d=>d.id===select.value); const payload={assigned_driver_id:driver?.id||null,assigned_driver_name:driver?.name||null}; const {error}=await db.from('jobs').update(payload).eq('id',jobId); if(error){showNotice(error.message,'error');render();return;} const job=state.jobs.find(j=>j.id===jobId); if(job)Object.assign(job,payload); showNotice(driver?`${job.job_number} assigned to ${driver.name}.`:`${job.job_number} unassigned.`,'ok'); render(); });
+    document.querySelectorAll('[data-assign-job],[data-driver-assign]').forEach(select => select.onchange = async () => { const jobId=select.dataset.assignJob||select.dataset.driverAssign; const driver=state.drivers.find(d=>d.id===select.value); const payload={assigned_driver_id:driver?.id||null,assigned_driver_name:driver?.name||null}; const {error}=await db.from('jobs').update(payload).eq('id',jobId); if(error){showNotice(error.message,'error');render();return;} const job=state.jobs.find(j=>j.id===jobId); if(job)Object.assign(job,payload); if(driver)sendDriverJobPush(jobId); showNotice(driver?`${job.job_number} assigned to ${driver.name}.`:`${job.job_number} unassigned.`,'ok'); render(); });
     document.querySelectorAll('[data-save-eta]').forEach(button => button.onclick = async () => { const input=document.querySelector(`[data-job-eta="${button.dataset.saveEta}"]`); const eta=input?.value ? new Date(input.value).toISOString() : null; const {error}=await db.from('jobs').update({eta_at:eta}).eq('id',button.dataset.saveEta); if(error){showNotice(error.message,'error');render();return;} const job=state.jobs.find(j=>j.id===button.dataset.saveEta); if(job)job.eta_at=eta; showNotice('Customer ETA saved.','ok'); render(); });
     document.querySelectorAll('[data-driver-availability]').forEach(select => select.onchange = async () => { const driver=state.drivers.find(d=>d.id===select.dataset.driverAvailability); if(!driver)return; const previous=driver.availability_status||'Available'; driver.availability_status=select.value; const {error}=await db.from('drivers').update({availability_status:select.value,last_seen_at:new Date().toISOString()}).eq('id',driver.id); if(error){driver.availability_status=previous;showNotice(error.message,'error');render();return;} showNotice(`${driver.name} is now ${select.value}.`,'ok');render(); });
     document.querySelector('[data-action="refresh-map"]')?.addEventListener('click', initialiseDispatchMap);
@@ -2443,7 +2453,7 @@ function systemHealthSummary() {
         button.disabled = true;
         button.textContent = 'Creating job…';
         const jobPayload = {
-          job_number: quote.quote_number,user_id: state.user.id, customer_id: quote.customer_id, quote_id: quote.id,
+          user_id: state.user.id, customer_id: quote.customer_id, quote_id: quote.id,
           customer_name: quote.customer_name, contact_name: quote.contact_name || quote.customer_name,
           customer_email: quote.email || null, contact_email: quote.email || null, contact_phone: quote.phone || null,
           collection_date: quote.collection_date, collection_time: quote.collection_time, collection_address: quote.collection_address,
@@ -2482,6 +2492,7 @@ function systemHealthSummary() {
         }
         if (error) throw error;
         Object.assign(job, data || payload);
+        if (assigned_driver_id) sendDriverJobPush(job.id);
         showNotice(assigned_driver_id ? `${job.job_number || 'Job'} assigned to ${driver?.name || 'driver'}.` : `${job.job_number || 'Job'} unassigned.`, 'ok');
       } catch (error) {
         select.value = job.assigned_driver_id || '';
@@ -2535,6 +2546,7 @@ function systemHealthSummary() {
       const job = state.jobs.find(j => j.id === state.jobEditorId);
       if (!job) return;
       const values = Object.fromEntries(new FormData(event.currentTarget));
+      const previousDriverId = job.assigned_driver_id || null;
       const payload = {
         collection_date: values.collection_date || null,
         collection_time: values.collection_time || null,
@@ -2552,6 +2564,7 @@ function systemHealthSummary() {
         const { data, error } = await db.from('jobs').update(payload).eq('id', job.id).select().single();
         if (error) throw error;
         Object.assign(job, data || payload);
+        if (payload.assigned_driver_id && payload.assigned_driver_id !== previousDriverId) sendDriverJobPush(job.id);
         state.jobEditorId = null;
         showNotice(`${job.job_number || 'Job'} saved and driver assignment updated.`, 'ok');
         render();
@@ -3101,7 +3114,7 @@ function systemHealthSummary() {
     if (quoteToken) {
       state.loading = true; render();
       if (!configured) { state.loading = false; state.notice = {text:'Quotation service is not configured.',type:'error'}; render(); return; }
-      const { data, error } = await db.rpc('get_public_quote_v2', { p_token: quoteToken })
+      const { data, error } = await db.rpc('get_public_quote_v2', { p_token: quoteToken });
       state.publicQuote = Array.isArray(data) ? data[0] : data;
       state.notice = error ? {text:error.message,type:'error'} : null;
       state.loading = false; render(); return;

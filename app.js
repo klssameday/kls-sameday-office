@@ -2730,11 +2730,26 @@ function systemHealthSummary() {
 
     document.querySelectorAll('[data-print-quote]').forEach(button => button.onclick = () => printDocument('quote', state.quotes.find(q => q.id === button.dataset.printQuote)));
     const quoteMessage = (quote, publicUrl = '') => `${state.settings.trading_name} quotation ${quote.quote_number}\n\nCollection: ${quote.collection_address}\nDelivery: ${quote.delivery_address}\nVehicle: ${quote.vehicle}\nPrice: ${money(quote.quoted_price)}${publicUrl ? `\n\nView and respond to your quotation:\n${publicUrl}` : ''}\n\nDedicated same-day courier service\n${state.settings.phone} • ${state.settings.email}`;
-    document.querySelectorAll('[data-email-quote]').forEach(button => button.onclick = () => {
+    document.querySelectorAll('[data-email-quote]').forEach(button => button.onclick = async () => {
       const quote = state.quotes.find(q => q.id === button.dataset.emailQuote);
+      if (!quote) return;
+      let publicUrl;
+      try {
+        button.disabled = true;
+        button.textContent = 'Preparing…';
+        publicUrl = await ensurePublicQuote(quote);
+      } catch (error) {
+        showNotice(error.message, 'error');
+        render();
+        return;
+      }
       const subject = encodeURIComponent(`${state.settings.trading_name} quotation ${quote.quote_number}`);
-      const body = encodeURIComponent(quoteMessage(quote));
+      const body = encodeURIComponent(quoteMessage(quote, publicUrl));
       window.location.href = `mailto:${encodeURIComponent(quote.email || '')}?subject=${subject}&body=${body}`;
+      setTimeout(() => {
+        button.disabled = false;
+        button.textContent = 'Email';
+      }, 1000);
     });
     document.querySelectorAll('[data-whatsapp-quote]').forEach(button => button.onclick = async () => {
       const quote = state.quotes.find(q => q.id === button.dataset.whatsappQuote);

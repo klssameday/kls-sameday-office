@@ -1,4 +1,4 @@
-// KLS SameDay Driver v35.4.6 — background job push notifications
+// KLS SameDay Driver v35.4.8 — background job push notifications
 (() => {
   const raw = window.KLS_CONFIG || {};
   const root = document.getElementById('driver-app');
@@ -538,7 +538,7 @@
 
   function workflowView(job,type){
     const collection=type==='collection';
-    return `<div class="workflow-overlay"><section class="workflow-sheet"><div class="pod-head"><div><small>${collection?'COLLECTION CHECK':'DELIVERY CHECK'}</small><h2>${esc(job.job_number||'Job')}</h2></div><button data-close-workflow>×</button></div><form id="driver-workflow-form" class="workflow-form"><label class="check-row"><input type="checkbox" name="confirmed" required><span>${collection?'I am at the correct collection address':'I am at the correct delivery address'}</span></label>${collection?`<label class="check-row"><input type="checkbox" name="goods_ok" required><span>Goods checked and match the booking</span></label><label>Condition<select name="condition"><option>Goods in good condition</option><option>Damage found</option><option>Items missing</option></select></label>`:''}<label>${collection?'Collection photo':'Delivery photo'}<input name="photo" type="file" accept="image/*" ${collection?'':'required'}></label><label>Notes<textarea name="notes" rows="3" placeholder="Optional notes for the office"></textarea></label><button class="btn primary full" type="submit">${collection?'Confirm loaded & begin delivery':'Continue to signature & POD'}</button><button class="btn secondary full" type="button" data-close-workflow>Cancel</button></form></section></div>`;
+    return `<div class="workflow-overlay"><section class="workflow-sheet"><div class="pod-head"><div><small>${collection?'COLLECTION CHECK':'DELIVERY CHECK'}</small><h2>${esc(job.job_number||'Job')}</h2></div><button data-close-workflow>×</button></div><form id="driver-workflow-form" class="workflow-form"><label class="check-row"><input type="checkbox" name="confirmed" required><span>${collection?'I am at the correct collection address':'I am at the correct delivery address'}</span></label>${collection?`<label class="check-row"><input type="checkbox" name="goods_ok" required><span>Goods checked and match the booking</span></label><label>Condition<select name="condition"><option>Goods in good condition</option><option>Damage found</option><option>Items missing</option></select></label>`:''}<label>${collection?'Collection photo':'Delivery photo'}<input name="photo" type="file" accept="image/*" required></label><label>Notes<textarea name="notes" rows="3" placeholder="Optional notes for the office"></textarea></label><button class="btn primary full" type="submit">${collection?'Confirm loaded & begin delivery':'Continue to signature & POD'}</button><button class="btn secondary full" type="button" data-close-workflow>Cancel</button></form></section></div>`;
   }
 
   function appView(){
@@ -778,6 +778,15 @@
     }
   }
 
+  async function sendCustomerJobUpdate(jobId,status){
+    try{
+      const {error}=await db.functions.invoke('send-customer-job-update',{body:{job_id:jobId,status}});
+      if(error)console.warn('Customer status email was not delivered',error);
+    }catch(error){
+      console.warn('Customer status email was not delivered',error);
+    }
+  }
+
   async function confirmAndAdvance(jobId,status,label){
     const job=state.jobs.find(j=>j.id===jobId);
     const question=status==='Arrived at Collection'||status==='Arrived at Delivery'
@@ -794,6 +803,7 @@
       const {error}=await db.rpc('driver_update_job_status',{p_job_id:jobId,p_status:status,p_latitude:pos?.coords.latitude??null,p_longitude:pos?.coords.longitude??null,p_accuracy:pos?.coords.accuracy??null});
       if(error)throw error;
       const job=state.jobs.find(j=>j.id===jobId);if(job)job.job_status=status;
+      if(!isCorrection)void sendCustomerJobUpdate(jobId,status);
       if(status==='En Route to Collection')startTracking(jobId,true);
       else if(['Arrived at Collection','Collected','In Transit','Arrived at Delivery'].includes(status)&&watchId===null)startTracking(jobId,false);
       notice(isCorrection?`${job?.job_number||'Job'} moved back to ${status}.`:`${job?.job_number||'Job'} updated to ${status}.`,'ok');
@@ -843,8 +853,14 @@
       let photoUrl=null;
       if(photo?.size)photoUrl=await upload(job,photo,type==='collection'?'collection':'delivery');
       if(type==='collection'){
-        const {error}=await db.from('driver_job_checks').insert({job_id:job.id,driver_id:state.profile.linked_driver_id,check_type:'collection',condition:String(fd.get('condition')||''),notes:String(fd.get('notes')||'')||null,photo_url:photoUrl});
+        const {error}=await db.rpc('driver_save_collection_check',{
+          p_job_id:job.id,
+          p_condition:String(fd.get('condition')||'')||null,
+          p_notes:String(fd.get('notes')||'')||null,
+          p_photo_url:photoUrl
+        });
         if(error)throw error;
+        job.collection_photo_url=photoUrl;
         state.workflowJob=null;state.workflowType=null;
         await advanceStatus(job.id,'Collected',false);
         await advanceStatus(job.id,'In Transit',false);
@@ -903,6 +919,7 @@
       };
       const rpcResult=await timed(db.rpc('driver_complete_job',payload),'Job completion');
       if(rpcResult.error)throw rpcResult.error;
+      void sendCustomerJobUpdate(job.id,'Delivered');
       const verify=await timed(db.from('jobs').select('*').eq('id',job.id).maybeSingle(),'Delivery confirmation');
       if(verify.error)throw verify.error;
       Object.assign(job,verify.data||{job_status:'Delivered',delivered_at:new Date().toISOString(),recipient_name:recipient,pod_photo_url:photoUrl,pod_signature_url:signatureUrl});

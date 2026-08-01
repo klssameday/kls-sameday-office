@@ -33,9 +33,11 @@ const statusCopy: Record<string, { heading: string; message: string }> = {
   },
 };
 
-const escapeHtml = (value: unknown) => String(value ?? "").replace(/[&<>"']/g, (character) => ({
+const htmlEntities: Record<string, string> = {
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-}[character] || character));
+};
+const escapeHtml = (value: unknown) =>
+  String(value ?? "").replace(/[&<>"']/g, (character) => htmlEntities[character] || character);
 
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });

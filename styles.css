@@ -391,8 +391,25 @@ td button:not(.alt):not(.danger){background:#111827!important;color:#fff!importa
 .command-map{
   background:#f8fafc!important;
 }
+.command-map-wrap{
+  position:relative;
+}
 .command-map-empty{
-  background:linear-gradient(135deg,#f8fafc,#f2f4f7)!important;
+  position:absolute;
+  z-index:500;
+  top:50%;
+  left:50%;
+  width:min(310px,calc(100% - 40px));
+  height:auto;
+  min-height:92px;
+  padding:18px 22px;
+  transform:translate(-50%,-50%);
+  border:1px solid rgba(16,24,40,.12);
+  border-radius:14px;
+  background:rgba(255,255,255,.94)!important;
+  box-shadow:0 12px 32px rgba(16,24,40,.16);
+  text-align:center;
+  pointer-events:none;
 }
 .command-map-empty b{color:#101828!important}
 

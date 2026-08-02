@@ -341,7 +341,7 @@
       <section class="command-kpis ops-kpis">${card('Jobs today',todayJobs.length,`${activeJobs.length} currently active`,'jobs')}${card('In progress',activeJobs.length,`${unassigned.length} unassigned`,'dispatch')}${card('Completed',completedJobs.length,`${deliveredTodayCount} today`,'jobs')}${card('Active drivers',onJobDrivers.length,`${availableDrivers.length} available`,'drivers')}${card('Today’s revenue',money(todayRevenue),`${todayJobs.length} scheduled`,'jobs')}${card('Needs attention',alerts.length,alerts.length?'Action required':'All clear','dashboard')}</section>
       <section class="ops-finance-strip"><div><small>TODAY</small><b>${money(todayRevenue)}</b></div><div><small>THIS WEEK</small><b>${money(weekRevenue)}</b></div><div><small>THIS MONTH</small><b>${money(monthRevenue)}</b></div><div><small>AVERAGE JOB</small><b>${money(averageJob)}</b></div><button data-page="accounts">Open accounts →</button></section>
       <section class="command-layout"><div class="command-main">
-        <section class="command-map-panel"><header><div><small>LIVE FLEET</small><h2>Driver map</h2></div><button class="secondary" data-page="tracking">Full tracking</button></header><div id="command-map" class="command-map"></div><div id="command-map-empty" class="command-map-empty hidden"><b>No live GPS positions</b><span>Drivers appear here when location tracking starts.</span></div></section>
+        <section class="command-map-panel"><header><div><small>LIVE FLEET</small><h2>Driver map</h2></div><button class="secondary" data-page="tracking">Full tracking</button></header><div class="command-map-wrap"><div id="command-map" class="command-map"></div><div id="command-map-empty" class="command-map-empty hidden"><b>No live GPS positions</b><span>Drivers appear here when location tracking starts.</span></div></div></section>
         <section class="command-board-panel"><header><div><small>LIVE OPERATIONS</small><h2>Dispatch snapshot</h2></div><button class="secondary" data-page="dispatch">Open full board</button></header><div class="command-board">${board}</div></section>
         <section class="ops-chart-grid"><section class="ops-chart-panel"><header><div><small>LAST 7 DAYS</small><h2>Jobs completed</h2></div></header><div class="ops-bar-chart">${jobsChart}</div></section><section class="ops-chart-panel"><header><div><small>LAST 7 DAYS</small><h2>Booked revenue</h2></div></header><div class="ops-bar-chart revenue">${revenueChart}</div></section></section>
       </div><aside class="command-side">
@@ -1791,10 +1791,15 @@ function systemHealthSummary() {
     if (commandMap) { commandMap.remove(); commandMap = null; }
     const jobs = state.jobs.filter(j => j.last_latitude && j.last_longitude && !['Cancelled','Delivered'].includes(j.job_status));
     const empty = document.getElementById('command-map-empty');
-    if (!jobs.length) { mapNode.classList.add('hidden'); empty?.classList.remove('hidden'); return; }
-    mapNode.classList.remove('hidden'); empty?.classList.add('hidden');
-    commandMap = L.map(mapNode,{zoomControl:true});
+    mapNode.classList.remove('hidden');
+    commandMap = L.map(mapNode,{zoomControl:true}).setView([54.5,-3.2],5);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap contributors'}).addTo(commandMap);
+    if (!jobs.length) {
+      empty?.classList.remove('hidden');
+      setTimeout(()=>commandMap?.invalidateSize(),60);
+      return;
+    }
+    empty?.classList.add('hidden');
     const bounds=[];
     jobs.forEach(job=>{ const lat=Number(job.last_latitude),lng=Number(job.last_longitude); if(!Number.isFinite(lat)||!Number.isFinite(lng))return; bounds.push([lat,lng]); const age=trackingAge(job); L.marker([lat,lng]).addTo(commandMap).bindPopup(`<b>${esc(job.assigned_driver_name||'Unassigned')}</b><br>${esc(job.job_number||'Job')} · ${esc(job.job_status||'')}<br><small>${esc(age.label)}</small>`); });
     if(bounds.length===1)commandMap.setView(bounds[0],13);else commandMap.fitBounds(bounds,{padding:[30,30]});
